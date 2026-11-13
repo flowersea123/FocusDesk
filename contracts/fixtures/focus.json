@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "revision": "focus-demo-seed",
+  "date": "2026-11-03",
+  "timezone": "Asia/Shanghai",
+  "updated_at": "2026-11-03T15:50:00.000Z",
+  "tasks": [
+    { "id": "focus-task", "title": "Build FocusDesk Demo", "status": "todo", "due_at": null }
+  ],
+  "focus": {
+    "task_id": "focus-task",
+    "started_at": "2026-11-03T15:50:00.000Z",
+    "ends_at": "2026-11-03T16:15:00.000Z"
+  }
+}

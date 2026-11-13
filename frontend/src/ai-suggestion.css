@@ -1,0 +1,7 @@
+.ai-suggestion-editor { margin-top: 28px; padding-top: 24px; border-top: 2px solid #000; }
+.ai-suggestion-editor .section-heading { margin-bottom: 14px; }
+.ai-suggestion-editor h2 { font-size: 23px; }
+.suggestion-count { font-size: 11px; white-space: nowrap; }
+.ai-suggestion-editor textarea { display: block; width: 100%; min-height: 90px; font-size: 14px; line-height: 1.7; }
+.suggestion-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.suggestion-actions [role='status'] { font-size: 12px; }

@@ -1,0 +1,21 @@
+{
+  "node": {
+    "version": "24.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "archive": "node-v24.16.0-win-x64.zip",
+    "url": "https://nodejs.org/dist/v24.16.0/node-v24.16.0-win-x64.zip",
+    "checksumsUrl": "https://nodejs.org/dist/v24.16.0/SHASUMS256.txt",
+    "sha256": "edaca9bd58ec8e92037dac4e877d52f6b8f430b81c18b57e264b4e2fb111cd56",
+    "executableSha256": "b3094d0b49f9ad602262a9921551737bb97637c05dd357a06ae98188d7290aa3",
+    "licenseSha256": "8efdacdc1cfa3460aeb7fe98e3c54337b971d5da70e6eee292b73b981acb220c"
+  },
+  "inno": {
+    "version": "6.7.4",
+    "archive": "innosetup-6.7.4.exe",
+    "url": "https://github.com/jrsoftware/issrc/releases/download/is-6_7_4/innosetup-6.7.4.exe",
+    "releaseUrl": "https://api.github.com/repos/jrsoftware/issrc/releases/tags/is-6_7_4",
+    "sha256": "a549929319f9120716677c685535ca4671e4b937b5fdc87e2585f32d8eb30e8c",
+    "compilerSha256": "f02fa0e5f237b47d7ed1edae9b991866ec94fe02af61eb6a73e94f92fe8e0604"
+  }
+}

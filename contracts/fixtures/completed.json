@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "revision": "mock-20261102-completed",
+  "date": "2026-11-02",
+  "timezone": "Asia/Shanghai",
+  "updated_at": "2026-11-02T10:00:00Z",
+  "tasks": [
+    { "id": "task-001", "title": "整理今天的重点任务", "status": "done", "due_at": "2026-11-02T04:00:00Z" },
+    { "id": "task-002", "title": "完成 Dashboard 页面验证", "status": "done", "due_at": "2026-11-02T09:00:00Z" },
+    { "id": "task-003", "title": "核对电子纸接线清单", "status": "done", "due_at": null }
+  ]
+}

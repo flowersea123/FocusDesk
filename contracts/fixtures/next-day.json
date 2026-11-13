@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "revision": "mock-20261103-001",
+  "date": "2026-11-03",
+  "timezone": "Asia/Shanghai",
+  "updated_at": "2026-11-02T16:00:00Z",
+  "tasks": [
+    { "id": "task-004", "title": "确认 Demo 接口与样例", "status": "todo", "due_at": "2026-11-03T04:00:00Z" },
+    { "id": "task-005", "title": "准备下一轮设备显示验证", "status": "todo", "due_at": null }
+  ]
+}

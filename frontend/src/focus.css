@@ -1,0 +1,12 @@
+.focus-panel { margin: 24px 0 8px; padding: 21px; border: 1px solid #000; border-left: 4px solid #d22020; background: #fff; }
+.focus-panel h3 { margin: 6px 0 16px; font-size: 22px; }
+.focus-panel label { display: block; margin-bottom: 9px; font-size: 14px; }
+.focus-panel select { width: 100%; padding: 12px; color: #000; background: #fff; border: 1px solid #000; font: inherit; }
+.focus-action { margin-top: 14px; padding: 11px 18px; border: 1px solid #000; background: #000; color: #fff; cursor: pointer; font: inherit; }
+.focus-action:disabled { opacity: 1; cursor: default; background: #fff; color: #000; border-style: dashed; }
+.focus-action:focus-visible, .focus-panel select:focus-visible { outline: 3px solid #ffda00; outline-offset: 3px; }
+.focus-task { display: block; overflow-wrap: anywhere; font-size: 20px; line-height: 1.4; }
+.focus-time { font-size: 15px; line-height: 1.6; }
+.focus-time span { font-size: 12px; }
+.focus-hint { margin: 12px 0 0; font-size: 12px; line-height: 1.7; color: #000; }
+.focus-error { color: #d22020; font-size: 14px; }

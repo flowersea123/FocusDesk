@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FocusDesk · 设备连接</title>
+  <style>
+    :root { font-family: 'DM Sans', 'Segoe UI', 'Microsoft YaHei', sans-serif; color: #000; background: #fff; font-synthesis: none; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; font-size: 14px; line-height: 1.75; }
+    a { color: #000; text-decoration: none; }
+    button, input { font: inherit; }
+    button, summary { cursor: pointer; }
+    button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid #ffda00; outline-offset: 3px; }
+    .topbar { min-height: 82px; border-bottom: 2px solid #000; padding: 0 max(32px, calc((100vw - 1240px) / 2)); display: flex; align-items: center; gap: 48px; }
+    .brand { font-size: 27px; font-weight: 800; letter-spacing: -1px; }
+    .topbar nav { display: flex; align-items: stretch; gap: 28px; min-height: 80px; font-size: 13px; }
+    .topbar nav a { display: flex; align-items: center; }
+    .topbar .nav-current { border-bottom: 4px solid #d22020; }
+    .source-badge { margin-left: auto; font-size: 12px; font-weight: 600; }
+    main { max-width: 1240px; margin: 0 auto; padding: 38px 0 30px; }
+    h1 { margin: 0 0 12px; font-size: 44px; line-height: 1.25; font-weight: 800; letter-spacing: -1.8px; }
+    h2 { margin: 0 0 16px; font-size: 23px; font-weight: 750; letter-spacing: -.6px; line-height: 1.4; }
+    p { margin: 10px 0; }
+    .muted { font-size: 12px; line-height: 1.8; }
+    .page-intro { margin-bottom: 32px; }
+    .connection-grid { display: grid; grid-template-columns: minmax(0, 1fr) 450px; align-items: start; gap: 40px; }
+    .management-column, .guide-column { min-width: 0; }
+    .card { border: 1px solid #000; padding: 24px; margin: 0 0 24px; background: #fff; }
+    .local-card { border: 0; border-top: 5px solid #d22020; padding: 25px 0 0; }
+    .guide-card h2 { display: inline-block; padding: 5px 9px; background: #ffda00; }
+    code { font-family: 'Consolas', 'Courier New', monospace; overflow-wrap: anywhere; }
+    #local { display: inline-block; margin: 9px 0 3px; padding: 9px 12px; border: 1px solid #000; font-size: 13px; }
+    .address { border-top: 1px solid #000; padding: 18px 0; }
+    .address strong { font-size: 13px; overflow-wrap: anywhere; }
+    .address a { font-size: 12px; text-decoration: underline; text-underline-offset: 4px; }
+    .row { display: flex; gap: 10px; margin: 12px 0; }
+    input { width: 100%; min-width: 0; padding: 11px 12px; border: 1px solid #000; border-radius: 0; background: #fff; color: #000; font: 12px/1.5 'Consolas', 'Courier New', monospace; }
+    button { padding: 10px 15px; border: 1px solid #000; border-radius: 0; background: #fff; color: #000; font-size: 12px; font-weight: 600; white-space: nowrap; }
+    #refresh { margin-top: 8px; background: #000; color: #fff; }
+    button:disabled, #refresh:disabled { cursor: default; opacity: 1; border-style: dashed; background: #fff; color: #000; }
+    #status { min-height: 24px; }
+    #error { color: #d22020; border-left: 4px solid #d22020; padding-left: 12px; font-size: 12px; }
+    .steps { margin: 0; padding-left: 22px; }
+    .steps li { padding: 5px 0; overflow-wrap: anywhere; }
+    summary { font-size: 15px; font-weight: 700; }
+    details[open] summary { margin-bottom: 14px; }
+    footer { max-width: 1240px; margin: 0 auto; padding: 20px 0 28px; border-top: 1px solid #000; display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 11px; }
+    footer strong { font-weight: 700; }
+    footer span { padding: 6px 12px; background: #ffda00; font-weight: 600; }
+    @media (max-width: 1320px) { main, footer { margin-left: 32px; margin-right: 32px; } .connection-grid { grid-template-columns: minmax(0, 1fr) 420px; } }
+    @media (max-width: 1050px) { .connection-grid { grid-template-columns: minmax(0, 1fr) 360px; gap: 26px; } .topbar { gap: 28px; } .card { padding: 20px; } .local-card { padding: 25px 0 0; } }
+    @media (max-width: 850px) { .connection-grid { grid-template-columns: 1fr; gap: 0; } .source-badge { display: none; } .topbar { gap: 24px; padding: 0 22px; } main { padding-top: 28px; } }
+    @media (max-width: 520px) { main, footer { margin-left: 20px; margin-right: 20px; } .topbar { flex-wrap: wrap; gap: 0; padding: 14px 20px 0; } .brand { font-size: 24px; } .topbar nav { flex-basis: 100%; min-height: 48px; gap: 24px; font-size: 12px; } h1 { font-size: 30px; letter-spacing: -1px; } h2 { font-size: 20px; } .card { padding: 18px; } .local-card { padding: 22px 0 0; } .row { flex-wrap: wrap; } .row input { flex-basis: 100%; } footer { font-size: 10px; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="FocusDesk home">FocusDesk</a>
+    <nav aria-label="Main navigation"><a href="/">Daily overview</a><a href="/connect" class="nav-current" aria-current="page">Device connection</a></nav>
+    <span class="source-badge">Local Hub</span>
+  </header>
+<main>
+  <h1>让电子纸连接这台电脑</h1>
+  <p class="muted page-intro">电脑与电子纸需要连接到可以互相访问的同一局域网。保持 FocusDesk 启动窗口开启。</p>
+  <div class="connection-grid"><div class="management-column">
+  <section class="card local-card"><h2>1. 在服务电脑管理任务</h2>
+    <p>在运行 FocusDesk 的电脑浏览器中打开：<br><code id="local">正在读取…</code></p>
+    <p class="muted">这里可以编辑任务、开始或结束专注。手机和其他电脑通过局域网地址打开时保持只读。</p>
+  </section>
+  <section class="card"><h2>2. 选择电子纸连接地址</h2>
+    <p class="muted">如果有多张网卡，请选择与电子纸连接同一路由器的 Wi-Fi 或以太网地址。地址列表不代表设备已连接成功。</p>
+    <div id="addresses"></div>
+    <p id="status" class="muted" role="status" aria-live="polite">正在识别本机地址…</p>
+    <p id="error" role="alert" hidden></p><button id="refresh" type="button">刷新连接地址</button>
+  </section>
+  </div><aside class="guide-column">
+  <section class="card guide-card"><h2>3. 保存到电子纸</h2>
+    <ol class="steps">
+      <li>复制上方与设备网络对应的电子纸地址。</li>
+      <li>本阶段使用 Arduino IDE：将地址填入本地 <code>private_config.h</code> 的 <code>FOCUSDESK_API_URL</code>，Wi-Fi 设置沿用原值。</li>
+      <li>验证并上传联网程序，等待电子纸自动读取内容。</li>
+    </ol>
+    <p class="muted">电脑换网络、IP 或端口变化后，回到此页刷新，再更新电子纸地址并上传。仅重启设备不会更改已保存的地址；自动配网将在后续版本加入。</p>
+  </section>
+  <details class="card"><summary>无法连接时</summary><ul class="steps">
+    <li>确认服务窗口未关闭，电脑未休眠，设备与电脑网络互通。</li>
+    <li>在同一局域网的另一台设备上打开对应的 Dashboard 地址，先检查电脑服务是否可访问。</li>
+    <li>Windows 提示是否允许网络访问时，按实际使用场景允许专用网络。不要关闭整个防火墙。</li>
+    <li>来宾 Wi-Fi、路由器客户端隔离、VPN 或企业网络策略可能阻止设备互访。</li>
+  </ul></details>
+  </aside></div>
+</main>
+<footer><strong>FocusDesk</strong><span>ONE THING AT A TIME</span></footer>
+<script>
+  const list = document.getElementById('addresses'), status = document.getElementById('status');
+  const error = document.getElementById('error'), refresh = document.getElementById('refresh');
+  let previous = '', busy = false;
+  async function load() {
+    if (busy) return; busy = true; refresh.disabled = true;
+    try {
+      const response = await fetch('/api/v1/server-info', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+      if (!response.ok) throw new Error('服务读取失败');
+      const info = await response.json();
+      document.getElementById('local').textContent = info.local_url || '当前只绑定一张局域网网卡。请将 focusdesk.config.json 中 host 设为 0.0.0.0 后重启，以使用本机编辑入口。';
+      const snapshot = JSON.stringify(info.addresses);
+      if (snapshot !== previous) {
+        previous = snapshot; list.replaceChildren();
+        for (const entry of info.addresses) {
+          const card = document.createElement('div'); card.className = 'address';
+          const title = document.createElement('strong'); title.textContent = entry.interface + ' · ' + entry.address;
+          const row = document.createElement('div'); row.className = 'row';
+          const input = document.createElement('input'); input.readOnly = true; input.value = entry.device_api_url;
+          input.setAttribute('aria-label', entry.interface + ' 电子纸连接地址');
+          const button = document.createElement('button'); button.type = 'button'; button.textContent = '复制地址';
+          button.addEventListener('click', async () => {
+            try { await navigator.clipboard.writeText(input.value); status.textContent = '地址已复制，可填入电子纸配置。'; }
+            catch { input.focus(); input.select(); status.textContent = '地址已选中，请按 Ctrl+C 复制。'; }
+          });
+          const link = document.createElement('a'); link.href = entry.dashboard_url; link.textContent = '局域网 Dashboard（只读入口）';
+          row.append(input, button); card.append(title, row, link); list.append(card);
+        }
+      }
+      error.hidden = true;
+      status.textContent = info.addresses.length ? '已识别当前地址，每 15 秒自动检查变化。' : '暂未发现可用局域网地址。请连接 Wi-Fi/网线，并确认服务允许局域网访问。';
+    } catch {
+      error.hidden = false; error.textContent = '暂时无法读取连接信息，已有地址可能过期。请确认 FocusDesk 服务仍在运行后刷新。';
+    } finally { busy = false; refresh.disabled = false; }
+  }
+  refresh.addEventListener('click', load); void load(); setInterval(load, 15000);
+</script></body></html>

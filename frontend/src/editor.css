@@ -1,0 +1,21 @@
+.task-editor { margin-top: 18px; }
+.edit-entry { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.edit-entry [role="status"] { color: #000; font-size: 12px; line-height: 1.7; }
+.editor-panel { background: #fff; border: 1px solid #000; padding: 18px; }
+.editor-heading { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 16px; font-size: 14px; }
+.editor-heading span, .editor-hint { color: #000; font-size: 12px; line-height: 1.8; }
+.editor-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+.editor-row input[type="checkbox"] { appearance: none; width: 18px; height: 18px; padding: 0; border: 2px solid #000; background: #fff; display: grid; place-content: center; flex-shrink: 0; }
+.editor-row input[type="checkbox"]:checked { background: #000; color: #fff; }
+.editor-row input[type="checkbox"]:checked::before { content: '✓'; color: #fff; font-size: 13px; line-height: 1; font-weight: 700; }
+.editor-row input:not([type]) { width: 100%; min-width: 0; border: 1px solid #000; padding: 10px; color: #000; background: #fff; font: inherit; font-size: 14px; }
+.editor-row input[aria-invalid="true"] { border-color: #d22020; }
+.editor-row input:focus-visible { outline: 3px solid #ffda00; outline-offset: 2px; }
+.editor-button, .editor-primary, .editor-add, .editor-remove, .editor-error button { border: 1px solid #000; background: #fff; color: #000; padding: 9px 12px; font-size: 12px; }
+.editor-primary { background: #000; color: #fff; }
+.editor-add { margin-top: 5px; }
+.editor-remove { border: 0; background: #fff; color: #d22020; white-space: nowrap; }
+.editor-actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.editor-error { color: #d22020; padding: 12px; background: #fff; border: 1px solid #d22020; font-size: 12px; line-height: 1.8; }
+.editor-error p { margin: 0 0 8px; }
+@media (max-width: 480px) { .editor-panel { padding: 13px; } .editor-row { gap: 6px; } .editor-row input:not([type]) { padding: 9px 7px; font-size: 13px; } .editor-remove { padding: 7px 3px; } }

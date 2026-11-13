@@ -1,0 +1,32 @@
+@font-face {
+  font-family: 'Nunito Preview';
+  src: url('../public/fonts/Nunito.ttf?inline') format('truetype');
+  font-style: normal;
+  font-weight: 200 1000;
+  font-display: swap;
+}
+
+.preview-source-options { display: flex; gap: 8px; margin-top: 20px; }
+.preview-source-options button { border: 1px solid #000; border-radius: 5px; background: #fff; padding: 6px 10px; font-size: 11px; }
+.preview-source-options button[aria-pressed='true'] { background: #000; color: #fff; }
+.paper-design { container-type: inline-size; position: relative; width: 100%; aspect-ratio: 4 / 3; background: #fff; overflow: hidden; }
+.paper-layout { position: absolute; inset: 0; color: #000; font-family: 'Nunito Preview', 'Segoe UI', sans-serif; font-weight: 400; font-synthesis: none; }
+.paper-heading, .paper-summary { position: absolute; left: 4cqw; right: 4cqw; display: flex; align-items: baseline; justify-content: space-between; }
+.paper-heading { top: 3.5cqw; font-size: 2.75cqw; line-height: 4cqw; }
+.paper-heading strong { font-weight: 750; letter-spacing: .12cqw; }
+.paper-summary { top: 10cqw; line-height: 5.5cqw; }
+.paper-summary strong { font-size: 4.25cqw; font-weight: 700; }
+.paper-summary > span { font-size: 2.75cqw; }
+.paper-focus-caption { position: absolute; top: 16cqw; left: 4cqw; font-size: 2.5cqw; line-height: 3cqw; }
+.paper-tasks { position: absolute; top: 20cqw; left: 4cqw; right: 4cqw; }
+.paper-task { position: relative; display: flex; align-items: center; gap: 3cqw; height: 6cqw; padding-left: 4cqw; }
+.paper-task.is-current::before { content: ''; position: absolute; left: 0; top: 1cqw; width: .5cqw; height: 4cqw; border-radius: .25cqw; background: #d22020; }
+.paper-task-check { flex: 0 0 2.5cqw; height: 2.5cqw; border: 1px solid #000; border-radius: .7cqw; }
+.preview-task-title { min-width: 0; font-size: 4cqw; line-height: 6cqw; font-weight: 400; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.paper-task.is-current .preview-task-title { font-weight: 750; }
+.paper-empty { margin: 0; font-size: 4cqw; line-height: 6cqw; }
+.paper-more { position: absolute; right: 4cqw; top: 51cqw; font-size: 2.75cqw; line-height: 4cqw; }
+.paper-recommendation { position: absolute; left: 4cqw; right: 4cqw; top: 56cqw; height: 15cqw; padding: 1.75cqw 3cqw; border-radius: 1.5cqw; background: #ffda00; }
+.paper-recommendation strong { display: block; font-size: 2.5cqw; line-height: 3cqw; font-weight: 750; letter-spacing: .05cqw; }
+.paper-recommendation p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; white-space: pre-line; margin: .5cqw 0 0; font-size: 3.25cqw; line-height: 4cqw; }
+.paper-waiting { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; }

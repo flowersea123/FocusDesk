@@ -1,0 +1,13 @@
+{
+  "date": "2026-11-13",
+  "timezone": "Asia/Shanghai",
+  "tasks": [
+    {
+      "id": "handoff-demo-1",
+      "title": "Try editing this example task",
+      "status": "todo",
+      "due_at": null
+    }
+  ],
+  "ai_suggestion": "Choose one task and focus for 25 min."
+}

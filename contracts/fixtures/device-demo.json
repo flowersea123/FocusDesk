@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "revision": "device-demo-seed",
+  "date": "2026-11-02",
+  "timezone": "Asia/Shanghai",
+  "updated_at": "2026-11-02T01:00:00Z",
+  "tasks": [
+    { "id": "demo-001", "title": "Plan today's work", "status": "todo", "due_at": null },
+    { "id": "demo-002", "title": "Read FocusDesk task list", "status": "done", "due_at": null },
+    { "id": "demo-003", "title": "Edit this task on your PC", "status": "todo", "due_at": null }
+  ]
+}

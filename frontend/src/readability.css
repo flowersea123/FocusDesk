@@ -1,0 +1,4 @@
+/* Task and Focus controls share the display's solid four-color palette. */
+.editor-row input:not([type]), .focus-panel select { font-size: 14px; }
+.editor-hint, .focus-hint, .readonly-note, .field-note, .preview-note { line-height: 1.75; }
+.task-title { line-height: 1.45; }

@@ -1,0 +1,22 @@
+{
+  "name": "focusdesk",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "build": "npm --prefix frontend run build",
+    "start": "node backend/server.ts --host 127.0.0.1",
+    "lan": "node scripts/start-focusdesk.mjs",
+    "package:lan": "node scripts/package-lan.mjs",
+    "build:installer": "node scripts/build-installer.mjs",
+    "demo": "node backend/server.ts --host 0.0.0.0",
+    "test": "node --test contracts/tests/*.test.mjs backend/tests/*.test.mjs",
+    "test:frontend": "npm --prefix frontend test",
+    "test:integration": "node --test tests/integration/*.test.mjs",
+    "test:packaging": "node --test tests/packaging/*.test.mjs",
+    "test:desktop": "node --test tests/desktop/*.test.mjs",
+    "test:migration": "node --test tests/migration/*.test.mjs",
+    "test:installer": "node --test tests/installer/*.test.mjs"
+  }
+}
