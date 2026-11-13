@@ -1,5 +1,9 @@
 # 团队协作与交付
 
+## README-SIMPLIFY 首页精简（2026-11-13）
+
+用户要求简化GitHub首页。Tech Lead接手根README与本登记，将安装体验放在前面，保留源码启动命令和开发入口，链接到现有详细说明。完成本地链接、命令与差异核对后同步GitHub，文档文件释放。
+
 ## GITHUB-HANDOFF 交接整理（2026-11-13）
 
 用户授权清理、隐私检查、版本验证和上传新建的私有 FocusDesk 仓库。Tech Lead负责 `.gitignore`、根README与版本、`backend/data/tasks.example.json`、`docs/HANDOFF.md`、`docs/firmware/READINESS.md`及本登记，整合构建和发布。Privacy Audit仅只读检查隐私与许可，不写文件。历史实验模块仍被统一固件引用，保留其目录结构。发布源码使用示例任务数据，本地任务、私有配置和连接卡由Git忽略。回归发现旧测试夹具遗漏新增建议契约，Tech Lead接手 `tests/desktop/{host,native}.test.mjs` 与 `tests/packaging/portable.test.mjs`，补齐夹具文件及预期清单后复测。另接手 `tests/integration/live-demo.test.mjs`，将已移除work_state编辑区的旧断言更新为当前任务与建议保存入口。
