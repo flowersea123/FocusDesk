@@ -5,6 +5,42 @@ const setup = byId('app-registration');
 let submitting = false;
 let initial = true;
 let statusSerial = 0;
+let lastConnected = false;
+let connectedType;
+
+const accountOptions = {
+  personal: {
+    name: '个人 Outlook',
+    hint: '支持个人 Microsoft 账户的应用 ID 可以直接使用。',
+    audience: '账户类型选择「仅限个人 Microsoft 账户」，或选择同时支持组织和个人 Microsoft 账户的选项。',
+    ids: '从应用「概述」复制应用程序（客户端）ID，填入上方。',
+  },
+  organization: {
+    name: '学校或工作邮箱',
+    hint: '单租户应用填写两个 ID。多租户应用可留空租户 ID。',
+    audience: '使用学校或工作目录注册，选「仅此组织目录中的帐户」。组织限制注册时，可向 IT 索取已注册应用的 ID。',
+    ids: '从应用「概述」复制应用程序（客户端）ID 和目录（租户）ID，填入上方。',
+  },
+};
+function configuredType(state) {
+  if (!state.connected && !state.configured) return 'personal';
+  if (state.accountType === 'personal' || state.accountType === 'organization') return state.accountType;
+  // Older configured registrations were for organizational accounts.
+  return state.tenantId === 'consumers' ? 'personal' : 'organization';
+}
+function selectType(type) {
+  const option = accountOptions[type];
+  outlookForm.elements.accountType.value = type;
+  byId('tenant-field').hidden = type === 'personal';
+  byId('tenant-id').disabled = type === 'personal';
+  byId('registration-hint').textContent = option.hint;
+  byId('registration-audience').textContent = option.audience;
+  byId('registration-ids').textContent = option.ids;
+  byId('outlook-login').textContent = '登录' + option.name;
+}
+for (const radio of outlookForm.elements.accountType) {
+  radio.addEventListener('change', () => { selectType(radio.value); outlookNotice.textContent = ''; });
+}
 
 const phaseLabels = { baseline: '正在建立收件箱起点', incremental: '正在监听新邮件', error: '同步需要处理', disconnected: '等待连接' };
 const actionLabels = { added: '已加入待办', existing: '待办已存在', full: '待办已满，等待重试', review: '待核对', retry: '等待重试', pending: '等待写入', expired: '已过期' };
@@ -47,6 +83,10 @@ async function refreshOutlook() {
     if (!res.ok) throw new Error(state.error || '邮箱状态读取失败。');
     if (ticket !== statusSerial) return;
     const sync = state.sync || {};
+    const type = configuredType(state);
+    connectedType = state.connected ? type : undefined;
+    byId('outlook-title').textContent = state.connected ? accountOptions[type].name : '连接 Outlook 邮箱';
+    byId('outlook-reconnect').textContent = '重新登录' + accountOptions[type].name;
     byId('outlook-state').textContent = state.connected
       ? [sync.syncing ? '正在同步' : (phaseLabels[sync.phase] || '已连接'), sync.lastSyncAt && '最近同步 ' + time(sync.lastSyncAt), sync.lastError].filter(Boolean).join(' · ')
       : '尚未连接';
@@ -54,12 +94,14 @@ async function refreshOutlook() {
     byId('outlook-inbox').hidden = !state.connected;
     byId('outlook-reconnect').hidden = !(state.connected && sync.phase === 'error');
     byId('redirect-uri').textContent = state.redirectUri || 'http://localhost:' + location.port + '/auth/callback';
-    if (initial) {
+    if (initial || state.connected !== lastConnected) {
       byId('client-id').value = state.clientId || '';
-      byId('tenant-id').value = state.tenantId === 'organizations' ? '' : state.tenantId || '';
+      byId('tenant-id').value = type === 'organization' && state.tenantId !== 'organizations' ? state.tenantId || '' : '';
+      selectType(type);
       setup.open = !state.configured;
       initial = false;
     }
+    lastConnected = state.connected;
     showHistory(state.connected ? sync.history || [] : []);
   } catch (err) {
     byId('outlook-state').textContent = '状态读取失败 · ' + err.message;
@@ -86,13 +128,15 @@ outlookForm.addEventListener('submit', event => {
   act(async () => {
     const clientId = byId('client-id').value.trim();
     if (!clientId) { setup.open = true; byId('client-id').focus(); throw new Error('请先填写应用程序（客户端）ID。'); }
-    const tenantId = byId('tenant-id').value.trim();
-    const { authorizationUrl } = await outlookAction('connect', { clientId, tenantId });
+    const accountType = outlookForm.elements.accountType.value;
+    const settings = { accountType, clientId };
+    if (accountType === 'organization') settings.tenantId = byId('tenant-id').value.trim();
+    const { authorizationUrl } = await outlookAction('connect', settings);
     location.assign(authorizationUrl);
   });
 });
 byId('outlook-reconnect').addEventListener('click', () => act(async () => {
-  const { authorizationUrl } = await outlookAction('connect');
+  const { authorizationUrl } = await outlookAction('connect', { accountType: connectedType });
   location.assign(authorizationUrl);
 }));
 byId('outlook-sync').addEventListener('click', () => act(() => outlookAction('sync')));

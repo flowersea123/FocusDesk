@@ -120,7 +120,7 @@ export function createTrialServer({ outlook, analyze = analyzeMail, save = impor
         if (!input || typeof input !== 'object' || Array.isArray(input)) throw new RequestError(400, '请检查邮箱配置。');
         if (url.endsWith('/connect')) {
           const settings = {};
-          for (const key of ['clientId','tenantId']) {
+          for (const key of ['clientId', 'tenantId', 'accountType']) {
             if (input[key] !== undefined) {
               if (typeof input[key] !== 'string') throw new RequestError(400, '应用标识格式有误。');
               settings[key] = input[key].trim();

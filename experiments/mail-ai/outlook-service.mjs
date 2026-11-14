@@ -42,8 +42,8 @@ export function outlookController(auth, worker) {
   }
   return {
     async status() {
-      const { connected, configured, clientId, tenantId, redirectUri } = await auth.status();
-      return { connected, configured, clientId, tenantId, redirectUri, sync: connected && !changing ? worker.status() : null };
+      const { connected, configured, clientId, tenantId, accountType, redirectUri } = await auth.status();
+      return { connected, configured, clientId, tenantId, accountType, redirectUri, sync: connected && !changing ? worker.status() : null };
     },
     begin(settings) {
       if (changing) throw new Error('正在更新邮箱连接，请稍后再试。');
@@ -52,7 +52,7 @@ export function outlookController(auth, worker) {
     finish: params => change(() => auth.finish(params)),
     disconnect: () => change(() => auth.disconnect()),
     async sync() {
-      if (changing || !(await auth.status()).connected) throw new Error('请先连接学校 Outlook。');
+      if (changing || !(await auth.status()).connected) throw new Error('请先连接 Outlook。');
       // Progress and recoverable failures are reported by the worker on the status endpoint.
       return worker.sync();
     },

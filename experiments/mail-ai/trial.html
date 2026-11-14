@@ -1,23 +1,28 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>学校 Outlook · FocusDesk</title>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Outlook 邮箱 · FocusDesk</title>
 <style nonce="{{NONCE}}">
 :root{color-scheme:light;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#171817;background:#fbfbf8}*{box-sizing:border-box}body{margin:0}header{height:72px;border-bottom:2px solid #151515;background:white;display:flex;align-items:center;justify-content:space-between;padding:0 max(5vw,16px)}header strong{font-size:24px;letter-spacing:-1.3px}a{color:inherit;text-underline-offset:3px}main{max-width:760px;margin:clamp(30px,7vh,70px) auto;padding:0 20px 60px}h1{font-size:clamp(32px,5vw,46px);letter-spacing:-.04em;margin:0 0 8px}h2{font-size:21px;margin:0 0 12px}h3{font-size:16px;margin:0 0 8px;overflow-wrap:anywhere}.intro{color:#494b47;margin:0 0 28px;line-height:1.75}.card{border:1px solid #242424;border-radius:12px;padding:clamp(18px,4vw,28px);background:white;margin-bottom:18px}.upload{display:block;border:1px solid #a3a39e;border-radius:5px;padding:12px;width:100%;font:inherit;font-size:14px;margin:14px 0}.actions{display:flex;gap:10px;flex-wrap:wrap}button{font:inherit;font-weight:600;font-size:14px;border:1px solid black;background:white;color:black;padding:9px 15px;border-radius:4px;cursor:pointer}button.primary{background:#151515;color:white}button:disabled{opacity:.47;cursor:default}button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #d39b00;outline-offset:2px}#status,#error{margin:12px 0 0;font-size:14px}#error:not(:empty){color:#9d1717}#status:empty,#error:empty{display:none}.summary,blockquote{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.75}.item{padding:14px 0;border-top:1px solid #d0d1cc}.time{font-variant-numeric:tabular-nums}blockquote{margin:8px 0;padding:6px 12px;background:#f6f6f1;border-left:3px solid #e2b700}.hint{color:#595b55;font-size:14px}details img{max-width:100%;height:auto;display:block;margin:12px auto}summary{cursor:pointer}label{font-weight:600}.subject{overflow-wrap:anywhere}.action-state{font-size:14px;color:#333}
 .account-heading{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}.account-heading h2{margin:0}.card details{margin:14px 0}#app-registration ol{padding-left:22px;line-height:1.65}#app-registration li+li{margin-top:7px}.field{display:block;margin:12px 0}.field input{display:block;margin-top:5px;border:1px solid #979a93;border-radius:5px;width:100%;padding:9px;font:inherit;font-weight:400}.hint,.item,code{overflow-wrap:anywhere}.card[hidden],form[hidden]{display:none}#outlook-notice{color:#774213}#outlook-notice:empty{display:none}#outlook-inbox>h3{margin-top:22px}
+.account-types{border:0;margin:16px 0;padding:0;min-width:0}.account-types legend{font-weight:600;margin-bottom:8px;padding:0}.account-options{display:flex;gap:8px;flex-wrap:wrap}.account-options label{display:flex;align-items:center;gap:7px;min-height:40px;padding:8px 12px;border:1px solid #b2b4ac;border-radius:5px;font-size:14px;font-weight:500;cursor:pointer}.account-options label:has(:checked){border-color:#242424;background:#f2f3ed;font-weight:600}.account-options input{accent-color:#171817;margin:0}.field[hidden]{display:none}
 </style></head>
 <body><header><strong>FocusDesk</strong><a href="{{HUB}}" target="_blank" rel="noreferrer">任务面板 ↗</a></header><main>
 <h1>邮件与待办</h1><p class="intro">新邮件由本机模型总结，原文能核实的截止事项自动加入任务面板。</p>
 <section class="card" id="outlook" aria-labelledby="outlook-title">
-<div class="account-heading"><h2 id="outlook-title">学校 Outlook</h2><span class="hint" id="outlook-state" role="status">正在读取连接状态…</span></div>
+<div class="account-heading"><h2 id="outlook-title">连接 Outlook 邮箱</h2><span class="hint" id="outlook-state" role="status">正在读取连接状态…</span></div>
 <form id="connect-form">
-<p class="hint">用学校账号登录一次。邮件服务运行时每分钟检查收件箱，关闭本页后也会继续。</p>
-<details id="app-registration"><summary>首次配置 Microsoft 应用</summary>
-<ol><li>在学校目录中<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noreferrer">打开应用注册</a>，选择「新注册」，名称填写 FocusDesk，账户类型选择「仅此组织目录中的帐户」。如果学校限制注册，请由学校 IT 注册并提供下面两个 ID。</li>
-<li>在「身份验证」添加「移动和桌面应用程序」平台，填写自定义重定向 URI <code id="redirect-uri">http://localhost:5184/auth/callback</code>。</li>
-<li>在「API 权限」选择 Microsoft Graph 的委托权限 <code>Mail.Read</code>。从应用「概述」复制下面两个公开 ID。</li></ol>
+<p class="hint">登录后，本机邮件服务每分钟检查一次收件箱，关闭本页后也会继续。</p>
+<fieldset class="account-types"><legend>邮箱类型</legend><div class="account-options">
+<label><input type="radio" name="accountType" value="personal" checked>个人 Outlook</label>
+<label><input type="radio" name="accountType" value="organization">学校或工作邮箱</label>
+</div></fieldset>
 <label class="field">应用程序（客户端）ID<input id="client-id" type="text" autocomplete="off" spellcheck="false" maxlength="36"></label>
-<label class="field">目录（租户）ID<input id="tenant-id" type="text" autocomplete="off" spellcheck="false" maxlength="36"></label>
-<p class="hint">学校单租户注册填写两个 ID。已注册为多租户应用时，租户 ID 可留空。</p></details>
-<button class="primary" type="submit">登录学校 Outlook</button></form>
+<label class="field" id="tenant-field" hidden>目录（租户）ID<input id="tenant-id" type="text" autocomplete="off" spellcheck="false" maxlength="36" disabled></label>
+<p class="hint" id="registration-hint">支持个人 Microsoft 账户的应用 ID 可以直接使用。</p>
+<details id="app-registration"><summary>配置 Microsoft 应用</summary>
+<ol><li>在 Microsoft Entra 中<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noreferrer">打开应用注册</a>，选择「新注册」，名称填写 FocusDesk。<span id="registration-audience">账户类型选择「仅限个人 Microsoft 账户」，或选择同时支持组织和个人 Microsoft 账户的选项。</span></li>
+<li>在「身份验证」添加「移动和桌面应用程序」平台，填写自定义重定向 URI<br><code id="redirect-uri">http://localhost:5184/auth/callback</code></li>
+<li>在「API 权限」添加 Microsoft Graph 的委托权限 <code>Mail.Read</code>。<span id="registration-ids">从应用「概述」复制应用程序（客户端）ID，填入上方。</span></li></ol></details>
+<button class="primary" id="outlook-login" type="submit">登录个人 Outlook</button></form>
 <div id="outlook-inbox" hidden><div class="actions"><button id="outlook-sync">立即同步</button><button id="outlook-reconnect" hidden>重新登录</button><button id="outlook-disconnect">断开连接</button></div>
 <h3>最近邮件</h3><div id="outlook-history"></div></div><p id="outlook-notice" role="status"></p></section>
 

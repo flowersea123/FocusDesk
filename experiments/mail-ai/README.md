@@ -2,17 +2,17 @@
 
 可以从试读页打开一封 EML，让本机模型总结正文、读取随信图片，并把时间明确的事项加入 FocusDesk 待办。命令行还可按需读取最近 1–10 封 Outlook 邮件，或直接查看指定 Canvas 课程的作业和提交状态。面板和模拟屏从同一个 Hub 读取已保存的任务。
 
-## 连接学校 Outlook
+## 连接个人、学校或工作 Outlook
 
-启动 Hub、模型和下节的本机邮件服务，打开 [学校 Outlook 设置页](http://127.0.0.1:5184/)。第一次需要为 FocusDesk 注册一个 Microsoft Entra 客户端，学校限制应用注册或用户同意时，可由学校 IT 完成注册或审批。注册可供同一学校允许使用该应用的用户复用。
+启动 Hub、模型和下节的本机邮件服务，打开 [Outlook 设置页](http://127.0.0.1:5184/)。已有适配所选账户类型的应用时，可直接复用其公开客户端 ID。
 
-1. 在学校 Microsoft Entra 目录进入「应用注册」→「新注册」，名称填写 FocusDesk，选择「仅此组织目录中的帐户」。[应用注册入口](https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade) · [微软注册说明](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)
-2. 在「身份验证」添加「移动和桌面应用程序」平台，填写设置页显示的回调地址，默认是 `http://localhost:5184/auth/callback`。使用本机浏览器和授权码 PKCE，应用凭据选公开客户端。[微软桌面应用配置](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-desktop-app-configuration)
-3. 在「API 权限」选择 Microsoft Graph 的委托权限 `Mail.Read`。从「概述」复制「应用程序（客户端）ID」和「目录（租户）ID」，填入本机页的「首次配置 Microsoft 应用」。多租户组织应用可留空租户 ID。这里填写的是两个公开标识；账号密码和可能的 MFA 操作都在微软登录页面完成。
-4. 点击「登录学校 Outlook」，用学校账号授权。微软将浏览器带回本机页，后台服务建立收件箱起点。首次连接之前的邮件不参加分析。之后，邮箱服务按一分钟间隔轮询，关闭浏览器标签页仍会继续。关闭电脑或服务会暂停同步，重启同一服务后从保存的位置继续。学校要求重新认证或撤销授权时，需要重新登录。[Microsoft Graph 增量读取](https://learn.microsoft.com/en-us/graph/delta-query-messages)
+1. 在 Microsoft Entra「应用注册」中选择或注册 FocusDesk。个人 Outlook 或 Hotmail 邮箱选择「仅限个人 Microsoft 帐户」，也可以用同时支持组织与个人账号的应用。学校单租户应用选择「仅此组织目录中的帐户」。注册应用的目录决定由谁管理该应用。[微软应用注册说明](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)
+2. 在应用的「身份验证」中添加「移动和桌面应用程序」平台，登记本机页给出的完整重定向 URI，默认是 `http://localhost:5184/auth/callback`。采用公开客户端的授权码流程与 PKCE。[微软桌面应用配置](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-desktop-app-configuration)
+3. FocusDesk 登录时请求 Microsoft Graph 的 `Mail.Read` 委托权限。个人模式只填「应用程序（客户端）ID」。学校或工作模式使用对应应用的客户端 ID，单租户应用还要填「目录（租户）ID」。组织限制应用注册或同意时，可由管理员处理。[微软 Mail.Read 权限](https://learn.microsoft.com/en-us/graph/permissions-reference#mailread)
+4. 点击对应的登录按钮，在微软页面选择要接收邮件的账号并授权。微软将浏览器带回本机页。首次连接建立收件箱起点，之后邮箱服务每分钟读取新增邮件。关闭浏览器标签页后仍会继续，关闭电脑或服务会暂停同步，重启同一服务后从保存的位置继续。[Microsoft Graph 增量读取](https://learn.microsoft.com/en-us/graph/delta-query-messages)
 5. 在「最近邮件」查看摘要、已加入待办、等待重试或待核对。任务满额或 Hub 暂时离线时，未写入的有效任务保留到重试；模型离线时先排队。读图日期和无法证实的时分会留待核对。「断开连接」停止该账号同步并清除本地授权，已加入 Hub 的待办和该账号的本地同步记录保留。
 
-当前支持 Microsoft 全球云学校/工作账号的收件箱。每个账号单独保存进度、摘要和任务处理状态，页面最多显示最近 60 封。原始邮件及附件在读取和推理过程中使用。应用通过 MSAL 管理登录续期；加密令牌缓存绑定本机操作系统凭据库。Linux 需要已解锁且可用的 Secret Service。数据目录可用 `FOCUSDESK_OUTLOOK_DATA_DIR` 指定，默认使用 macOS 的 `~/Library/Application Support/FocusDesk/outlook`、Windows 的 `%LOCALAPPDATA%\FocusDesk\outlook` 或 Linux 的 `$XDG_DATA_HOME/FocusDesk/outlook`（缺省为 `~/.local/share/FocusDesk/outlook`）。
+当前支持 Microsoft 全球云个人 Outlook、学校和工作账号的收件箱。每个账号单独保存进度、摘要和任务处理状态，页面最多显示最近 60 封。原始邮件及附件在读取和推理过程中使用。应用通过 MSAL 管理登录续期；加密令牌缓存绑定本机操作系统凭据库。Linux 需要已解锁且可用的 Secret Service。数据目录可用 `FOCUSDESK_OUTLOOK_DATA_DIR` 指定，默认使用 macOS 的 `~/Library/Application Support/FocusDesk/outlook`、Windows 的 `%LOCALAPPDATA%\FocusDesk\outlook` 或 Linux 的 `$XDG_DATA_HOME/FocusDesk/outlook`（缺省为 `~/.local/share/FocusDesk/outlook`）。
 
 ## 启动本机服务与样例试读
 
@@ -63,7 +63,7 @@ node experiments/mail-ai/cli.mjs eml experiments/mail-ai/evaluation/portfolio.em
 
 两种读取操作都使用 GET。Canvas 的 `--apply` 只向本机 Hub 添加状态明确、尚未提交、仍在将来的作业。没有设备可用英文短标题的作业会提示人工核对。重复运行同一来源时，已有任务保留手动改名和完成状态。邮件里如果有唯一可信的课程作业链接，设置同一个学校地址可以使两种来源生成相同的作业标识。其他邮件按邮件标识及截止原句去重。当前不会仅凭标题合并跨来源事项。
 
-表中的命令按需执行一次。常规学校邮箱连接使用页面登录与后台增量同步。Gmail 可以先导出 EML，直接连接 Gmail 需要增加 Gmail API 适配器。[Outlook 只读权限](https://learn.microsoft.com/en-us/graph/permissions-reference#mailread) · [Outlook 邮件 MIME 接口](https://learn.microsoft.com/en-us/graph/outlook-get-mime-message) · [Canvas 作业接口](https://developerdocs.instructure.com/services/canvas/resources/assignments) · [Gmail 接口](https://developers.google.com/workspace/gmail/api/guides/list-messages)
+表中的命令按需执行一次。常规 Outlook 连接使用页面登录与后台增量同步。Gmail 可以先导出 EML，直接连接 Gmail 需要增加 Gmail API 适配器。[Outlook 只读权限](https://learn.microsoft.com/en-us/graph/permissions-reference#mailread) · [Outlook 邮件 MIME 接口](https://learn.microsoft.com/en-us/graph/outlook-get-mime-message) · [Canvas 作业接口](https://developerdocs.instructure.com/services/canvas/resources/assignments) · [Gmail 接口](https://developers.google.com/workspace/gmail/api/guides/list-messages)
 
 ## 截止时间和留存
 

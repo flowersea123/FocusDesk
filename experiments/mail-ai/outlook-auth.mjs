@@ -16,31 +16,42 @@ class OutlookAuthError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
-function authError(error) {
+function authError(error, accountType) {
   if (error instanceof OutlookAuthError) return error;
   // Provider error descriptions can contain user information or the authorization code.
+  // Only show a recognized diagnostic number and our own instructions.
+  const diagnostic = String(error?.errorNo ?? /\bAADSTS(\d{5,9})\b/i.exec(error?.errorMessage ?? '')?.[1] ?? '');
+  if (diagnostic === '50194') return new OutlookAuthError(400, accountType === 'personal'
+    ? 'AADSTS50194。当前应用的注册限制了登录账号。请使用支持个人 Microsoft 账号的应用 ID。'
+    : 'AADSTS50194。单租户应用需要填写注册目录的 Directory (tenant) ID。');
+  if (diagnostic === '700016') return new OutlookAuthError(400, accountType === 'personal'
+    ? 'AADSTS700016。Microsoft 在个人账号目录找不到此应用。请核对客户端 ID 和注册时支持的账号类型。'
+    : 'AADSTS700016。Microsoft 在所选目录找不到此应用。请核对客户端 ID、租户 ID 和目录内的应用授权。');
+  if (diagnostic === '50011') return new OutlookAuthError(400, 'AADSTS50011。请在应用的「移动和桌面应用程序」平台登记试读页显示的完整回调地址。');
   const code = error?.errorCode;
   if (['interaction_required', 'consent_required', 'login_required', 'invalid_grant', 'no_tokens_found',
     'no_account_in_silent_request', 'token_refresh_required', 'refresh_token_expired'].includes(code)) {
-    return new OutlookAuthError(401, 'Microsoft 要求重新登录。请重新连接学校 Outlook。');
+    return new OutlookAuthError(401, 'Microsoft 要求重新登录。请重新连接 Outlook。');
   }
   if (['invalid_client', 'unauthorized_client', 'invalid_request', 'invalid_scope'].includes(code)) {
     return new OutlookAuthError(400, '请核对 Entra 应用的租户、客户端 ID、桌面回调地址和委托权限。');
   }
-  if (code === 'access_denied') return new OutlookAuthError(403, 'Microsoft 未授予邮件读取权限。如学校要求审批，请联系学校管理员。');
+  if (code === 'access_denied') return new OutlookAuthError(403, 'Microsoft 未授予邮件读取权限。请核对账号和授权设置。');
   return new OutlookAuthError(503, 'Microsoft 登录服务暂时无法完成请求，请稍后重试。');
 }
 
 const vaultMessage = '系统凭据库不可用。请解锁 macOS 钥匙串、Windows 凭据管理器或 Linux Secret Service，再重试。';
 
-function registration(clientId, tenantId) {
+function registration(clientId, tenantId, accountType) {
   const client = String(clientId ?? '').trim().toLowerCase();
   const tenant = String(tenantId ?? '').trim().toLowerCase() || 'organizations';
   if (!guid.test(client)) throw new OutlookAuthError(400, '请输入 Entra 应用的 Application (client) ID。');
+  if (accountType === 'personal') return { clientId: client, tenantId: 'consumers', accountType };
+  if (accountType !== 'organization') throw new OutlookAuthError(400, '请选择学校 / 工作账号或个人 Microsoft 账号。');
   if (tenant !== 'organizations' && (!guid.test(tenant) || tenant === personalTenant)) {
     throw new OutlookAuthError(400, '请输入学校的 Directory (tenant) ID，多租户应用可留空。');
   }
-  return { clientId: client, tenantId: tenant };
+  return { clientId: client, tenantId: tenant, accountType };
 }
 
 function callback(port) {
@@ -72,29 +83,44 @@ function application(settings, network) {
 
 function checkMail(result) {
   if (!result?.accessToken || !result.scopes?.some(s => /^(?:https:\/\/graph\.microsoft\.com\/)?mail\.read$/i.test(s))) {
-    throw new OutlookAuthError(403, 'Microsoft 未返回 Mail.Read 委托权限，请核对注册设置和学校授权。');
+    throw new OutlookAuthError(403, 'Microsoft 未返回 Mail.Read 委托权限，请核对注册设置和账号授权。');
   }
 }
 
-function accountId(account) {
-  if (!guid.test(account?.tenantId) || !guid.test(account?.localAccountId)) {
-    throw new OutlookAuthError(403, 'Microsoft 未确认学校邮箱身份。');
+function accountId(account, settings) {
+  const invalid = () => new OutlookAuthError(403, 'Microsoft 未确认邮箱身份。');
+  if (!guid.test(account?.tenantId)) throw invalid();
+  const tenant = account.tenantId.toLowerCase();
+  const claims = account.idTokenClaims;
+  if (settings.accountType === 'personal') {
+    // Consumer discovery advertises a pairwise sub; oid and nbf need not appear.
+    // Use sub consistently even if a later token adds an oid. Never normalize its case.
+    if (tenant !== personalTenant || claims?.tid?.toLowerCase() !== tenant ||
+        claims.iss !== microsoft + '/' + personalTenant + '/v2.0' || claims.aud !== settings.clientId ||
+        typeof claims.sub !== 'string' || !/^[\x20-\x7e]{1,255}$/.test(claims.sub)) throw invalid();
+    if (claims.oid !== undefined) {
+      if (!guid.test(claims.oid) || claims.oid.toLowerCase() !== account.localAccountId?.toLowerCase()) throw invalid();
+    } else if (claims.sub !== account.localAccountId) throw invalid();
+    return tenant + ':sub:' + hash(JSON.stringify([settings.clientId, claims.sub]));
   }
-  return account.tenantId.toLowerCase() + ':' + account.localAccountId.toLowerCase();
+  if (tenant === personalTenant || !guid.test(account.localAccountId) ||
+      claims?.oid?.toLowerCase() !== account.localAccountId.toLowerCase()) throw invalid();
+  return tenant + ':' + account.localAccountId.toLowerCase();
 }
 
 function validateSignIn(result, attempt, now) {
   const claims = result.idTokenClaims;
-  const id = accountId(result.account);
+  const id = accountId(result.account, attempt);
   const tenant = result.account.tenantId.toLowerCase();
+  const tenantMatches = attempt.accountType === 'personal' ? tenant === personalTenant :
+    tenant !== personalTenant && (attempt.tenantId === 'organizations' || tenant === attempt.tenantId);
   const seconds = Math.floor(now / 1000);
-  if (!claims || claims.nonce !== attempt.nonce || claims.aud !== attempt.clientId ||
+  if (!claims || !tenantMatches || claims.nonce !== attempt.nonce || claims.aud !== attempt.clientId ||
       claims.iss !== microsoft + '/' + tenant + '/v2.0' || claims.tid?.toLowerCase() !== tenant ||
-      claims.oid?.toLowerCase() !== result.account.localAccountId.toLowerCase() || tenant === personalTenant ||
-      (attempt.tenantId !== 'organizations' && tenant !== attempt.tenantId) ||
+      !Number.isFinite(claims.iat) || claims.iat > seconds + 60 ||
       !Number.isFinite(claims.exp) || claims.exp <= seconds - 60 ||
-      !Number.isFinite(claims.nbf) || claims.nbf > seconds + 60) {
-    throw new OutlookAuthError(403, 'Microsoft 返回的学校账号与当前登录请求不匹配。');
+      (claims.nbf !== undefined && (!Number.isFinite(claims.nbf) || claims.nbf > seconds + 60))) {
+    throw new OutlookAuthError(403, 'Microsoft 返回的账号与当前登录请求不匹配。');
   }
   return id;
 }
@@ -188,7 +214,8 @@ export function createOutlookAuth({ clientId = process.env.FOCUSDESK_OUTLOOK_CLI
 
   function publicState(state) {
     const settings = state.settings ?? { clientId: String(clientId ?? '').trim(), tenantId: String(tenantId ?? '').trim() || 'organizations' };
-    return { configured: guid.test(settings.clientId), connected: Boolean(state.sealed), ...settings, redirectUri: defaultRedirect };
+    return { configured: guid.test(settings.clientId), connected: Boolean(state.sealed), ...settings,
+      accountType: settings.accountType ?? 'organization', redirectUri: defaultRedirect };
   }
 
   async function disable(state) {
@@ -203,7 +230,9 @@ export function createOutlookAuth({ clientId = process.env.FOCUSDESK_OUTLOOK_CLI
     begin: (options = {}) => serial(async () => {
       const state = await readState(file);
       const defaults = publicState(state);
-      const settings = registration(options.clientId ?? defaults.clientId, options.tenantId ?? defaults.tenantId);
+      const accountType = options.accountType ?? defaults.accountType;
+      const sameType = accountType === defaults.accountType;
+      const settings = registration(options.clientId ?? defaults.clientId, options.tenantId ?? (sameType ? defaults.tenantId : ''), accountType);
       const redirectUri = callback(options.port ?? port);
       await keyFor(state, true); // Fail early if the platform cannot protect an offline login.
       // Save the public registration on first setup. A failed account change leaves the working session intact.
@@ -217,7 +246,7 @@ export function createOutlookAuth({ clientId = process.env.FOCUSDESK_OUTLOOK_CLI
           prompt: 'select_account', codeChallengeMethod: 'S256', codeChallenge: createHash('sha256').update(verifier).digest('base64url') });
         pending = { ...attempt, app };
         return { authorizationUrl };
-      } catch (error) { throw authError(error); }
+      } catch (error) { throw authError(error, settings.accountType); }
     }),
     finish: params => serial(async () => {
       const attempt = pending;
@@ -228,8 +257,7 @@ export function createOutlookAuth({ clientId = process.env.FOCUSDESK_OUTLOOK_CLI
       }
       pending = null;
       if (params.has('error')) {
-        if (params.get('error') === 'access_denied') throw authError({ errorCode: 'access_denied' });
-        throw new OutlookAuthError(400, 'Microsoft 未完成登录，请核对学校应用配置后重新连接。');
+        throw authError({ errorCode: params.get('error'), errorMessage: params.get('error_description') }, attempt.accountType);
       }
       if (params.getAll('code').length !== 1 || !params.get('code') || params.get('code').length > 16_384) {
         throw new OutlookAuthError(400, 'Microsoft 未返回有效授权码。');
@@ -244,7 +272,8 @@ export function createOutlookAuth({ clientId = process.env.FOCUSDESK_OUTLOOK_CLI
         if (!Object.values(JSON.parse(cache).RefreshToken ?? {}).some(token => token.secret)) {
           throw new OutlookAuthError(403, 'Microsoft 未提供离线授权，请重新连接并允许保持访问。');
         }
-        const settings = registration(attempt.clientId, attempt.tenantId);
+        const { clientId, tenantId, accountType } = attempt;
+        const settings = { clientId, tenantId, accountType };
         const index = hash(identity);
         const connectedAt = state.baselines[index] ?? new Date(now()).toISOString();
         const key = await keyFor(state, true);
@@ -252,7 +281,7 @@ export function createOutlookAuth({ clientId = process.env.FOCUSDESK_OUTLOOK_CLI
           sealed: seal(key, { ...settings, identity, connectedAt, cache }) };
         await saveState(file, next);
         return publicState(next);
-      } catch (error) { throw authError(error); }
+      } catch (error) { throw authError(error, attempt.accountType); }
     }),
     session: ({ forceRefresh = false } = {}) => serial(async () => {
       const state = await readState(file);
@@ -263,17 +292,17 @@ export function createOutlookAuth({ clientId = process.env.FOCUSDESK_OUTLOOK_CLI
         const app = application(record, network);
         const tokens = app.getTokenCache();
         tokens.deserialize(record.cache);
-        const account = (await tokens.getAllAccounts()).find(value => accountId(value) === record.identity);
-        if (!account) throw new OutlookAuthError(401, '请重新连接学校 Outlook。');
+        const account = (await tokens.getAllAccounts()).find(value => accountId(value, record) === record.identity);
+        if (!account) throw new OutlookAuthError(401, '请重新连接 Outlook。');
         const result = await app.acquireTokenSilent({ account, scopes, forceRefresh,
-          authority: microsoft + '/' + account.tenantId });
+          authority: microsoft + '/' + (record.accountType === 'personal' ? 'consumers' : account.tenantId) });
         checkMail(result);
-        if (accountId(result.account) !== record.identity) throw new OutlookAuthError(401, '学校账号已变化，请重新连接。');
+        if (accountId(result.account, record) !== record.identity) throw new OutlookAuthError(401, 'Microsoft 账号已变化，请重新连接。');
         const cache = tokens.serialize();
         if (cache !== record.cache) await saveState(file, { ...state, sealed: seal(key, { ...record, cache }) });
         return { accountId: record.identity, accessToken: result.accessToken, connectedAt: record.connectedAt };
       } catch (error) {
-        const issue = authError(error);
+        const issue = authError(error, record.accountType ?? 'organization');
         if (issue.status === 401 || issue.status === 403) await disable(state);
         throw issue;
       }
@@ -285,7 +314,7 @@ export function createOutlookAuth({ clientId = process.env.FOCUSDESK_OUTLOOK_CLI
   };
   auth.accessToken = async options => {
     const session = await auth.session(options);
-    if (!session) throw new OutlookAuthError(401, '请先连接学校 Outlook。');
+    if (!session) throw new OutlookAuthError(401, '请先连接 Outlook。');
     return session.accessToken;
   };
   return auth;

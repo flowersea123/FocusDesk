@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -8,6 +8,7 @@ import { createOutlookAuth } from '../outlook-auth.mjs';
 
 const clientId = '11111111-2222-3333-4444-555555555555';
 const tenant = '44444444-5555-6666-7777-888888888888';
+const personalTenant = '9188040d-6c67-4c5b-b112-36a304b66dad';
 const oid = '66666666-7777-8888-9999-aaaaaaaaaaaa';
 const origin = 'https://login.microsoftonline.com';
 const encode = obj => Buffer.from(JSON.stringify(obj)).toString('base64url');
@@ -38,7 +39,7 @@ async function setup(t, options = {}) {
       const grant = form.get('grant_type');
       provider.calls.push({ url, form });
       if (provider.error) return { status: provider.status ?? 400, headers: {}, body: {
-        error: provider.error, error_description: 'private diagnostic that must not reach the browser' } };
+        error: provider.error, error_codes: provider.errorCodes, error_description: 'private diagnostic that must not reach the browser' } };
       const sec = Math.floor(provider.now / 1000);
       const claims = { ver: '2.0', aud: clientId, iss: origin + '/' + provider.tenant + '/v2.0',
         nbf: sec - 30, iat: sec, exp: sec + 3600, sub: 'test', tid: provider.tenant, oid: provider.oid,
@@ -106,7 +107,8 @@ test('rejects stale, duplicate, cancelled and superseded callbacks before redeem
   const a = await begin({ clientId, tenantId: tenant, port: 3999 });
   assert.equal(a.url.pathname, '/' + tenant + '/oauth2/v2.0/authorize');
   assert.equal(a.url.searchParams.get('redirect_uri'), 'http://localhost:3999/auth/callback');
-  assert.deepEqual(await make().status(), { configured: true, connected: false, clientId, tenantId: tenant, redirectUri: 'http://localhost:5184/auth/callback' });
+  assert.deepEqual(await make().status(), { configured: true, connected: false, clientId, tenantId: tenant,
+    accountType: 'organization', redirectUri: 'http://localhost:5184/auth/callback' });
   const b = await begin();
   assert.notEqual(a.params.get('state'), b.params.get('state'));
   await assert.rejects(auth.finish(a.params), { status: 400 });
@@ -193,4 +195,103 @@ test('locked store and corrupt ciphertext never produce a plaintext file or an u
   assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), state);
   await auth.disconnect();
   assert.equal(await make().session(), null);
+});
+
+test('personal sign-in and refresh use the consumers endpoint; restart binds the same mailbox and cached access token', async t => {
+  const { auth, begin, make, provider } = await setup(t);
+  provider.tenant = personalTenant;
+  provider.oid = '00000000-0000-0000-c123-123456789abc';
+  provider.claims = { nbf: undefined, preferred_username: 'fixture@outlook.example' };
+  const { url, params } = await begin({ accountType: 'personal', clientId });
+  assert.equal(url.pathname, '/consumers/oauth2/v2.0/authorize');
+  assert.match(url.searchParams.get('scope'), /\bMail.Read\b/i);
+  assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
+  const status = await auth.finish(params);
+  assert.equal(status.accountType, 'personal');
+  assert.equal(status.tenantId, 'consumers');
+  assert.deepEqual(await make().status(), status);
+  const first = await auth.session();
+  assert.match(first.accountId, new RegExp('^' + personalTenant + ':sub:[a-f0-9]{64}$'));
+  const afterRestart = make();
+  assert.equal((await afterRestart.session()).accessToken === first.accessToken, true);
+  assert.equal(provider.calls.length, 1, 'reading a live token does not trigger another token request');
+  assert.equal((await afterRestart.session({forceRefresh: true})).accountId, first.accountId);
+  assert.equal(provider.calls.length, 2);
+  assert.deepEqual(provider.calls.map(c => new URL(c.url).pathname), ['/consumers/oauth2/v2.0/token', '/consumers/oauth2/v2.0/token']);
+  const school = await begin({ accountType: 'organization', clientId });
+  assert.equal(school.url.pathname, '/organizations/oauth2/v2.0/authorize');
+  await assert.rejects(auth.finish(school.params), { status: 403 });
+  assert.deepEqual(await auth.status(), status);
+});
+
+test('consumer login rejects an organization, incorrect consumer issuer and unbound identifiers', async t => {
+  const { auth, begin, provider } = await setup(t);
+  await assert.rejects(auth.begin({ accountType: 'common', clientId }), { status: 400 });
+  await assert.rejects(auth.finish((await begin({ accountType: 'personal' })).params), { status: 403 });
+  provider.tenant = personalTenant;
+  for (const bad of [{ iss: origin + '/consumers/v2.0' }, { tid: tenant }, { aud: tenant },
+    { sub: undefined, oid: undefined }, { oid: 'malformed-object-id' }, { nbf: 1e10 }]) {
+    provider.claims = bad;
+    await assert.rejects(auth.finish((await begin({ accountType: 'personal' })).params), { status: 403 });
+    assert.equal(await auth.session(), null);
+  }
+});
+
+test('consumer sub alone survives cached reads, refresh with optional oid, and reconnect; distinct subjects keep separate mailboxes', async t => {
+  const { begin, auth, provider, make } = await setup(t);
+  provider.tenant = personalTenant;
+  const subject = 'Abc9-def_123';
+  provider.claims = { oid: undefined, nbf: undefined, sub: subject };
+  await auth.finish((await begin({ accountType: 'personal' })).params);
+  const first = await auth.session();
+  assert.equal((await make().session()).accountId, first.accountId);
+  provider.claims = { sub: subject };
+  assert.equal((await make().session({ forceRefresh: true })).accountId, first.accountId);
+  await auth.disconnect();
+  provider.now += 1_000;
+  await auth.finish((await begin({ accountType: 'personal' })).params);
+  assert.equal((await auth.session()).connectedAt, first.connectedAt);
+  provider.claims = { oid: undefined, sub: subject.toLowerCase() };
+  await auth.finish((await begin({ accountType: 'personal' })).params);
+  const second = await auth.session();
+  assert.notEqual(second.accountId, first.accountId);
+  assert.notEqual(second.connectedAt, first.connectedAt);
+});
+
+test('version 1 saved registration and encrypted organization cache without accountType still refresh', async t => {
+  const { auth, begin, provider, store, make, file } = await setup(t);
+  await auth.finish((await begin({ tenantId: tenant })).params);
+  const data = JSON.parse(await readFile(file, 'utf8'));
+  const key = Buffer.from(store.value, 'base64url');
+  const packed = Buffer.from(data.sealed, 'base64');
+  const dec = createDecipheriv('aes-256-gcm', key, packed.subarray(0, 12));
+  dec.setAuthTag(packed.subarray(-16));
+  const old = JSON.parse(Buffer.concat([dec.update(packed.subarray(12, -16)), dec.final()]).toString('utf8'));
+  delete old.accountType;
+  delete data.settings.accountType;
+  const iv = randomBytes(12);
+  const enc = createCipheriv('aes-256-gcm', key, iv);
+  data.sealed = Buffer.concat([iv, enc.update(JSON.stringify(old), 'utf8'), enc.final(), enc.getAuthTag()]).toString('base64');
+  await writeFile(file, JSON.stringify(data));
+  const restored = make();
+  assert.equal((await restored.status()).accountType, 'organization');
+  assert.equal((await restored.session({ forceRefresh: true })).accountId, tenant + ':' + oid);
+  assert.equal(new URL(provider.calls.at(-1).url).pathname, '/' + tenant + '/oauth2/v2.0/token');
+});
+
+test('allowlisted Entra diagnostics explain registration mistakes in callbacks and real SDK errors without exposing raw data', async t => {
+  const { begin, auth, provider } = await setup(t);
+  for (const [number, clue] of [[50194, '个人 Microsoft'], [700016, '客户端 ID'], [50011, '回调地址']]) {
+    const { params } = await begin({accountType: 'personal'});
+    params.delete('code');
+    params.set('error', 'invalid_request');
+    params.set('error_description', 'AADSTS' + number + ': PRIVATE-ACCOUNT TRACE PRIVATE-CODE');
+    const safe = err => err.status === 400 && err.message.includes('AADSTS' + number) &&
+      err.message.includes(clue) && !err.message.includes('PRIVATE') && !err.message.includes('private');
+    await assert.rejects(auth.finish(params), safe);
+    provider.error = 'invalid_request';
+    provider.errorCodes = [number];
+    await assert.rejects(auth.finish((await begin()).params), safe);
+    delete provider.error;
+  }
 });
