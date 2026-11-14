@@ -12,9 +12,16 @@ const hiddenTags = new Set(['head', 'title', 'style', 'script', 'template', 'nos
 
 // An unavailable or oversized MIME part can be reported for one message.
 // Authentication, transport and mailbox-list failures abort the read.
-class ContentReadError extends Error {}
+class ContentReadError extends Error { permanent = true; }
 
 function digest(bytes) { return createHash('sha256').update(bytes).digest('hex'); }
+
+export function outlookMessageKey(id) {
+  if (typeof id !== 'string' || !id || id.length > 4096 || /[\u0000-\u0020\u007f]/.test(id) || id === '.' || id === '..') {
+    throw new Error('Graph 邮件标识无效。');
+  }
+  return 'outlook:' + digest(id);
+}
 
 // A Web reader for HTTP and an async file stream both enforce the limit even
 // when Content-Length is absent or a file grows after stat().
@@ -122,7 +129,7 @@ async function decodeMessage(bytes, graphMessage) {
     if (mime === 'image/png' || mime === 'image/jpeg') addImage(mime, Buffer.from(attachment.content));
   }
   if (!body && !images.length) throw new Error('此邮件没有可读取的正文或 PNG/JPEG 图片。');
-  const id = graphMessage ? 'outlook:' + digest(graphMessage.id) : 'eml:' + digest(parsed.messageId || bytes);
+  const id = graphMessage ? outlookMessageKey(graphMessage.id) : 'eml:' + digest(parsed.messageId || bytes);
   // The newest Received field is prepended by the receiving server. Exported
   // mail may only have a sender Date. A timezone-free header cannot anchor DDLs.
   const receipt = parsed.headers.find(h => h.key === 'received')?.value.split(';').at(-1);
@@ -149,16 +156,35 @@ export async function readEml(path) {
   } finally { await file.close(); }
 }
 
-async function graphGet(url, accessToken, fetcher, bytes, accept) {
+function requireOutlookToken(accessToken) {
+  if (typeof accessToken !== 'string' || !accessToken.trim() || /\s/.test(accessToken)) {
+    throw new Error('需要当前账号具有 Mail.Read 委托权限的 Microsoft Graph 访问令牌。');
+  }
+}
+
+function retryDelay(header) {
+  if (!header) return null;
+  const delay = /^\d+$/.test(header) ? Number(header) * 1000 : Date.parse(header) - Date.now();
+  return Number.isSafeInteger(delay) ? Math.max(0, delay) : null;
+}
+
+export async function graphGet(url, accessToken, fetcher, bytes, accept, prefer = 'IdType="ImmutableId"') {
+  const graphUrl = new URL(url);
+  if (graphUrl.origin !== 'https://graph.microsoft.com' || graphUrl.username || graphUrl.password || graphUrl.hash) {
+    throw new Error('请求地址不属于 Microsoft Graph。');
+  }
+  requireOutlookToken(accessToken);
   const response = await fetcher(url, {
     method: 'GET', redirect: 'error', signal: AbortSignal.timeout(20_000),
-    headers: { Authorization: 'Bearer ' + accessToken, Accept: accept, Prefer: 'IdType="ImmutableId"' },
+    headers: { Authorization: 'Bearer ' + accessToken, Accept: accept, Prefer: prefer },
   });
   if (!response.ok) {
     await response.body?.cancel();
     const message = `Microsoft Graph 读取失败 (HTTP ${response.status})。`;
-    if ([404, 410, 413, 415, 422].includes(response.status)) throw new ContentReadError(message);
-    throw new Error(message);
+    const error = [404, 410, 413, 415, 422].includes(response.status) ? new ContentReadError(message) : new Error(message);
+    error.status = response.status;
+    error.retryAfterMs = retryDelay(response.headers.get('Retry-After'));
+    throw error;
   }
   if (!response.body) throw new ContentReadError('Microsoft Graph 未返回可读取的内容。');
   if (Number(response.headers.get('Content-Length')) > bytes) {
@@ -179,7 +205,8 @@ function inboxPage(nextLink) {
   return url.href;
 }
 
-async function readOutlookMessage(item, accessToken, fetcher) {
+export async function readOutlookMessage(item, accessToken, fetcher) {
+  outlookMessageKey(item?.id);
   const url = inbox + '/' + encodeURIComponent(item.id) + '/$value';
   const bytes = await graphGet(url, accessToken, fetcher, MAX_EML_BYTES, '*/*');
   try { return await decodeMessage(bytes, item); }
@@ -189,9 +216,7 @@ async function readOutlookMessage(item, accessToken, fetcher) {
 // onMessageError receives { index, reason } for each failed message, where
 // index starts at 1 among the distinct messages attempted in this read.
 export async function readOutlook({ accessToken, limit = 5, fetcher = fetch, onMessageError } = {}) {
-  if (typeof accessToken !== 'string' || !accessToken.trim() || /\s/.test(accessToken)) {
-    throw new Error('需要当前账号具有 Mail.Read 委托权限的 Microsoft Graph 访问令牌。');
-  }
+  requireOutlookToken(accessToken);
   if (!Number.isInteger(limit) || limit < 1 || limit > 10) throw new Error('每次读取邮件数量应为 1 至 10 封。');
   if (onMessageError !== undefined && typeof onMessageError !== 'function') throw new TypeError('onMessageError 必须是函数。');
   const query = new URLSearchParams({ $select: 'id,receivedDateTime', $orderby: 'receivedDateTime desc', $top: String(limit) });

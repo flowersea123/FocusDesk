@@ -8,6 +8,7 @@ import { assessMail } from './assess.mjs';
 import { importTask } from './task-import.mjs';
 
 const pageTemplate = await readFile(new URL('./trial.html', import.meta.url), 'utf8');
+const outlookScript = await readFile(new URL('./outlook-ui.js', import.meta.url), 'utf8');
 const tenMinutes = 10 * 60 * 1000;
 
 class RequestError extends Error {
@@ -38,7 +39,7 @@ function sampleEml(now) {
   ].join('\r\n'));
 }
 
-export function createTrialServer({ analyze = analyzeMail, save = importTask, now = Date.now,
+export function createTrialServer({ outlook, analyze = analyzeMail, save = importTask, now = Date.now,
   hub = process.env.FOCUSDESK_HUB_URL ?? 'http://127.0.0.1:8787',
   endpoint = process.env.FOCUSDESK_MODEL_URL, model = process.env.FOCUSDESK_MODEL_NAME,
   canvasOrigin = process.env.FOCUSDESK_CANVAS_ORIGIN } = {}) {
@@ -85,11 +86,53 @@ export function createTrialServer({ analyze = analyzeMail, save = importTask, no
     response.setHeader('Content-Type', 'application/json; charset=utf-8');
     try {
       if (socket.remoteAddress !== '127.0.0.1' || !localHosts.includes(headers.host)) throw new RequestError(403, '请从本机试读页打开。');
+      if (method === 'GET' && url === '/outlook-ui.js') {
+        response.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+        response.end(outlookScript);
+        return;
+      }
       if (method === 'GET' && url === '/') {
         const nonce = randomUUID();
         response.setHeader('Content-Security-Policy', `default-src 'none'; connect-src 'self'; img-src data:; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`);
         response.setHeader('Content-Type', 'text/html; charset=utf-8');
         response.end(pageTemplate.replaceAll('{{NONCE}}', nonce).replace('{{HUB}}', hubOrigin));
+        return;
+      }
+      const parsed = new URL(url, origin);
+      if (outlook && method === 'GET' && parsed.pathname === '/auth/callback') {
+        // Exchange the one-use code on this machine. Redirect to a clean URL even on failure.
+        let notice = 'connected';
+        try { await outlook.finish(parsed.searchParams); }
+        catch (error) { notice = 'error=' + encodeURIComponent(error.message.slice(0, 300)); }
+        response.writeHead(303, { Location: '/#outlook-' + notice });
+        response.end();
+        return;
+      }
+      if (outlook && method === 'GET' && url === '/api/outlook/status') {
+        response.end(JSON.stringify(await outlook.status()));
+        return;
+      }
+      if (outlook && method === 'POST' && ['/api/outlook/connect', '/api/outlook/disconnect', '/api/outlook/sync'].includes(url)) {
+        if (headers.origin !== origin) throw new RequestError(403, '请从本机同一试读页操作。');
+        let input;
+        try { input = JSON.parse((await readBody(request, 'application/json', 1024)).toString('utf8')); }
+        catch (error) { if (error instanceof RequestError) throw error; throw new RequestError(400, '请检查邮箱配置。'); }
+        if (!input || typeof input !== 'object' || Array.isArray(input)) throw new RequestError(400, '请检查邮箱配置。');
+        if (url.endsWith('/connect')) {
+          const settings = {};
+          for (const key of ['clientId','tenantId']) {
+            if (input[key] !== undefined) {
+              if (typeof input[key] !== 'string') throw new RequestError(400, '应用标识格式有误。');
+              settings[key] = input[key].trim();
+            }
+          }
+          const { authorizationUrl } = await outlook.begin(settings);
+          response.end(JSON.stringify({ authorizationUrl }));
+        } else {
+          if (url.endsWith('/sync')) await outlook.sync();
+          else await outlook.disconnect();
+          response.end('{}');
+        }
         return;
       }
       if (method !== 'POST' || !['/api/sample','/api/eml','/api/import'].includes(url)) throw new RequestError(404, '未找到此页面。');
@@ -133,7 +176,21 @@ export function createTrialServer({ analyze = analyzeMail, save = importTask, no
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   const port = Number(process.env.FOCUSDESK_TRIAL_PORT ?? 5184);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('试读页端口应为 1 至 65535。');
-  const server = createTrialServer();
-  server.once('error', error => { console.error(error.message); process.exitCode = 1; });
-  server.listen(port, '127.0.0.1', () => console.log(`FocusDesk 邮件试读 http://127.0.0.1:${port}/`));
+  const { openOutlookService } = await import('./outlook-service.mjs');
+  const outlook = await openOutlookService({ port, hub: process.env.FOCUSDESK_HUB_URL ?? 'http://127.0.0.1:8787',
+    endpoint: process.env.FOCUSDESK_MODEL_URL, model: process.env.FOCUSDESK_MODEL_NAME,
+    canvasOrigin: process.env.FOCUSDESK_CANVAS_ORIGIN });
+  const server = createTrialServer({ outlook });
+  server.once('error', async error => { console.error(error.message); process.exitCode = 1; await outlook.close(); });
+  server.listen(port, '127.0.0.1', () => console.log(`FocusDesk 邮件服务 http://127.0.0.1:${port}/`));
+  let closing = false;
+  async function close() {
+    if (closing) return;
+    closing = true;
+    server.close();
+    server.closeAllConnections();
+    await outlook.close();
+  }
+  process.on('SIGTERM', close);
+  process.on('SIGINT', close);
 }

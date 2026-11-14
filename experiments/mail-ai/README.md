@@ -2,7 +2,19 @@
 
 可以从试读页打开一封 EML，让本机模型总结正文、读取随信图片，并把时间明确的事项加入 FocusDesk 待办。命令行还可按需读取最近 1–10 封 Outlook 邮件，或直接查看指定 Canvas 课程的作业和提交状态。面板和模拟屏从同一个 Hub 读取已保存的任务。
 
-## 先用样例试读
+## 连接学校 Outlook
+
+启动 Hub、模型和下节的本机邮件服务，打开 [学校 Outlook 设置页](http://127.0.0.1:5184/)。第一次需要为 FocusDesk 注册一个 Microsoft Entra 客户端，学校限制应用注册或用户同意时，可由学校 IT 完成注册或审批。注册可供同一学校允许使用该应用的用户复用。
+
+1. 在学校 Microsoft Entra 目录进入「应用注册」→「新注册」，名称填写 FocusDesk，选择「仅此组织目录中的帐户」。[应用注册入口](https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade) · [微软注册说明](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)
+2. 在「身份验证」添加「移动和桌面应用程序」平台，填写设置页显示的回调地址，默认是 `http://localhost:5184/auth/callback`。使用本机浏览器和授权码 PKCE，应用凭据选公开客户端。[微软桌面应用配置](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-desktop-app-configuration)
+3. 在「API 权限」选择 Microsoft Graph 的委托权限 `Mail.Read`。从「概述」复制「应用程序（客户端）ID」和「目录（租户）ID」，填入本机页的「首次配置 Microsoft 应用」。多租户组织应用可留空租户 ID。这里填写的是两个公开标识；账号密码和可能的 MFA 操作都在微软登录页面完成。
+4. 点击「登录学校 Outlook」，用学校账号授权。微软将浏览器带回本机页，后台服务建立收件箱起点。首次连接之前的邮件不参加分析。之后，邮箱服务按一分钟间隔轮询，关闭浏览器标签页仍会继续。关闭电脑或服务会暂停同步，重启同一服务后从保存的位置继续。学校要求重新认证或撤销授权时，需要重新登录。[Microsoft Graph 增量读取](https://learn.microsoft.com/en-us/graph/delta-query-messages)
+5. 在「最近邮件」查看摘要、已加入待办、等待重试或待核对。任务满额或 Hub 暂时离线时，未写入的有效任务保留到重试；模型离线时先排队。读图日期和无法证实的时分会留待核对。「断开连接」停止该账号同步并清除本地授权，已加入 Hub 的待办和该账号的本地同步记录保留。
+
+当前支持 Microsoft 全球云学校/工作账号的收件箱。每个账号单独保存进度、摘要和任务处理状态，页面最多显示最近 60 封。原始邮件及附件在读取和推理过程中使用。应用通过 MSAL 管理登录续期；加密令牌缓存绑定本机操作系统凭据库。Linux 需要已解锁且可用的 Secret Service。数据目录可用 `FOCUSDESK_OUTLOOK_DATA_DIR` 指定，默认使用 macOS 的 `~/Library/Application Support/FocusDesk/outlook`、Windows 的 `%LOCALAPPDATA%\FocusDesk\outlook` 或 Linux 的 `$XDG_DATA_HOME/FocusDesk/outlook`（缺省为 `~/.local/share/FocusDesk/outlook`）。
+
+## 启动本机服务与样例试读
 
 使用 Node.js 24 或更新版本。在仓库根目录安装邮件解析依赖，再启动 Hub。Linux、macOS 和 Windows 使用相同的 Node 命令。
 
@@ -51,14 +63,14 @@ node experiments/mail-ai/cli.mjs eml experiments/mail-ai/evaluation/portfolio.em
 
 两种读取操作都使用 GET。Canvas 的 `--apply` 只向本机 Hub 添加状态明确、尚未提交、仍在将来的作业。没有设备可用英文短标题的作业会提示人工核对。重复运行同一来源时，已有任务保留手动改名和完成状态。邮件里如果有唯一可信的课程作业链接，设置同一个学校地址可以使两种来源生成相同的作业标识。其他邮件按邮件标识及截止原句去重。当前不会仅凭标题合并跨来源事项。
 
-命令按需执行一次。真实账号接入需要学校或提供方允许该应用获得相应权限。此版使用用户在本机配置的令牌，产品内的 OAuth 登录、自动续签和后台增量同步属于后续集成。Gmail 可以先导出 EML，直接连接 Gmail 需要增加 Gmail API 适配器。[Outlook 只读权限](https://learn.microsoft.com/en-us/graph/permissions-reference#mailread) · [Outlook 邮件 MIME 接口](https://learn.microsoft.com/en-us/graph/outlook-get-mime-message) · [Canvas 作业接口](https://developerdocs.instructure.com/services/canvas/resources/assignments) · [Gmail 接口](https://developers.google.com/workspace/gmail/api/guides/list-messages)
+表中的命令按需执行一次。常规学校邮箱连接使用页面登录与后台增量同步。Gmail 可以先导出 EML，直接连接 Gmail 需要增加 Gmail API 适配器。[Outlook 只读权限](https://learn.microsoft.com/en-us/graph/permissions-reference#mailread) · [Outlook 邮件 MIME 接口](https://learn.microsoft.com/en-us/graph/outlook-get-mime-message) · [Canvas 作业接口](https://developerdocs.instructure.com/services/canvas/resources/assignments) · [Gmail 接口](https://developers.google.com/workspace/gmail/api/guides/list-messages)
 
 ## 截止时间和留存
 
 - 邮件正文里符合规则的完整原句需同时包含任务动作、截止提示、明确日期和时分。程序独立解析原句，与模型提取的北京时间核对。相对日期以有时区的收件时间计算。EML 优先使用最近的 Received 字段，再参考带时区的 Date。邮件缺省时区按北京处理，时区含混会转人工核对。
 - 只有日期、多个冲突日期、改期或撤销、图片中的时间、英文标题不符合设备限制等情况会在输出里提示核对。当前试用入口展示原文和原图来源，用户可在现有任务面板手动添加核实后的任务。附件里有图时，正文与图片的要求也需核对。模型完全漏掉的事项仍可能漏报。
-- 试读页在内存中解析原信和图片并返回给本机浏览器，待写入的预览凭据保留最多 10 分钟。命令行将摘要和引句输出到用户终端。本版没有建立邮件历史库。已导入项目的英文标题、`due_at` 和稳定 ID 与其他待办一起写入 Hub 本地任务文件。后天到期的项目会跨日、跨重启保留。
-- 当前活动列表最多 10 条，显示屏最多展示前 5 条未完成任务。满表时返回“待办列表已满”，再次导入需先腾出空间。同一来源改期会提示核对。手动删除待办后再次导入可能重新创建。无人值守同步应先增加轻量处理记录、删除记录和待导入队列。
+- 试读页在内存中解析原信和图片并返回给本机浏览器，待写入的预览凭据保留最多 10 分钟。命令行将摘要和引句输出到用户终端。EML 试读不建立邮件历史库；通过 Outlook 登录自动同步的摘要与处理记录按账号持久化。已导入项目的英文标题、`due_at` 和稳定 ID 与其他待办一起写入 Hub 本地任务文件。后天到期的项目会跨日、跨重启保留。
+- 当前活动列表最多 10 条，显示屏最多展示前 5 条未完成任务。满表时返回“待办列表已满”，再次导入需先腾出空间。同一来源改期会提示核对。命令行单次导入在手动删除后再次执行可能重建待办。自动邮箱同步使用持久化的写入记录，并保留待重试队列。
 - 本阶段沿用一个列表。周、月视图可按 `due_at` 筛选，按项目拆分还需要添加项目归属。历史、计划视图和后台调度不影响这一阶段的收件与验证。
 
 ## 输入与测试范围

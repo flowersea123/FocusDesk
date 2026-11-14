@@ -17,7 +17,7 @@ npm run dev
 
 ## 本地 AI 邮件试读
 
-在本机读取一封 EML，用图文模型总结正文与随信截图、识别截止时间，然后将核对通过的待办加入现有任务列表。命令行也能按需读取 Outlook 收件箱和指定 Canvas 课程的作业。当前提供源码试用入口。[启动与账号配置](experiments/mail-ai/README.md) · [三个小模型的实测结果](experiments/mail-ai/evaluation/RESULTS.md)
+学校 Outlook 支持一次登录、自动读取新邮件，用本机图文模型总结正文与截图，并将能从原文核实的未来 DDL 加入现有待办。可在邮件页配置学校应用、查看摘要与同步结果，也可单独试读 EML。命令行也能按需读取 Outlook 收件箱和指定 Canvas 课程的作业。当前提供源码试用入口。[启动与账号配置](experiments/mail-ai/README.md) · [三个小模型的实测结果](experiments/mail-ai/evaluation/RESULTS.md)
 
 ## 安装体验
 
