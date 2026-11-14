@@ -1,0 +1,48 @@
+.simulator-main { max-width: 1120px; }
+.simulator-main .page-heading { align-items: center; gap: 18px; }
+.simulator-main .page-heading h1 { margin: 0; }
+.simulator-main .page-heading .eyebrow { margin-bottom: 8px; }
+.simulator-editor-link { color: #000; font-size: 14px; text-underline-offset: 4px; white-space: nowrap; }
+.simulator-intro { margin: 0 0 18px; max-width: 780px; font-size: 15px; line-height: 1.8; }
+.simulator-notice { border-left: 4px solid #d22020; padding: 12px 16px; background: #fff; font-size: 14px; line-height: 1.8; }
+.simulator-controls { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 26px 0; }
+.simulator-modes { padding: 0; margin: 0; border: 0; min-width: 0; }
+.simulator-modes legend { padding: 0; margin-bottom: 10px; font-weight: 700; font-size: 14px; }
+.simulator-modes p { font-size: 13px; line-height: 1.8; max-width: 610px; margin: 10px 0 0; }
+.simulator-segmented { display: inline-flex; gap: 0; border: 1px solid #000; border-radius: 6px; overflow: hidden; }
+.simulator-segmented button { background: #fff; color: #000; border: 0; padding: 9px 15px; font: inherit; font-size: 13px; cursor: pointer; }
+.simulator-segmented button + button { border-left: 1px solid #000; }
+.simulator-segmented button[aria-pressed='true'] { color: #fff; background: #000; }
+.simulator-actions, .simulator-view-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.simulator-shell button:focus-visible, .simulator-shell a:focus-visible, .simulator-shell summary:focus-visible { outline: 3px solid #d22020; outline-offset: 4px; }
+.simulator-shell button:disabled { opacity: .5; cursor: not-allowed; }
+.simulator-screen-card { padding: 26px; background: #fff; border: 1px solid #000; border-radius: 12px; }
+.simulator-screen-heading { margin-bottom: 24px; gap: 18px; flex-wrap: wrap; }
+.simulator-screen-heading h2 { font-size: 19px; }
+.simulator-canvas-scroll { overflow: auto; padding: 18px; background: #eee; border-radius: 8px; }
+.simulator-canvas-frame { position: relative; flex-shrink: 0; margin: 0 auto; background: #fff; outline: 1px solid #ccc; }
+.simulator-canvas-frame canvas { display: block; image-rendering: pixelated; }
+.simulator-canvas-empty { position: absolute; inset: 0; display: grid; place-items: center; color: #555; font-size: 14px; }
+.simulator-status { display: flex; align-items: center; gap: 10px; margin-top: 22px; font-size: 14px; line-height: 1.8; }
+.simulator-status-dot { width: 9px; height: 9px; border-radius: 50%; background: #000; flex-shrink: 0; }
+.simulator-status-dot.is-paused { background: #d22020; }
+.simulator-wait { padding: 10px 12px; margin: 12px 0 0; background: #ffda00; line-height: 1.8; font-size: 13px; }
+.simulator-error { border-left: 3px solid #d22020; padding-left: 12px; color: #9b1717; font-size: 14px; line-height: 1.8; }
+.simulator-read-times { display: flex; gap: 8px 24px; flex-wrap: wrap; font-size: 12px; line-height: 1.8; margin-top: 14px; }
+.simulator-details { margin: 24px 0 40px; border-top: 1px solid #bbb; padding-top: 18px; font-size: 13px; line-height: 1.8; }
+.simulator-details summary { cursor: pointer; font-weight: 700; }
+.simulator-details dl { margin-top: 18px; }
+.simulator-details dl > div { display: flex; gap: 18px; padding: 5px 0; }
+.simulator-details dt { min-width: 110px; }
+.simulator-details dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.simulator-details code { font-size: 12px; }
+.simulator-details p { max-width: 900px; }
+@media (max-width: 760px) {
+  .simulator-controls { align-items: flex-start; flex-direction: column; gap: 16px; }
+  .simulator-main .page-heading { align-items: flex-start; flex-direction: column; }
+  .simulator-screen-card { padding: 16px; }
+  .simulator-canvas-scroll { padding: 10px; }
+  .simulator-shell .topbar { gap: 16px; padding: 0 16px; }
+  .simulator-shell .topbar nav { gap: 14px; font-size: 13px; }
+  .simulator-shell .brand { font-size: 20px; }
+}

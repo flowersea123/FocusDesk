@@ -2,6 +2,8 @@
 
 整理日期为2026-11-13，交接版本为0.2.0。目标仓库为GitHub私有仓库 `flowersea123/FocusDesk`。
 
+后续 Mac 开发扩展见本地 `codex/mac-device-simulator` 分支，含 `npm run dev`、真实 Hub 驱动的 `/simulator` 页面、macOS 数据锁和可重跑的固件主机像素校验。启动和本轮验证见 [Mac 本机开发与设备模拟](MAC_DEVELOPMENT.md)。本页末尾保留原 Windows 交接批次的验收记录。
+
 ## 已完成与待开发
 
 已具备本地Hub任务编辑、文件持久化、25分钟专注、建议文本编辑、共享电子纸排版、手机配网、有效配置NVS保存和Windows安装包。当前任务上限十项，电子纸展示五条未完成任务。

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { fork } from 'node:child_process';
 import { createServer } from 'node:net';
 import { once } from 'node:events';
-import { mkdtemp, writeFile, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, readdir, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,7 +56,7 @@ test('CLI IPC previews without writing, requires confirmation, then backs up and
   const paths = await setup(t); const running = paths.launch();
   const ready = await running.wait(message => message.type === 'focusdesk-ready');
   assert.equal(ready.dashboardUrl, `http://127.0.0.1:${paths.port}/`);
-  assert.equal(ready.dataPath, paths.dataPath);
+  assert.equal(ready.dataPath, await realpath(paths.dataPath));
   const original = await readFile(paths.dataPath);
   running.child.send({ type: 'focusdesk-import-preview', requestId: 'preview-1', source });
   const preview = await running.wait(message => message.requestId === 'preview-1');

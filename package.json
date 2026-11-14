@@ -5,6 +5,7 @@
   "type": "module",
   "engines": { "node": ">=24" },
   "scripts": {
+    "dev": "node scripts/dev.mjs",
     "build": "npm --prefix frontend run build",
     "start": "node backend/server.ts --host 127.0.0.1",
     "lan": "node scripts/start-focusdesk.mjs",
@@ -17,6 +18,8 @@
     "test:packaging": "node --test tests/packaging/*.test.mjs",
     "test:desktop": "node --test tests/desktop/*.test.mjs",
     "test:migration": "node --test tests/migration/*.test.mjs",
-    "test:installer": "node --test tests/installer/*.test.mjs"
+    "test:installer": "node --test tests/installer/*.test.mjs",
+    "test:development": "node --test tests/development/*.test.mjs",
+    "test:display-host": "node scripts/test-display-host.mjs"
   }
 }

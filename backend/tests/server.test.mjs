@@ -67,6 +67,21 @@ test('serves the shared device seed with a bounded JSON body and explicit uncomp
   assert.equal(response.headers['transfer-encoding'], undefined);
 });
 
+test('serves the simulator as an app page while keeping unknown API and file paths unavailable', async t => {
+  const { get } = await setup(t);
+  const dashboard = await get('/');
+  for (const pathname of ['/simulator', '/simulator/', '/simulator?mode=device']) {
+    const response = await get(pathname);
+    assert.equal(response.status, 200);
+    assert.equal(response.body, dashboard.body);
+    assert.equal(response.headers['content-type'], 'text/html; charset=utf-8');
+  }
+  const head = await get('/simulator', 'HEAD');
+  assert.equal(head.status, 200); assert.equal(head.body, '');
+  assert.equal((await get('/api/simulator')).status, 404);
+  assert.equal((await get('/simulator/unknown')).status, 404);
+});
+
 test('repeated reads and whitespace/property-order edits keep revision and updated_at stable', async t => {
   const { get, write } = await setup(t);
   const first = (await get()).json();

@@ -9,6 +9,7 @@ playwright-report/
 !.env.example
 *.local
 *.log
+**/.focusdesk-data-*.lock
 firmware/**/private_config.h
 .codex/
 backend/data/*

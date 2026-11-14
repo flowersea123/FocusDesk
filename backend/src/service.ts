@@ -120,7 +120,8 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
         json(response, 404, 'NOT_FOUND', 'API endpoint not found.', head);
         return;
       }
-      const target = path.resolve(root, pathname === '/' ? 'index.html' : `.${pathname}`);
+      const appPage = pathname === '/' || pathname === '/simulator' || pathname === '/simulator/';
+      const target = path.resolve(root, appPage ? 'index.html' : `.${pathname}`);
       const type = mime[path.extname(target).toLowerCase()];
       if (!within(root, target) || !type) {
         json(response, 404, 'NOT_FOUND', 'Static resource not found.', head);

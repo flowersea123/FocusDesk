@@ -1,5 +1,16 @@
 # 团队协作与交付
 
+## MAC-DEV-SIM 本机开发与模拟屏（2026-11-13）
+
+用户选择本轮先完成 Mac 本机开发与模拟屏，不制作原生 Mac 安装应用。复用真实 Hub、现有显示快照协议和设备字形；不改固件、任务业务、真实数据或进行设备操作。
+
+- Tech Lead：根 package.json、README、AGENTS.md、docs/MAC_DEVELOPMENT.md、docs/HANDOFF.md、本登记、scripts/dev.mjs、tests/development/**、backend/src/service.ts 及相关 HTTP 路由测试；负责开发启动、页面整合、浏览器验收和最终验证。
+- Mac Runtime：backend/src/data-lock.ts、backend/tests/desktop-lock.test.mjs、backend/tests/desktop-server.test.mjs；实现 macOS 单实例数据锁，保留 Windows/Linux 行为，验证进程退出及崩溃恢复。desktop-server 的规范化路径断言经 Tech Lead 移交。
+- Simulator UI：frontend/src/DeviceSimulator.tsx、frontend/src/simulator/**、frontend/src/device-simulator.css、对应前端测试，以及 frontend/src/main.tsx、frontend/src/App.tsx、frontend/vite.config.ts；使用真实 /api/v1/display-snapshot 和共享位图渲染，提供快速检查及设备节奏模式、断线保留、读取/显示状态区分。
+- Firmware Parity：scripts/test-display-host.mjs、tests/firmware/mac-host/**、docs/firmware/HOST_SIMULATION.md 与本地忽略缓存；准备可在 Mac 重跑的原生固件解析/渲染及像素一致性检查，不修改固件或替代真实硬件验收。
+
+以上文件单一写入，跨范围先协调；测试使用隔离合成数据。当前状态：已完成整合，全部文件释放。契约/后端173项、前端115项、HTTP集成7项、开发生命周期5项共300项测试通过，生产构建通过；原生固件主机1149项检查与21场景逐像素对照通过。浏览器完成12项交互/像素检查，并验证生产页面在真实Hub停止后保留画面、重启后继续同步。未执行ESP32目标编译、烧录或真机验收。
+
 ## README-SIMPLIFY 首页精简（2026-11-13）
 
 用户要求简化GitHub首页。Tech Lead接手根README与本登记，将安装体验放在前面，保留源码启动命令和开发入口，链接到现有详细说明。完成本地链接、命令与差异核对后同步GitHub，文档文件释放。

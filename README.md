@@ -1,6 +1,19 @@
 # FocusDesk
 
-Windows 本地 Hub 与 ESP32-S3 电子纸任务屏，支持任务编辑、25分钟专注和手动填写AI建议。当前版本为0.2.0。
+本地 Hub 与 ESP32-S3 电子纸任务屏，支持任务编辑、25分钟专注和手动填写AI建议。当前版本为0.2.0；提供 Windows 安装版和 macOS 本机开发模式。
+
+## Mac 本机开发与模拟屏
+
+安装 Node.js 24 或以上版本，在仓库根目录执行：
+
+```sh
+npm --prefix frontend ci
+npm run dev
+```
+
+打开 [Dashboard](http://127.0.0.1:5173/) 编辑任务，在 [设备模拟屏](http://127.0.0.1:5173/simulator) 查看保存后的真实显示快照。首次运行只在任务文件不存在时复制示例；已有数据保留。前端修改自动更新，后端或共享排版修改自动重启 Hub 并刷新页面，修改代码前先保存编辑草稿。Ctrl+C 同时停止两个服务。
+
+模拟屏使用设备相同的位图字体和绘图规则，提供快速检查、设备节奏、模拟断网和 PNG 导出。软件模拟不验证物理刷新、无线连接或实际色彩。[开发流程与验证边界](docs/MAC_DEVELOPMENT.md)
 
 ## 安装体验
 
@@ -44,5 +57,6 @@ npm run demo
 - [API与数据契约](docs/API_CONTRACT.md)
 - [安装包构建](installer/README.md)
 - [Windows使用与数据目录](docs/WINDOWS_DESKTOP.md)
+- [Mac开发与设备模拟](docs/MAC_DEVELOPMENT.md)
 
 固件采用GPL-3.0-only，第三方资源按随附许可使用。Windows应用自有代码的统一发行许可待所有者确定。[固件许可](firmware/LICENSE) · [第三方来源](firmware/THIRD_PARTY_NOTICES.md) · [字体许可](contracts/DISPLAY_FONT_LICENSE.txt)
