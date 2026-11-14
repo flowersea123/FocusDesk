@@ -9,6 +9,14 @@ import today from '../../contracts/fixtures/today.json';
 afterEach(() => vi.useRealTimers());
 
 describe('Dashboard', () => {
+  it('opens the local mail page from the editable Hub without leaving the task editor', async () => {
+    render(<App source={{ kind: 'http', read: vi.fn().mockResolvedValue(parseDailyOverview(today)), updateTasks: vi.fn() }} />);
+    await screen.findAllByText(today.tasks[0].title);
+    const mail = within(screen.getByRole('navigation')).getByRole('link', { name: '邮件与待办' });
+    expect(mail).toHaveAttribute('href', `http://127.0.0.1:${Number(process.env.FOCUSDESK_TRIAL_PORT ?? 5184)}/`);
+    expect(mail).toHaveAttribute('target', '_blank');
+  });
+
   it('shows task controls and omits editors for fields outside the preview', async () => {
     const signals = (['active', 'acknowledged', 'ignored', 'closed'] as const).map((status, index) => ({
       id: `event-${index}`, content: `Manual event ${index + 1}`, source: 'Manual',
@@ -132,6 +140,7 @@ describe('Dashboard', () => {
     expect(screen.getByText('Local Hub')).toBeVisible();
     expect(screen.getByText(/日期以任务文件为准，不是实时今日/)).toBeInTheDocument();
     expect(screen.getByText(/请在本机打开 FocusDesk 编辑任务/)).toBeVisible();
+    expect(screen.queryByRole('link', { name: '邮件与待办' })).not.toBeInTheDocument();
     expect(screen.queryByText(/尚待成员 B/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '空列表' })).not.toBeInTheDocument();
   });

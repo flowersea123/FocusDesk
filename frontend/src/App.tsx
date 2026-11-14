@@ -40,7 +40,12 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
 
   return <div className="app-shell">
     <header className="topbar"><a className="brand" href="./" aria-label="FocusDesk home">FocusDesk</a>
-      <nav aria-label="Main navigation"><a className="nav-current" href="#workspace">Daily overview</a><a href="/simulator" target="_blank" rel="noreferrer">模拟屏 <span aria-hidden="true">↗</span></a><a href="/connect">Device connection <span aria-hidden="true">↗</span></a></nav>
+      <nav aria-label="Main navigation">
+        <a className="nav-current" href="#workspace">Daily overview</a>
+        {!mock && source.updateTasks && <a href={import.meta.env.VITE_MAIL_PAGE_URL} target="_blank" rel="noreferrer">邮件与待办 <span aria-hidden="true">↗</span></a>}
+        <a href="/simulator" target="_blank" rel="noreferrer">模拟屏 <span aria-hidden="true">↗</span></a>
+        <a href="/connect">Device connection <span aria-hidden="true">↗</span></a>
+      </nav>
       <span className="source-badge">{mock ? '本地 Mock 演示' : 'Local Hub'}</span></header>
     <main id="workspace">
       <div className="page-heading"><h1>Daily overview</h1><p className="workspace-date">{dateLabel}<span>{overview?.timezone ?? 'Local-first workspace'}</span></p></div>
