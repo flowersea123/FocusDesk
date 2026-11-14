@@ -1,0 +1,13 @@
+[
+  {"id":"text-en","subject":"Course portfolio","body":"Please submit the design portfolio by 2026-11-16 17:00 Beijing time.","expect":["2026-11-16 17:00"]},
+  {"id":"text-zh-relative","subject":"课程提纲","body":"请在后天 09:15 前提交论文提纲。","expect":["2026-11-16 09:15"]},
+  {"id":"meeting-only","subject":"Lab seminar","body":"The lab seminar starts at 2026-11-17 14:30 Beijing time. Attendance is optional, and there is nothing to submit.","expect":[]},
+  {"id":"cancelled","subject":"取消报名","body":"原定 2026-11-19 18:00 截止的训练营报名已经取消。你不需要再提交表格。","expect":[]},
+  {"id":"date-only","subject":"报名表","body":"请在 2026 年 11 月 18 日前交回报名表，具体几点截止还没有确定。","expect":[null]},
+  {"id":"two-actions","subject":"Two deliverables","body":"Submit your budget by 2026-11-17 10:00 Beijing time.\nUpload your poster by 2026-11-20 16:45 Beijing time.","expect":["2026-11-17 10:00","2026-11-20 16:45"]},
+  {"id":"rescheduled","subject":"Deadline extended","body":"The previous deadline of 2026-11-15 17:00 is cancelled. Please submit the field report by 2026-11-18 12:30 Beijing time instead.","expect":["2026-11-18 12:30"]},
+  {"id":"image-zh","subject":"课程通知见图","body":"请查看随附通知。","image":"notice-zh.png","expect":["2026-11-21 18:35"]},
+  {"id":"image-en","subject":"Poster attached","body":"Please see the attached poster.","image":"notice-en.png","expect":["2026-11-23 09:50"]},
+  {"id":"image-meeting","subject":"Seminar poster","body":"The event details are in the attachment.","image":"meeting.png","expect":[]},
+  {"id":"mixed-update","subject":"更新后的展板截止时间","body":"附件为旧版通知。请在 2026-11-25 11:20 前提交展板，以此邮件正文为准。","image":"notice-en.png","expect":["2026-11-25 11:20"]}
+]

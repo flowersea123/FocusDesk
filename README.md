@@ -15,6 +15,10 @@ npm run dev
 
 模拟屏使用设备相同的位图字体和绘图规则，提供快速检查、设备节奏、模拟断网和 PNG 导出。软件模拟不验证物理刷新、无线连接或实际色彩。[开发流程与验证边界](docs/MAC_DEVELOPMENT.md)
 
+## 本地 AI 邮件试读
+
+在本机读取一封 EML，用图文模型总结正文与随信截图、识别截止时间，然后将核对通过的待办加入现有任务列表。命令行也能按需读取 Outlook 收件箱和指定 Canvas 课程的作业。当前提供源码试用入口。[启动与账号配置](experiments/mail-ai/README.md) · [三个小模型的实测结果](experiments/mail-ai/evaluation/RESULTS.md)
+
 ## 安装体验
 
 1. 下载 `FocusDesk-Setup.exe`。[安装包](https://github.com/flowersea123/FocusDesk/releases/tag/v0.2.0)

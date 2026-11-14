@@ -1,0 +1,63 @@
+[
+  {
+    "id": "holdout-budget",
+    "subject": "设备借用",
+    "body": "请在 2026-11-28 14:05 前提交设备借用单。",
+    "expect": [
+      "2026-11-28 14:05"
+    ]
+  },
+  {
+    "id": "holdout-meeting-register",
+    "subject": "Workshop",
+    "body": "The workshop starts on 2026-12-04 at 13:00. Register for the workshop by 2026-12-02 11:40 Beijing time.",
+    "expect": [
+      "2026-12-02 11:40"
+    ]
+  },
+  {
+    "id": "holdout-time-zone",
+    "subject": "Grant application",
+    "body": "Submit the grant application by 2026-12-01 12:00 UTC.",
+    "expect": [
+      "2026-12-01 20:00"
+    ]
+  },
+  {
+    "id": "holdout-fyi",
+    "subject": "通知归档",
+    "body": "这是一封回执。你的申请已于 2026-11-13 16:45 提交成功。请保留记录。",
+    "expect": []
+  },
+  {
+    "id": "holdout-no-day",
+    "subject": "Review note",
+    "body": "Please send your review when the revised manuscript is ready. I have not set a deadline yet.",
+    "expect": []
+  },
+  {
+    "id": "holdout-image-zh",
+    "subject": "竞赛报名图",
+    "body": "请参阅附件。",
+    "image": "call-zh.png",
+    "expect": [
+      "2026-12-03 13:08"
+    ]
+  },
+  {
+    "id": "holdout-image-en",
+    "subject": "Return request",
+    "body": "See the attached instructions.",
+    "image": "return-en.png",
+    "expect": [
+      "2026-12-07 08:06"
+    ]
+  },
+  {
+    "id": "holdout-image-receipt",
+    "subject": "服务台回执",
+    "body": "留存备查。",
+    "image": "receipt-zh.png",
+    "expect": []
+  }
+]

@@ -1,5 +1,17 @@
 # 团队协作与交付
 
+## 2026-11-14 邮件 AI 可行性验证
+
+先用独立的 `experiments/mail-ai/` 验证一条链路，再讨论正式产品设置。Tech Lead 负责多模态模型实测、分析器、命令入口、整合、使用说明、`revise` 与三平台验收配置。三项独立交付各自单一写入，使用临时数据和样例。
+
+- 邮件输入：`experiments/mail-ai/mail-source.mjs`、该目录的 `package.json` / `package-lock.json`、`tests/mail-source.test.mjs`。解析 EML、读取 Outlook 收件箱正文及受限图片输入。
+- 待办导入：`experiments/mail-ai/task-import.mjs`、`tests/task-import.test.mjs`。复用真实 Hub 的任务接口，处理精确日期、重复邮件、用户编辑、数据冲突和容量。
+- Canvas 可行性：`experiments/mail-ai/canvas.mjs`、`tests/canvas.test.mjs`。读取指定课程作业，复用同一作业链接身份；账号和真实课程的验收单独记录。
+- 三平台检查由 Canvas 工作完成后的同一角色接手 `.github/workflows/mail-ai.yml`，在可用的本机环境执行隔离测试。Tech Lead 负责记录实际运行平台。
+- 本机试读页：收件适配完成后，邮件角色接手 `experiments/mail-ai/{trial.mjs,trial.html,tests/trial.test.mjs}` 和 `mail-source.mjs` 的内存读取入口。使用真实邮件解析器、本机模型、同一套待办核对规则及已有 Hub，提供样例、EML 上传与可选加入待办。
+
+本轮 EMAIL-AI-1 已完成整合，各文件释放。Tech Lead 在根 README 增加试读入口，并归档原句核对、跨平台验证与真实模型逐例结果。macOS/Linux 各 26 项软件测试通过，Chrome 完成 10 项合成邮件交互检查，Windows 矩阵待实际运行。现有 Hub API 与固件协议继续适用。Outlook、Canvas 使用只读适配器，已完成模拟接口验证，真实账户登录及后台同步留待后续集成。
+
 ## MAC-DEV-SIM 本机开发与模拟屏（2026-11-13）
 
 用户选择本轮先完成 Mac 本机开发与模拟屏，不制作原生 Mac 安装应用。复用真实 Hub、现有显示快照协议和设备字形；不改固件、任务业务、真实数据或进行设备操作。
