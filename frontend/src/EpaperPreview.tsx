@@ -1,13 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DailyOverview, Task } from '../../contracts/daily-overview';
+import type { ProjectStatus } from '../../contracts/project-progress';
+import { buildProjectDisplay } from '../../contracts/display-snapshot';
+import { paintDisplaySnapshot } from './simulator/canvas';
 import './epaper-preview.css';
+
+function ProjectCanvas({ project }: { project: ProjectStatus }) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (canvas.current) paintDisplaySnapshot(canvas.current, buildProjectDisplay(project, 'preview'));
+  }, [project]);
+  return <canvas ref={canvas} width={400} height={300} aria-hidden="true" className="project-device-canvas"/>;
+}
 
 const sampleTasks: Task[] = [
   'Finish project proposal', 'Review presentation', 'Read 10 pages',
   'Prepare tomorrow’s outline', 'Organize research notes', 'Reply to project feedback',
 ].map((title, index) => ({ id: `preview-${index}`, title, status: 'todo', due_at: null }));
 
-export default function EpaperPreview({ overview, draft }: { overview: DailyOverview | null; draft: boolean }) {
+export default function EpaperPreview({ overview, draft, project }: { overview: DailyOverview | null; draft: boolean; project?: ProjectStatus | null }) {
   const [sample, setSample] = useState(false);
   const tasks = sample ? sampleTasks : overview?.tasks ?? [];
   const pending = tasks.filter(task => task.status === 'todo');
@@ -26,7 +37,8 @@ export default function EpaperPreview({ overview, draft }: { overview: DailyOver
   const emptyLabel = tasks.length ? 'All tasks done' : 'No tasks for today';
   const recommendation = (overview?.ai_suggestion ?? (sample ? 'Draft the outline, then focus for 25 min.' : '')).trim() || 'No suggestion yet.';
   const available = Boolean(overview || sample);
-  const transcript = available ? ['FOCUSDESK', dateLabel, 'Tasks', progress, focusLabel,
+  const pinned = !sample && project;
+  const transcript = pinned ? [pinned.title, pinned.percent === null ? '进度待确认' : pinned.percent + '%', ...pinned.completed].join(' ') : available ? ['FOCUSDESK', dateLabel, 'Tasks', progress, focusLabel,
     ...visible.map(task => task.title), !visible.length && emptyLabel, hidden && `+${hidden} more`,
     'AI RECOMMENDATION', recommendation].filter(Boolean).join(' ') : '';
   return <section className="preview-card" aria-labelledby="preview-title">
@@ -38,7 +50,7 @@ export default function EpaperPreview({ overview, draft }: { overview: DailyOver
     <div className="device-stage"><div className="device-frame">
       <div className="paper-design" role="img" aria-label="400 × 300 e-paper preview" aria-describedby="preview-transcript"
         data-width="400" data-height="300" data-source-revision={overview?.revision ?? ''} data-preview-mode={sample ? 'sample' : 'workspace'}>
-        {available ? <div className="paper-layout" aria-hidden="true">
+        {pinned ? <ProjectCanvas project={pinned} /> : available ? <div className="paper-layout" aria-hidden="true">
           <div className="paper-heading"><strong>FOCUSDESK</strong><span>{dateLabel}</span></div>
           <div className="paper-summary"><strong>Tasks</strong><span>{progress}</span></div>
           {focusLabel && <div className="paper-focus-caption">{focusLabel}</div>}
@@ -51,8 +63,8 @@ export default function EpaperPreview({ overview, draft }: { overview: DailyOver
       </div>
     </div></div>
     <div id="preview-transcript" className="sr-only">{transcript}</div>
-    <div className="preview-status"><span className={draft ? 'draft-dot' : 'saved-dot'} /><strong>{draft ? '未保存草稿' : sample ? '示例预览' : '当前任务预览'}</strong></div>
-    <p className="preview-note">{sample ? '合成任务仅用于查看排版。' : '浏览器内随编辑更新，设备下次读取时使用已保存的内容。'}</p>
+    <div className="preview-status"><span className={draft ? 'draft-dot' : 'saved-dot'} /><strong>{pinned ? '电子屏已固定此任务' : draft ? '未保存草稿' : sample ? '示例预览' : '当前任务预览'}</strong></div>
+    <p className="preview-note">{pinned ? '模拟屏与设备读取同一份任务进度。' : sample ? '合成任务仅用于查看排版。' : '浏览器内随编辑更新，设备下次读取时使用已保存的内容。'}</p>
     <div className="display-colors" aria-label="电子纸四色"><span><i className="color-black" />黑</span><span><i className="color-white" />白</span><span><i className="color-yellow" />黄</span><span><i className="color-red" />红</span></div>
     <a className="connection-link" href="/connect">连接设备 <span aria-hidden="true">↗</span></a>
   </section>;

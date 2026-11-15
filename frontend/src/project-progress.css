@@ -1,0 +1,22 @@
+.project-progress { min-width:0; background:#fff; border:1px solid var(--line); border-radius:13px; padding:clamp(18px,2.5vw,25px); color:var(--ink); }
+.project-progress header,.project-meter-label,.project-actions {display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;}
+.project-progress header,.project-meter-label {justify-content:space-between;}
+.project-progress h2 {margin:0;font-size:21px;letter-spacing:-.04em;}
+.project-progress p,.project-progress small,.project-meter-label span {margin:7px 0;color:var(--muted);font-size:13px;line-height:1.65;}
+.project-progress select,.project-progress textarea {max-width:100%;border:1px solid #c8c4d1;border-radius:7px;background:#fff;font:inherit;color:inherit;padding:8px;}
+.project-meter-label {margin:18px 0 8px;}
+.project-meter-label strong {font-size:26px;font-variant-numeric:tabular-nums;letter-spacing:-.04em;}
+.project-meter {height:12px;background:#ece8f2;border-radius:8px;overflow:hidden;}
+.project-meter > span {display:block;background:#7960b4;height:100%;}
+.project-progress h3 {margin:16px 0 8px;font-size:14px;}
+.project-progress ul {display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 14px;list-style:none;padding:0;}
+.project-progress li {padding:4px 10px;background:#f2eef8;border-radius:5px;font-size:13px;overflow-wrap:anywhere;}
+.project-actions {margin:14px 0 5px;}
+.project-progress button,.daily-synthesis button {border:1px solid #cbc7d4;border-radius:7px;padding:7px 11px;background:white;color:var(--ink);font:inherit;font-size:13px;}
+.project-progress .project-actions button:first-child {background:#50406e;color:white;border-color:#50406e;}
+.project-progress a {text-decoration:underline;}
+.project-plan {margin-top:18px;border-top:1px solid var(--line);padding-top:15px;}
+.project-plan label {font-weight:650;}
+.project-plan textarea {width:100%;}
+
+.project-device-canvas { display:block; width:100%; height:auto; image-rendering:pixelated; }

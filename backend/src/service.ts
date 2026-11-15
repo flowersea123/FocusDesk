@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { createProjectProgress } from './project-progress.ts';
 import { createServer, type ServerResponse } from 'node:http';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -7,7 +9,7 @@ import { parseTaskUpdateText } from '../../contracts/task-update.ts';
 import { parseFocusUpdateText } from '../../contracts/focus-update.ts';
 import { parseWorkStateUpdateText } from '../../contracts/work-state.ts';
 import { parseAISuggestionUpdateText } from '../../contracts/ai-suggestion.ts';
-import { buildDisplaySnapshot } from '../../contracts/display-snapshot.ts';
+import { buildDisplaySnapshot, buildProjectDisplay } from '../../contracts/display-snapshot.ts';
 import { checkWritePolicy, readUpdateBody, WriteRequestError } from './write-policy.ts';
 import { getServerInfo } from './network-info.ts';
 import { fileURLToPath } from 'node:url';
@@ -48,6 +50,7 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
   const root = path.resolve(distPath);
   const checkpoints = createCheckpointStore(dataPath);
   const checkpointHttp = createCheckpointHttp(checkpoints, () => loader.load());
+  const projects = createProjectProgress(dataPath, checkpoints, () => loader.load());
   const screenObservation = createScreenObservationHandler({ getTasks: async () => (await loader.load()).tasks });
   const server = createServer(async (request, response) => {
     const head = request.method === 'HEAD';
@@ -64,6 +67,7 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
         json(response, 403, 'FORBIDDEN_PATH', 'Path is not available.', head);
         return;
       }
+      if (pathname === '/api/v1/project-progress') { await projects.handle(request, response); return; }
       if (pathname === '/api/v1/screen-observation') { await screenObservation(request, response); return; }
       if (pathname === '/api/v1/checkpoints') { await checkpointHttp(request, response); return; }
       if (pathname === UPDATE_PATH || pathname === FOCUS_PATH || pathname === WORK_STATE_PATH || pathname === AI_SUGGESTION_PATH) {
@@ -115,7 +119,14 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
       if (pathname === API_PATH || pathname === DISPLAY_PATH) {
         try {
           const overview = await loader.load();
-          const body = JSON.stringify(pathname === DISPLAY_PATH ? buildDisplaySnapshot(overview) : overview);
+          let payload;
+          if (pathname === DISPLAY_PATH) {
+            const project = await projects.pinned(overview);
+            payload = project
+              ? buildProjectDisplay(project, 'project:' + createHash('sha256').update(JSON.stringify(project)).digest('hex'))
+              : buildDisplaySnapshot(overview);
+          } else payload = overview;
+          const body = JSON.stringify(payload);
           if (Buffer.byteLength(body) > MAX_OVERVIEW_BYTES) throw new SourceError('DISPLAY_SNAPSHOT_TOO_LARGE', 'Display snapshot exceeds the response limit.');
           send(response, 200, body, 'application/json; charset=utf-8', head);
         } catch (error) {

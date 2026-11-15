@@ -222,3 +222,7 @@ The active device layout uses FOCUSDESK/date, Tasks/completion count, up to five
 
 Display schema display-1, layout goal-1, 4096-byte transport, 64 commands and drawing kinds0–2 continue. Fonts10–17 are NunitoRegular10px, NunitoBold10px, NunitoRegular11px, NunitoBold11px, NunitoRegular13px, NunitoRegular16px, NunitoBold16px, NunitoBold17px. Glyph indexes0–9 retain their existing faces. The opaque revision prefix is goal-1:nun1: plus the source revision. The matching firmware provides the new faces. Rounded checkboxes and the recommendation background are composed from rectangle commands.
 
+
+### 大任务进度与设备画面
+
+本机 GET /api/v1/project-progress 返回逐个任务的百分比、已完成部分和步骤清单。PUT 使用 revision、taskId 和 plan/pin/unpin 更新清单或选择设备内容。有清单时根据已记录的步骤计数，无清单时仅采用可核对的比例。GET /api/v1/display-snapshot 继续提供标准 400×300 display-1 绘制指令。固定后设备显示大任务完整进度及完成部分，取消固定后恢复今日总览。当前设备字库支持 ASCII，可为自定义步骤提供英文短名。

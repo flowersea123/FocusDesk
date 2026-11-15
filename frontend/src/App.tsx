@@ -3,6 +3,8 @@ import type { DailyOverview, Task } from '../../contracts/daily-overview';
 import { createConfiguredSource, type DemoScenario, type OverviewSource } from './data/overview-source';
 import { useOverview } from './data/use-overview';
 import { CheckpointWorkspace } from './CheckpointWorkspace';
+import ProjectProgress from './ProjectProgress';
+import type { ProjectStatus } from '../../contracts/project-progress';
 import TaskEditor from './TaskEditor';
 import FocusPanel from './FocusPanel';
 import EpaperPreview from './EpaperPreview';
@@ -40,6 +42,8 @@ function TaskList({ overview }: { overview: DailyOverview }) {
 export default function App({ source = defaultSource }: { source?: OverviewSource }) {
   const [view, setView] = useState<'today' | 'screen'>('today');
   const [screenOpened, setScreenOpened] = useState(false);
+  const [checkpointVersion, setCheckpointVersion] = useState(0);
+  const [pinned, setPinned] = useState<ProjectStatus | null>(null);
   const [scenario, setScenario] = useState<DemoScenario>('today');
   const [taskDraft, setTaskDraft] = useState<Task[] | null>(null);
   const [suggestionDraft, setSuggestionDraft] = useState<string | null>(null);
@@ -90,7 +94,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
         </div>}
         {loading && <p className={overview ? 'sr-only' : 'loading-line'} role="status">{overview ? '正在读取，暂时保留上次内容…' : '正在读取今日概览…'}</p>}
       </div>
-      {local && overview && <div className="workspace-views" role="group" aria-label="工作台视图">
+      {source.localWorkspace && overview && <div className="workspace-views" role="group" aria-label="工作台视图">
         <button type="button" aria-pressed={view === 'today'} onClick={() => setView('today')}>今天任务</button>
         <button type="button" aria-pressed={view === 'screen'} onClick={() => { setScreenOpened(true); setView('screen'); }}>屏幕记录</button>
       </div>}
@@ -98,6 +102,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
       <div className="desk-grid">
         <div className="desk-work">
           {overview && <FocusPanel overview={overview} saving={saving} onSave={source.updateFocus ? saveFocus : undefined} />}
+          {source.localWorkspace && overview && <ProjectProgress overview={overview} refreshKey={checkpointVersion} onPinned={setPinned} />}
           <section className="desk-task-panel" aria-labelledby="overview-title" aria-busy={loading}>
             <div className="desk-section-head">
               <h2 id="overview-title">今日任务</h2>
@@ -116,7 +121,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
             onSave={saveAISuggestion} onDraftChange={setSuggestionDraft} />}
         </div>
         <aside className="desk-side" aria-label="设备">
-          <EpaperPreview overview={previewOverview} draft={taskDraft !== null || suggestionDraft !== null} />
+          <EpaperPreview overview={previewOverview} project={pinned} draft={taskDraft !== null || suggestionDraft !== null} />
         </aside>
       </div>
       <details className="desk-details" open={mock}>
@@ -130,7 +135,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
           <button type="button" key={item.value} onClick={() => setScenario(item.value)} aria-pressed={scenario === item.value}>{item.label}</button>)}</div>}
       </details>
       </div>
-      {local && overview && screenOpened && <div hidden={view !== 'screen'}><CheckpointWorkspace overview={overview} /></div>}
+      {source.localWorkspace && overview && screenOpened && <div hidden={view !== 'screen'}><CheckpointWorkspace overview={overview} onChange={() => setCheckpointVersion(v => v + 1)} /></div>}
     </main>
   </div>;
 }

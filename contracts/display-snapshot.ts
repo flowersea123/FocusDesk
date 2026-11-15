@@ -1,3 +1,4 @@
+import { devicePart, type ProjectStatus } from './project-progress.ts';
 import type { DailyOverview } from './daily-overview.ts';
 import { DISPLAY_FONTS } from './display-fonts.ts';
 
@@ -145,4 +146,31 @@ export function rasterizeDisplaySnapshot(snapshot: DisplaySnapshot): Uint8Array 
     }
   }
   return pixels;
+}
+
+/** Dedicated large-task view. Uses drawing instructions already understood by the device. */
+export function buildProjectDisplay(project: ProjectStatus, revision: string): DisplaySnapshot {
+  const commands: DisplayCommand[] = [];
+  const rect = (x:number,y:number,w:number,h:number,color:number) => commands.push([0,x,y,w,h,color]);
+  const draw = (label:string,x:number,y:number,font:number,width:number) => {
+    const fitted = lines(label,font,width,1)[0];
+    if (fitted) commands.push([1,x - textBounds(fitted,font).left,y,font,0,fitted]);
+  };
+  draw('FOCUSDESK  /  TASK PROGRESS',18,25,FONT.bold11,360);
+  draw(project.title,18,61,FONT.bold17,364);
+  const percent = project.percent;
+  draw(percent === null ? 'Progress unknown' : percent+'%',18,96,FONT.bold17,180);
+  if (project.total !== null) draw(project.completed.length+' / '+project.total+' parts',216,95,FONT.regular13,166);
+  rect(18,109,364,12,0); rect(20,111,360,8,1);
+  if(percent!==null && percent>0) rect(20,111,Math.round(360*percent/100),8,2);
+  draw('COMPLETED',18,149,FONT.bold11,364);
+  const named=project.completed.map(devicePart);
+  const visible=named.filter((name):name is string=>name!==null).slice(0,5);
+  visible.forEach((name,i)=>{
+    rect(19,166+i*23,5,5,0);
+    draw(name,33,174+i*23,FONT.regular13,347);
+  });
+  if (!named.length) draw('No confirmed parts yet',18,176,FONT.regular13,364);
+  if (named.length>visible.length) draw('+'+(named.length-visible.length)+' more on Hub',18,292,FONT.regular10,364);
+  return {schema_version:'display-1',layout_version:'goal-1',revision,width:400,height:300,commands};
 }

@@ -1,0 +1,27 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { projectStatus, validSections } from '../project-progress.ts';
+import { buildProjectDisplay } from '../display-snapshot.ts';
+const task={id:'paper',title:'Read the paper',status:'todo',due_at:null};
+const plan={taskId:'paper',sections:['摘要 | Abstract','Introduction','Method','Results','Discussion']};
+const row=(parts,at='2026-11-16T03:00:00.000Z')=>({taskId:'paper',capturedAt:at,summary:'Working on this paper',progress:null,completedParts:parts});
+
+test('deduplicates confirmed sections, matches named aliases, computes whole-task progress and lists the parts under the bar',()=>{
+  const rows=[row(['Introduction','2. Methods']),row(['摘要', 'Method']),{...row(['Discussion']),taskId:'another'}];
+  const project=projectStatus(task,plan,rows);
+  assert.equal(project.percent,60);assert.equal(project.total,5);assert.equal(project.completed.length,3);
+  const snap=buildProjectDisplay(project,'project:test');
+  const labels=snap.commands.filter(c=>c[0]===1).map(c=>c[5]);
+  assert.deepEqual(labels.slice(-3),['Abstract','Introduction','Method']);
+  assert.ok(labels.includes('60%'));
+  assert.equal(snap.commands.find(c=>c[0]===0&&c[5]===2)[3],216);
+  assert.ok(JSON.stringify(snap).length<=4096); assert.ok(snap.commands.length<=64);
+  assert.equal(validSections(['Method','Methods']),false);
+  assert.equal(validSections(['阅读结论 | Read conclusion']),true);
+});
+test('preserves unknown progress for a page heading, and uses latest evidenced percentage in the absence of a checklist',()=>{
+  const latest={...row(['Introduction']), progress:{percent:50,evidence:'Paper: 2/4 sections complete'}};
+  assert.equal(projectStatus(task,undefined,[row([])]).percent,null);
+  assert.equal(projectStatus(task,undefined,[latest]).percent,50);
+  assert.equal(projectStatus(task,plan,[latest]).percent,20);
+});
