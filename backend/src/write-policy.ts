@@ -19,13 +19,17 @@ export function isLoopback(address: string | undefined): boolean {
   return isIPv4(ipv4) && ipv4.split('.')[0] === '127';
 }
 
-export function checkWritePolicy(address: string | undefined, host: string | undefined, origin: string | undefined, contentType: string | undefined) {
+export function isLocalRequest(address: string | undefined, host: string | undefined): boolean {
   let localHost = false;
   try {
     const hostname = new URL(`http://${host}`).hostname.replace(/^\[|\]$/g, '');
     localHost = hostname === 'localhost' || isLoopback(hostname);
   } catch { /* Invalid Host cannot authorize a write. */ }
-  if (!isLoopback(address) || !localHost || !host || origin !== `http://${host}`) {
+  return Boolean(host && localHost && isLoopback(address));
+}
+
+export function checkWritePolicy(address: string | undefined, host: string | undefined, origin: string | undefined, contentType: string | undefined) {
+  if (!isLocalRequest(address, host) || origin !== `http://${host}`) {
     throw new WriteRequestError(403, 'WRITE_FORBIDDEN', 'Task editing requires a same-origin browser on this computer.');
   }
   if (!contentType || !/^application\/json(?:\s*;\s*charset\s*=\s*(?:utf-8|"utf-8"))?\s*$/i.test(contentType)) {

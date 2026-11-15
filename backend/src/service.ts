@@ -11,6 +11,9 @@ import { buildDisplaySnapshot } from '../../contracts/display-snapshot.ts';
 import { checkWritePolicy, readUpdateBody, WriteRequestError } from './write-policy.ts';
 import { getServerInfo } from './network-info.ts';
 import { fileURLToPath } from 'node:url';
+import { createCheckpointStore } from './checkpoint-store.ts';
+import { createCheckpointHttp } from './checkpoint-http.ts';
+import { createScreenObservationHandler } from './screen-observation.ts';
 
 const API_PATH = '/api/v1/daily-overview';
 const UPDATE_PATH = `${API_PATH}/tasks`;
@@ -43,6 +46,9 @@ function within(root: string, target: string): boolean {
 export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, now, loader: sharedLoader }: { dataPath: string; distPath: string; writeTimeoutMs?: number; now?: () => number; loader?: ReturnType<typeof createOverviewLoader> }) {
   const loader = sharedLoader ?? createOverviewLoader(dataPath, { now });
   const root = path.resolve(distPath);
+  const checkpoints = createCheckpointStore(dataPath);
+  const checkpointHttp = createCheckpointHttp(checkpoints, () => loader.load());
+  const screenObservation = createScreenObservationHandler({ getTasks: async () => (await loader.load()).tasks });
   const server = createServer(async (request, response) => {
     const head = request.method === 'HEAD';
     try {
@@ -58,6 +64,8 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
         json(response, 403, 'FORBIDDEN_PATH', 'Path is not available.', head);
         return;
       }
+      if (pathname === '/api/v1/screen-observation') { await screenObservation(request, response); return; }
+      if (pathname === '/api/v1/checkpoints') { await checkpointHttp(request, response); return; }
       if (pathname === UPDATE_PATH || pathname === FOCUS_PATH || pathname === WORK_STATE_PATH || pathname === AI_SUGGESTION_PATH) {
         const focus = pathname === FOCUS_PATH;
         const workState = pathname === WORK_STATE_PATH;

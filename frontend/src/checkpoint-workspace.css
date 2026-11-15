@@ -1,0 +1,25 @@
+.checkpoint-workspace { min-width: 0; }
+.checkpoint-history { padding: 18px 0 6px; }
+.checkpoint-history > h3 { font-size: 15px; }
+.checkpoint-history article { border-top: 1px solid #dce1dc; padding: 14px 0 12px; overflow-wrap: anywhere; }
+.checkpoint-history strong { font-size: 14px; }
+.checkpoint-history p, .checkpoint-meta { color: #48574e; margin: 5px 0; font-size: 13px; line-height: 1.6; }
+.checkpoint-meta { display: flex; gap: 14px; color: #617269; font-size: 12px; }
+.checkpoint-history button { font: inherit; font-size: 12px; background: transparent; border: 0; color: #586957; padding: 4px 0; text-decoration: underline; }
+
+.workspace-views { display:flex; gap:5px; border-bottom:1px solid var(--line); margin:-4px 0 23px; }
+.workspace-views button { border:0; background:transparent; padding:8px 13px 11px; color:var(--muted); font-weight:550; border-bottom:2px solid transparent; border-radius:0; }
+.workspace-views button[aria-pressed="true"] { color:var(--accent); border-color:var(--accent); }
+.dashboard [hidden] { display:none !important; }
+
+.checkpoint-workspace { max-width: 880px; }
+.checkpoint-workspace .screen-observation, .checkpoint-history { background: #fff; border: 1px solid var(--line); border-radius: 13px; padding: clamp(18px, 3vw, 32px); }
+.checkpoint-history { margin-top: 18px; }
+.screen-observation h3 { font-size: 22px; letter-spacing: -.035em; }
+.checkpoint-workspace .so-actions button { font: inherit; font-size: 13px; border: 1px solid #c9c6d1; border-radius: 7px; color: var(--ink); background: white; }
+.checkpoint-workspace .so-actions .so-primary { background: #50406e; border-color: #50406e; color: white; }
+.checkpoint-workspace .so-actions .so-stop { color: #92352d; }
+.checkpoint-workspace .so-actions button:disabled { opacity: .55; }
+.checkpoint-workspace .so-field select, .checkpoint-workspace .so-field textarea { padding: 9px 10px; border: 1px solid #c9c6d1; border-radius: 7px; color: var(--ink); background: white; font: inherit; }
+.checkpoint-workspace .so-draft { border-color: var(--line); border-radius: 9px; }
+.checkpoint-workspace .so-live { border-radius: 6px; background: #f3eefb; color: #50406e; }

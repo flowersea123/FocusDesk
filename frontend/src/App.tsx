@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { DailyOverview, Task } from '../../contracts/daily-overview';
 import { createConfiguredSource, type DemoScenario, type OverviewSource } from './data/overview-source';
 import { useOverview } from './data/use-overview';
+import { CheckpointWorkspace } from './CheckpointWorkspace';
 import TaskEditor from './TaskEditor';
 import FocusPanel from './FocusPanel';
 import EpaperPreview from './EpaperPreview';
@@ -37,6 +38,8 @@ function TaskList({ overview }: { overview: DailyOverview }) {
 }
 
 export default function App({ source = defaultSource }: { source?: OverviewSource }) {
+  const [view, setView] = useState<'today' | 'screen'>('today');
+  const [screenOpened, setScreenOpened] = useState(false);
   const [scenario, setScenario] = useState<DemoScenario>('today');
   const [taskDraft, setTaskDraft] = useState<Task[] | null>(null);
   const [suggestionDraft, setSuggestionDraft] = useState<string | null>(null);
@@ -87,6 +90,11 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
         </div>}
         {loading && <p className={overview ? 'sr-only' : 'loading-line'} role="status">{overview ? '正在读取，暂时保留上次内容…' : '正在读取今日概览…'}</p>}
       </div>
+      {local && overview && <div className="workspace-views" role="group" aria-label="工作台视图">
+        <button type="button" aria-pressed={view === 'today'} onClick={() => setView('today')}>今天任务</button>
+        <button type="button" aria-pressed={view === 'screen'} onClick={() => { setScreenOpened(true); setView('screen'); }}>屏幕记录</button>
+      </div>}
+      <div hidden={view !== 'today'}>
       <div className="desk-grid">
         <div className="desk-work">
           {overview && <FocusPanel overview={overview} saving={saving} onSave={source.updateFocus ? saveFocus : undefined} />}
@@ -121,6 +129,8 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
         {mock && <div className="scenario-options" role="group" aria-label="切换演示样例">{scenarios.map(item =>
           <button type="button" key={item.value} onClick={() => setScenario(item.value)} aria-pressed={scenario === item.value}>{item.label}</button>)}</div>}
       </details>
+      </div>
+      {local && overview && screenOpened && <div hidden={view !== 'screen'}><CheckpointWorkspace overview={overview} /></div>}
     </main>
   </div>;
 }
