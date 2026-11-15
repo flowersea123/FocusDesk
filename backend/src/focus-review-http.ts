@@ -42,7 +42,7 @@ export function createReviewHttp(
       }
 
       const { records } = await checkpoints.read();
-      const observations = records.map(r => ({ id: r.id, at: r.capturedAt, summary: r.summary, nextStep: r.nextStep }));
+      const observations = records.map(r => ({ id: r.id, at: r.capturedAt, summary: r.summary, nextStep: r.nextStep, source: r.source }));
       const result = await reviews.read(date, overview.timezone, observations);
       privateJson(response, 200, synthesis ? await synthesize(result) : result);
     } catch (error) {

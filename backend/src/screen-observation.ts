@@ -73,10 +73,11 @@ function validJpeg(bytes: Buffer): boolean {
   return false;
 }
 
-function parseInput(raw: string): { taskId: string | null; image: string } {
+function parseInput(raw: string): { taskId: string | null; image: string; automatic?: boolean } {
   let data;
   try { data = JSON.parse(raw); } catch { reject(400, 'BAD_REQUEST', '无法读取截图请求。'); }
-  if (!data || Array.isArray(data) || typeof data !== 'object' || Object.keys(data).some(k => !['taskId', 'image'].includes(k)) ||
+  if (!data || Array.isArray(data) || typeof data !== 'object' || Object.keys(data).some(k => !['taskId', 'image', 'automatic'].includes(k)) ||
+      (data.automatic !== undefined && (typeof data.automatic !== 'boolean' || (data.automatic && !data.taskId))) ||
       !(data.taskId === null || (typeof data.taskId === 'string' && data.taskId.length > 0 && data.taskId.length <= 128)) ||
       typeof data.image !== 'string' || !data.image.startsWith('data:image/jpeg;base64,')) {
     reject(400, 'BAD_REQUEST', '请从检查点页面选择任务和截图。');
@@ -90,10 +91,11 @@ function parseInput(raw: string): { taskId: string | null; image: string } {
   return data;
 }
 
-function progressFrom(title: string | undefined, label: string, evidence: string): Progress | null {
-  const normalize = (s: string) => s.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+const normalize = (s: string) => s.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+
+function progressFrom(matchesTask: boolean, evidence: string): Progress | null {
   // The selected task title is never supplied to the model. Bind only a transcribed, matching title.
-  if (!title || normalize(title) !== normalize(label) || !evidence || evidence.length > 180) return null;
+  if (!matchesTask || !evidence || evidence.length > 180) return null;
   const line = normalize(evidence);
   if (!/progress|complet|finish|done|passed|进度|完成|通过|已处理/.test(line) ||
       /battery|zoom|volume|storage|download|upload|\bpage\b|电量|缩放|音量|磁盘|页码/.test(line)) return null;
@@ -118,7 +120,7 @@ type Options = {
 export function createScreenObservationHandler({ getTasks, endpoint = process.env.FOCUSDESK_MODEL_URL || 'http://127.0.0.1:18187',
   model = process.env.FOCUSDESK_MODEL_NAME || 'focusdesk-mail', fetcher = fetch, timeoutMs = 90_000, uploadTimeoutMs = 10_000 }: Options) {
   let busy = false;
-  async function observe(image: string, title: string | undefined, signal: AbortSignal) {
+  async function observe(image: string, title: string | undefined, automatic: boolean, signal: AbortSignal) {
     const url = new URL(endpoint);
     if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) ||
         url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
@@ -158,8 +160,10 @@ export function createScreenObservationHandler({ getTasks, endpoint = process.en
           !/\b(not|pending|unread|incomplete|unfinished|to read)\b|未完成|未读|待办|待阅读|☐|\[ \]/i.test(line) &&
           !completedParts.includes(name)) completedParts.push(name);
     }
+    const matchesTask = !!title && normalize(title) === normalize(result.taskLabel);
+    // The manual draft can be corrected. An unattended sample cannot mark steps in a different document.
     return { summary: result.summary.trim(), nextStep: result.nextStep.trim(),
-      progress: progressFrom(title, result.taskLabel, result.evidence.trim()), completedParts };
+      progress: progressFrom(matchesTask, result.evidence.trim()), completedParts: automatic && !matchesTask ? [] : completedParts };
   }
 
   return async function handleScreenObservation(req: IncomingMessage, res: ServerResponse) {
@@ -179,14 +183,14 @@ export function createScreenObservationHandler({ getTasks, endpoint = process.en
       checkWritePolicy(req.socket.remoteAddress, req.headers.host, req.headers.origin, req.headers['content-type']);
       if (busy) reject(429, 'OBSERVATION_BUSY', '正在读取另一张截图，请稍后再试。');
       busy = true; ownsSlot = true;
-      const { taskId, image } = parseInput(await body(req, uploadTimeoutMs));
+      const { taskId, image, automatic = false } = parseInput(await body(req, uploadTimeoutMs));
       let task: Task | undefined;
       if (taskId !== null) {
         const tasks = await getTasks();
         task = tasks.find(t => t.id === taskId);
         if (!task) reject(409, 'TASK_CHANGED', '绑定的任务已移除，请刷新后重新选择。');
       }
-      const result = await observe(image, task?.title, AbortSignal.any([abort.signal, AbortSignal.timeout(timeoutMs)]));
+      const result = await observe(image, task?.title, automatic, AbortSignal.any([abort.signal, AbortSignal.timeout(timeoutMs)]));
       if (!res.destroyed) res.end(JSON.stringify(result));
     } catch (error) {
       if (res.destroyed) return;

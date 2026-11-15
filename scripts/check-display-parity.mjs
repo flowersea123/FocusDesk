@@ -55,6 +55,10 @@ for (const [name, percent, completed] of [
 ]) {
   scenes[name] = buildProjectDisplay({ ...project, percent, completed }, 'project:' + name);
 }
+scenes['project-automatic'] = buildProjectDisplay({
+  ...project, total: null, percent: 75, evidenceSource: 'automatic',
+  completed: ['Introduction', 'Method'], automaticParts: ['Method'],
+}, 'project:automatic');
 for (const [name, scene] of Object.entries(scenes)) {
   const source = path.join(destination, `${name}.json`);
   const raw = path.join(destination, `${name}.raw`);

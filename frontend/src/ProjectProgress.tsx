@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DailyOverview } from '../../contracts/daily-overview';
 import { validSections, type ProgressConfig, type ProjectStatus } from '../../contracts/project-progress';
+import { checkpointSourceLabel } from '../../contracts/screen-checkpoint';
 import { checkpointRequest } from './CheckpointWorkspace';
 import './project-progress.css';
 
@@ -40,18 +41,18 @@ export default function ProjectProgress({overview,refreshKey,onPinned}:{overview
   }
   const pinned=data?.config.pinned===current && !!current;
   return <section className="project-progress" id="project-progress" aria-labelledby="project-progress-title">
-    <header><div><h2 id="project-progress-title">大任务进度</h2><p>{status?.total?'按已确认的步骤计算':'从已确认的截图读取进度'}</p></div>
+    <header><div><h2 id="project-progress-title">大任务进度</h2><p>{status?.total?'按清单中已记录的完成项计算':'从屏幕记录中的明确比例读取进度'}</p></div>
       {current && <select aria-label="查看大任务进度" value={current} onChange={e=>{choose(e.target.value);setDraft(null);setError('');}}>
         {overview.tasks.map(t=><option value={t.id} key={t.id}>{t.title}</option>)}</select>}
     </header>
     {!current && <p>先在今日任务中添加一个想跟踪的大任务。</p>}
     {status && <>
       <div className="project-meter-label"><strong>{status.percent===null?'进度待确认':status.percent+'%'}</strong>
-        <span>{status.total!==null?`${status.completed.length} / ${status.total} 个步骤已完成`:status.evidence??'需有明确的进度依据或步骤清单'}</span></div>
+        <span>{status.total!==null?`${status.completed.length} / ${status.total} 个步骤已完成`:status.evidence?`${checkpointSourceLabel(status.evidenceSource)} · ${status.evidence}`:'需有明确的进度依据或步骤清单'}</span></div>
       <div className="project-meter" role="progressbar" aria-label={status.title+'整体进度'} aria-valuemin={0} aria-valuemax={100} aria-valuenow={status.percent??undefined}>
         {status.percent!==null && <span style={{width:status.percent+'%'}}/>}</div>
       <h3>已完成的部分</h3>
-      {status.completed.length?<ul>{status.completed.map(part=><li key={part}><span aria-hidden="true">✓</span> {part.split('|')[0].trim()}</li>)}</ul>:<p>还没有已确认完成的部分。</p>}
+      {status.completed.length?<ul>{status.completed.map(part=><li key={part}><span aria-hidden="true">✓</span> {part.split('|')[0].trim()} <small>{checkpointSourceLabel(status.automaticParts?.includes(part) ? 'automatic' : 'manual')}</small></li>)}</ul>:<p>尚无记录表明具体部分已完成。</p>}
       <div className="project-actions"><button type="button" disabled={busy} onClick={()=>change(pinned?'unpin':'pin')}>{pinned?'恢复电子屏总览':'在电子屏显示此任务'}</button>
         <button type="button" disabled={busy} onClick={()=>setDraft({id:current,revision:data!.config.revision,text:plan.join('\n')})}>{plan.length?'编辑步骤清单':'定义完成步骤'}</button></div>
       {pinned && <small>已选为电子屏内容 · <a href="/simulator" target="_blank" rel="noreferrer">查看模拟屏 ↗</a></small>}

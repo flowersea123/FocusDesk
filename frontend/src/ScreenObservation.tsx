@@ -5,11 +5,13 @@ import './screen-observation.css';
 export type ScreenObservationRecord = Omit<ScreenCheckpoint, 'id'>;
 type Props = {
   tasks: { id: string; title: string }[];
-  onSave: (record: ScreenObservationRecord) => void | Promise<void>;
+  onSave: (record: ScreenObservationRecord, signal?: AbortSignal) => void | Promise<void>;
 };
 type Result = Pick<ScreenObservationRecord, 'summary' | 'nextStep' | 'progress' | 'completedParts'>;
 type Mode = 'once' | 'periodic' | 'upload';
-type Session = { mode: Mode; taskId: string | null; stream?: MediaStream; video?: HTMLVideoElement;
+type AutoSample = { record: ScreenObservationRecord; content: string; frame?: string };
+type AutomaticCapture = { lastContent?: string; lastFrame?: string; pending?: AutoSample };
+type Session = { mode: Mode; taskId: string | null; automatic?: AutomaticCapture; stream?: MediaStream; video?: HTMLVideoElement;
   timer?: ReturnType<typeof setInterval>; abort: AbortController; busy: boolean };
 type Draft = { jpg: string; capturedAt: string; taskId: string | null; result: Result; parts: string; keepPercent: boolean };
 
@@ -48,12 +50,29 @@ async function fileJpeg(file: File) {
   } finally { URL.revokeObjectURL(url); }
 }
 
-async function analyze(image: string, taskId: string | null, signal: AbortSignal): Promise<Result> {
+// Keep only a hash of a previously saved frame. A static window does not need another inference.
+async function frameHash(image: string) {
+  if (!crypto.subtle) return undefined;
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(image));
+  return new Uint8Array(hash).join(',');
+}
+
+function contentKey(result: Result) {
+  const normalized = (s: string) => s.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+  // A new recommendation or a different order for checked boxes is not a change in the observed work.
+  return JSON.stringify([normalized(result.summary), result.progress?.percent ?? null,
+    normalized(result.progress?.evidence ?? ''), (result.completedParts ?? []).map(normalized).sort()]);
+}
+
+async function analyze(image: string, taskId: string | null, signal: AbortSignal, automatic: boolean): Promise<Result> {
   const res = await fetch('/api/v1/screen-observation', { method: 'POST', signal, redirect: 'error', cache: 'no-store',
-    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image, taskId }) });
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image, taskId, ...(automatic ? { automatic: true } : {}) }) });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error?.message || '本机模型未能读取截图。');
-  if (typeof data.summary !== 'string' || typeof data.nextStep !== 'string' || !Array.isArray(data.completedParts)) {
+  if (typeof data.summary !== 'string' || !data.summary.trim() || typeof data.nextStep !== 'string' ||
+      !Array.isArray(data.completedParts) || data.completedParts.length > 8 || data.completedParts.some((part: unknown) => typeof part !== 'string' || !part.trim()) ||
+      (data.progress !== null && (!Number.isInteger(data.progress?.percent) || data.progress.percent < 0 || data.progress.percent > 100 ||
+        typeof data.progress.evidence !== 'string' || !data.progress.evidence.trim()))) {
     throw new Error('模型结果无法读取。');
   }
   return data;
@@ -70,6 +89,7 @@ function getError(error: unknown) {
 
 export function ScreenObservation({ tasks, onSave }: Props) {
   const [taskId, setTaskId] = useState('');
+  const [automatic, setAutomatic] = useState(false);
   const [mode, setMode] = useState<Mode | null>(null);
   const [working, setWorking] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -98,23 +118,34 @@ export function ScreenObservation({ tasks, onSave }: Props) {
   }
   useEffect(() => {
     mounted.current = true;
-    const leave = () => { dispose(); setMode(null); setWorking(false); };
+    const leave = () => { dispose(); setMode(null); setWorking(false); setAutomatic(false); };
     window.addEventListener('pagehide', leave);
     return () => { mounted.current = false; window.removeEventListener('pagehide', leave); dispose(); };
   }, []);
 
   function stop(note: string) {
     dispose();
-    setMode(null); setWorking(false); setMessage(note);
+    setMode(null); setWorking(false); setAutomatic(false); setMessage(note);
   }
 
   function isActive(session: Session) { return active.current === session; }
 
   function startSession(choice: Mode) {
-    const session: Session = { mode: choice, taskId: validTask || null, abort: new AbortController(), busy: false };
+    const session: Session = { mode: choice, taskId: validTask || null,
+      automatic: choice === 'periodic' && automatic && validTask ? {} : undefined, abort: new AbortController(), busy: false };
     active.current = session;
     setMode(choice); setError(''); setMessage('');
     return session;
+  }
+
+  async function savePending(auto: AutomaticCapture, session: Session) {
+    const sample = auto.pending;
+    if (!sample) return;
+    await onSave(sample.record, session.abort.signal);
+    auto.lastContent = sample.content;
+    auto.lastFrame = sample.frame;
+    auto.pending = undefined;
+    if (isActive(session)) { setError(''); setMessage('已自动记录本次工作。'); }
   }
 
   async function take(session: Session, file?: File) {
@@ -122,14 +153,27 @@ export function ScreenObservation({ tasks, onSave }: Props) {
     session.busy = true; setWorking(true);
     const version = revision.current;
     try {
+      const auto = session.automatic;
+      // A lost reply can follow a successful write. Retry the original timestamp and content (and thus its UUID).
+      if (auto?.pending) await savePending(auto, session);
+      if (!isActive(session)) return;
       const video = session.video;
       const image = file ? await fileJpeg(file) : jpeg(video!, video!.videoWidth, video!.videoHeight);
       const capturedAt = new Date().toISOString();
-      if (!isActive(session)) return;
+      const frame = auto ? await frameHash(image) : undefined;
+      if (!isActive(session) || (frame && frame === auto?.lastFrame)) return;
       if (session.mode === 'once') releaseMedia(session);
-      const result = await analyze(image, session.taskId, session.abort.signal);
+      const result = await analyze(image, session.taskId, session.abort.signal, !!auto);
       // A result that arrived after an edit, confirmation or dismissal cannot replace it.
       if (!isActive(session) || editing.current || version !== revision.current) return;
+      if (auto) {
+        const content = contentKey(result);
+        if (content === auto.lastContent) { auto.lastFrame = frame; setError(''); return; }
+        auto.pending = { content, frame, record: { capturedAt, taskId: session.taskId, source: 'automatic',
+          summary: result.summary, nextStep: result.nextStep, progress: result.progress, completedParts: result.completedParts } };
+        await savePending(auto, session);
+        return;
+      }
       setDraft({ jpg: image, capturedAt, taskId: session.taskId, result, parts: (result.completedParts ?? []).join('\n'), keepPercent: !!result.progress });
       setError(''); setMessage('');
     } catch (cause) {
@@ -179,7 +223,7 @@ export function ScreenObservation({ tasks, onSave }: Props) {
     if (parts.length > 8 || parts.some(p => p.length > 64)) { setError('最多填写 8 个已完成部分，每项不超过 64 字符。'); return; }
     editing.current = true; revision.current++; setSaving(true); setError('');
     try {
-      await onSave({ capturedAt: draft.capturedAt, taskId: draft.taskId, summary: draft.result.summary.trim(),
+      await onSave({ source: 'manual', capturedAt: draft.capturedAt, taskId: draft.taskId, summary: draft.result.summary.trim(),
         nextStep: draft.result.nextStep.trim(), progress: draft.keepPercent ? draft.result.progress : null, completedParts: parts });
       if (mounted.current) { dismiss(); setMessage('已保存检查点。'); }
     } catch (cause) {
@@ -189,13 +233,16 @@ export function ScreenObservation({ tasks, onSave }: Props) {
 
   return <section className="screen-observation" aria-label="截图检查点">
     <h3>截图检查点</h3>
-    <p>选择一个窗口、屏幕或截图，让本机模型起草工作进展。保存时只记录你确认的文字。</p>
+    <p>选择一个窗口、屏幕或截图，让本机模型起草文字检查点。截图仅用于本次识别。</p>
     <label className="so-field">关联任务
-      <select value={validTask} disabled={!!mode || !!draft} onChange={event => setTaskId(event.target.value)}>
+      <select value={validTask} disabled={!!mode || !!draft} onChange={event => { setTaskId(event.target.value); setAutomatic(false); }}>
         <option value="">不关联任务</option>
         {tasks.map(task => <option key={task.id} value={task.id}>{task.title}</option>)}
       </select>
     </label>
+    <label className="so-auto"><input type="checkbox" aria-describedby="auto-sampling-description" checked={automatic && !!validTask} disabled={!validTask || !supportsShare || !!mode || !!draft}
+      onChange={event => setAutomatic(event.target.checked)} /> 周期采样时自动记录</label>
+    <p className="so-note" id="auto-sampling-description">选择任务后可开启，仅对本次共享生效。自动记录由模型直接写入，可在下方核对或删除。</p>
     <div className="so-actions">
       <button type="button" disabled={!supportsShare || !!mode || !!draft} onClick={() => void share('once')}>截取一次</button>
       <button type="button" disabled={!supportsShare || !!mode || !!draft} onClick={() => void share('periodic')}>每分钟采样</button>
@@ -206,8 +253,8 @@ export function ScreenObservation({ tasks, onSave }: Props) {
       {mode && <button type="button" className="so-stop" onClick={() => stop('采样已停止。')}>停止{mode === 'periodic' ? '采样' : '本次观察'}</button>}
     </div>
     {!supportsShare && <p className="so-note">当前浏览器无法共享屏幕，可使用「上传截图」。</p>}
-    {mode === 'periodic' && <p className="so-live" role="status"><span aria-hidden="true">●</span> {dirty || saving
-      ? '草稿编辑中，已暂停采样。' : '周期共享已开启，每分钟仅保留最新草稿。'}</p>}
+    {mode === 'periodic' && <p className="so-live" role="status"><span aria-hidden="true">●</span> {active.current?.automatic ? '周期共享中，每分钟自动记录发生变化的工作。' :
+      dirty || saving ? '草稿编辑中，已暂停采样。' : '周期共享已开启，每分钟仅保留最新草稿。'}</p>}
     {working && <p className="so-note" role="status">{mode === 'upload' ? '正在读取截图…' : '正在等待共享画面或本机模型…'}</p>}
     {draft && <div className="so-draft">
       <div className="so-draft-head"><h4>审阅检查点</h4><time dateTime={draft.capturedAt}>{new Date(draft.capturedAt).toLocaleTimeString('zh-CN')}</time></div>

@@ -4,7 +4,7 @@ import { createDailySynthesis } from '../src/daily-synthesis.ts';
 
 test('synthesis samples the whole day and binds cited numbers to stored observations', async () => {
   const observations = Array.from({ length: 25 }, (_, i) => ({
-    at: new Date(Date.UTC(2026, 10, 16, 0, i)).toISOString(), summary: 'record-' + i,
+    at: new Date(Date.UTC(2026, 10, 16, 0, i)).toISOString(), summary: 'record-' + i, source: i ? 'automatic' : 'manual',
   }));
   let input;
   const synthesize = createDailySynthesis({ fetcher: async (_url, options) => {
@@ -17,6 +17,8 @@ test('synthesis samples the whole day and binds cited numbers to stored observat
   assert.equal(result.total, 25);
   assert.equal(result.used, 12);
   assert.equal(input.length, 12);
+  assert.equal(input[0].source, '手动确认');
+  assert.equal(input.at(-1).source, '自动记录');
   assert.deepEqual(result.evidence, [observations[0], observations.at(-1)]);
   await assert.rejects(synthesize({ observations: [] }), { status: 400 });
 });

@@ -25,3 +25,17 @@ test('preserves unknown progress for a page heading, and uses latest evidenced p
   assert.equal(projectStatus(task,undefined,[latest]).percent,50);
   assert.equal(projectStatus(task,plan,[latest]).percent,20);
 });
+
+test('marks automatic evidence on Hub and device, and gives a reviewed part precedence across aliases', () => {
+  const auto = {...row(['Method', '引言']), source:'automatic', progress:{percent:50,evidence:'2/4 complete'}};
+  const reviewed = row(['Introduction']);
+  const planned = projectStatus(task, plan, [auto,reviewed]);
+  assert.deepEqual(planned.automaticParts,['Method']);
+  assert.equal(planned.percent,40);
+  const observed = projectStatus(task, undefined, [reviewed,auto]);
+  assert.deepEqual(observed.automaticParts,['Method']);
+  assert.equal(observed.evidenceSource,'automatic');
+  const labels = buildProjectDisplay(observed,'test').commands.filter(c=>c[0]===1).map(c=>c[5]);
+  assert.equal(labels.filter(s=>s==='AUTO').length,1);
+  assert.ok(labels.includes('Auto-recorded'));
+});

@@ -1,6 +1,13 @@
-/** Only user-confirmed text is stored. Captured pixels are never part of this record. */
+export type CheckpointSource = 'manual' | 'automatic';
+
+export function checkpointSourceLabel(source?: CheckpointSource): string {
+  return source === 'automatic' ? '自动记录' : '手动确认';
+}
+
+/** Earlier records were all reviewed manually and omit source. Only text is stored. */
 export interface ScreenCheckpoint {
   id: string;
+  source?: CheckpointSource;
   capturedAt: string;
   taskId: string | null;
   summary: string;

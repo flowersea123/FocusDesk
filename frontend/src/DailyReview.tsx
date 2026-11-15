@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { checkpointSourceLabel } from '../../contracts/screen-checkpoint';
 import type { FocusReview } from '../../contracts/focus-review';
 import DailySynthesis from './DailySynthesis';
 import './daily-review.css';
@@ -99,6 +100,7 @@ function Experiment({ review, refresh, changeDate }: { review: FocusReview; refr
 
 export default function DailyReview({ refreshKey }: { refreshKey?: string | number }) {
   const [date, setDate] = useState('');
+  const [aiSuggestion, setAISuggestion] = useState<FocusReview['suggestion']>(null);
   const [version, setVersion] = useState(0);
   const [review, setReview] = useState<FocusReview | null>(null);
   const [error, setError] = useState('');
@@ -135,6 +137,7 @@ export default function DailyReview({ refreshKey }: { refreshKey?: string | numb
   }, []);
 
   const current = review && (!date || review.date === date) ? review : null;
+  const suggestion = aiSuggestion ?? current?.suggestion ?? null;
   const clock = current && new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: current.timezone });
   return <section className="daily-review" aria-labelledby="daily-review-title">
     <header className="review-heading">
@@ -151,7 +154,7 @@ export default function DailyReview({ refreshKey }: { refreshKey?: string | numb
       <div className="review-metrics">
         <div><span>专注计时</span><strong>{duration(current.totalSeconds)}</strong></div>
         <div><span>计时段数</span><strong>{current.sessions.length}</strong></div>
-        <div><span>已确认观察</span><strong>{current.observations.length}</strong></div>
+        <div><span>屏幕观察</span><strong>{current.observations.length}</strong></div>
       </div>
       <p className="review-summary">{current.summary}</p>
       {current.partial && <p className="review-note">专注计时可追溯至 {new Intl.DateTimeFormat('zh-CN', {
@@ -162,13 +165,13 @@ export default function DailyReview({ refreshKey }: { refreshKey?: string | numb
           <span className="review-time">{clock!.format(new Date(s.from))}–{clock!.format(new Date(s.to))}</span>
           <span><strong>{s.title}</strong><small>{duration(s.seconds)} · {endLabel[s.end]}</small></span>
         </li>)}</ul></details>}
-      {current.observations.length > 0 && <details className="review-evidence"><summary>查看已确认的屏幕观察</summary>
+      {current.observations.length > 0 && <details className="review-evidence"><summary>查看屏幕观察</summary>
         <ul>{current.observations.map(o => <li key={o.id}><span className="review-time">{clock!.format(new Date(o.at))}</span>
-          <span>{o.summary}</span></li>)}</ul></details>}
-      <DailySynthesis date={current.date} revisionKey={refreshKey}/>
-      {current.suggestion && <aside className="review-suggestion"><h3>下次可以试试</h3><p>{current.suggestion.action}</p>
-        <small>{current.suggestion.evidence}</small></aside>}
-      <Experiment key={current.date} review={current} refresh={refresh} changeDate={setDate}/>
+          <span>{o.summary}<small>{checkpointSourceLabel(o.source)}</small></span></li>)}</ul></details>}
+      <DailySynthesis date={current.date} revisionKey={current.observations.map(o => o.id).join(',')} onSuggestion={setAISuggestion}/>
+      {suggestion && <aside className="review-suggestion"><h3>下次可以试试</h3><p>{suggestion.action}</p>
+        <small>{suggestion.evidence}</small></aside>}
+      <Experiment key={current.date} review={{ ...current, suggestion }} refresh={refresh} changeDate={setDate}/>
     </>}
   </section>;
 }

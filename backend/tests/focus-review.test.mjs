@@ -115,10 +115,14 @@ test('retains a day-scoped projection of confirmed observations and a grounded n
     { id: 'future', at: new Date(localMidnight + 2 * min).toISOString(), summary: '未来' },
   ];
   const result = await review.read(undefined, 'Asia/Shanghai', rows);
-  assert.deepEqual(result.observations, [{ id: 'a', at: first, summary: '两页草稿已确认。', nextStep: '校对第二页。' }]);
+  assert.deepEqual(result.observations, [{ id: 'a', at: first, source:'manual', summary: '两页草稿已确认。', nextStep: '校对第二页。' }]);
   assert.equal(result.suggestion.action, '校对第二页。');
   assert.ok(result.suggestion.evidence.includes('两页草稿'));
   assert.ok(result.summary.includes('确认'));
+  const automatic = await review.read(undefined, 'Asia/Shanghai', [{ id:'auto', at:first, source:'automatic', summary:'屏幕显示新批注。', nextStep:'核对批注。' }]);
+  assert.equal(automatic.observations[0].source, 'automatic');
+  assert.match(automatic.summary, /最近一次自动记录/);
+  assert.doesNotMatch(automatic.suggestion.evidence, /确认/);
   assert.equal(JSON.stringify(result).includes('PRIVATE-IMAGE'), false);
   assert.equal(result.totalSeconds, 0);
 });

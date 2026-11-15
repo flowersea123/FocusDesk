@@ -1,5 +1,5 @@
 import type { Task } from './daily-overview.ts';
-import type { ScreenCheckpoint } from './screen-checkpoint.ts';
+import type { CheckpointSource, ScreenCheckpoint } from './screen-checkpoint.ts';
 
 export interface ProjectPlan {
   taskId: string;
@@ -20,6 +20,8 @@ export interface ProjectStatus {
   completed: string[];
   remaining: string[];
   evidence: string | null;
+  evidenceSource?: CheckpointSource;
+  automaticParts?: string[];
 }
 
 const translations: Record<string, string> = {
@@ -58,8 +60,13 @@ export function projectStatus(task: Task, plan: ProjectPlan | undefined, records
   const rows = records.filter(row => row.taskId === task.id)
     .sort((a, b) => a.capturedAt.localeCompare(b.capturedAt));
   const observed = new Map<string, string>();
+  const reviewed = new Set<string>();
   for (const row of rows) {
-    for (const part of row.completedParts ?? []) observed.set(sectionKey(part), part);
+    for (const part of row.completedParts ?? []) {
+      const key = sectionKey(part);
+      observed.set(key, part);
+      if (row.source !== 'automatic') reviewed.add(key);
+    }
   }
 
   const sections = plan?.sections ?? [];
@@ -74,12 +81,16 @@ export function projectStatus(task: Task, plan: ProjectPlan | undefined, records
     return {
       ...identity, percent: Math.round(100 * completed.length / sections.length),
       total: sections.length, completed, remaining, evidence: null,
+      automaticParts: completed.filter(s => !s.split('|').some(name => reviewed.has(sectionKey(name)))),
     };
   }
 
-  const progress = rows.filter(row => row.progress !== null).at(-1)?.progress;
+  const latest = rows.filter(row => row.progress !== null).at(-1);
+  const progress = latest?.progress;
   return {
     ...identity, percent: progress?.percent ?? null, total: null,
     completed: [...observed.values()], remaining: [], evidence: progress?.evidence ?? null,
+    ...(progress ? { evidenceSource: latest?.source ?? 'manual' } : {}),
+    automaticParts: [...observed].filter(([key]) => !reviewed.has(key)).map(([, name]) => name),
   };
 }

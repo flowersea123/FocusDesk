@@ -23,3 +23,6 @@
 .checkpoint-workspace .so-field select, .checkpoint-workspace .so-field textarea { padding: 9px 10px; border: 1px solid #c9c6d1; border-radius: 7px; color: var(--ink); background: white; font: inherit; }
 .checkpoint-workspace .so-draft { border-color: var(--line); border-radius: 9px; }
 .checkpoint-workspace .so-live { border-radius: 6px; background: #f3eefb; color: #50406e; }
+
+.workspace-capture-indicator { display: none; }
+.dashboard:has(.so-live) .workspace-capture-indicator { display: inline; color: var(--accent); font-size: 11px; }

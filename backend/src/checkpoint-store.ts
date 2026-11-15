@@ -19,6 +19,8 @@ export function checkpointId(value: unknown): string {
 function parseRecord(row: Partial<ScreenCheckpoint>): ScreenCheckpoint {
   if (!row || typeof row !== 'object') inputError();
   const id = checkpointId(row.id);
+  const source = row.source === undefined ? 'manual' : row.source;
+  if ((source !== 'manual' && source !== 'automatic') || (source === 'automatic' && !row.taskId)) inputError();
   if (typeof row.capturedAt !== 'string' || !Number.isFinite(Date.parse(row.capturedAt)) ||
       new Date(row.capturedAt).toISOString() !== row.capturedAt) inputError();
   if (row.taskId !== null && (typeof row.taskId !== 'string' || !/^[\x21-\x7e]{1,64}$/.test(row.taskId))) inputError();
@@ -30,7 +32,7 @@ function parseRecord(row: Partial<ScreenCheckpoint>): ScreenCheckpoint {
   const parts = row.completedParts ?? [];
   if (!Array.isArray(parts) || parts.length > 8) inputError();
   const completedParts = [...new Set(parts.map(part => text(part, 64)))];
-  return { completedParts, id, capturedAt: row.capturedAt, taskId: row.taskId, summary: text(row.summary, 500), nextStep: text(row.nextStep, 350, true), progress };
+  return { completedParts, source, id, capturedAt: row.capturedAt, taskId: row.taskId, summary: text(row.summary, 500), nextStep: text(row.nextStep, 350, true), progress };
 }
 
 export function createCheckpointStore(dataPath: string) {

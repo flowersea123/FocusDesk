@@ -1,9 +1,15 @@
-export interface ConfirmedObservation {
+import type { CheckpointSource } from './screen-checkpoint.ts';
+
+export interface ReviewObservation {
+  source?: CheckpointSource;
   id: string;
   at: string;
   summary: string;
   nextStep?: string;
 }
+
+/** Older integrations supply manually confirmed observations without a source field. */
+export type ConfirmedObservation = ReviewObservation;
 
 export interface ReviewSegment {
   taskId: string;
@@ -29,7 +35,7 @@ export interface FocusReview {
   partial: boolean;
   totalSeconds: number;
   sessions: ReviewSegment[];
-  observations: ConfirmedObservation[];
+  observations: ReviewObservation[];
   summary: string;
   suggestion: { action: string; evidence: string } | null;
   experiment: ReviewExperiment | null;

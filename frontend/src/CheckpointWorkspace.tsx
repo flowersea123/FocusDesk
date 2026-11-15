@@ -2,7 +2,7 @@ import "./checkpoint-workspace.css";
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DailyOverview } from '../../contracts/daily-overview';
-import type { ScreenCheckpoint, CheckpointHistory } from '../../contracts/screen-checkpoint';
+import { checkpointSourceLabel, type ScreenCheckpoint, type CheckpointHistory } from '../../contracts/screen-checkpoint';
 import ScreenObservation from './ScreenObservation';
 
 export async function checkpointRequest<T>(path: string, options?: RequestInit): Promise<T> {
@@ -27,10 +27,10 @@ export function CheckpointWorkspace({ overview, onChange }: { overview: DailyOve
   }, []);
   useEffect(() => { void load(); return () => { sequence.current++; }; }, [load]);
 
-  async function save(record: Omit<ScreenCheckpoint, 'id'>) {
+  async function save(record: Omit<ScreenCheckpoint, 'id'>, signal?: AbortSignal) {
     const key = JSON.stringify(record);
     if (pendingSave.current?.key !== key) pendingSave.current = { key, id: crypto.randomUUID() };
-    await checkpointRequest('/api/v1/checkpoints', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...record, id: pendingSave.current.id }) });
+    await checkpointRequest('/api/v1/checkpoints', { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...record, id: pendingSave.current.id }) });
     await load();
     onChange?.();
   }
@@ -49,6 +49,7 @@ export function CheckpointWorkspace({ overview, onChange }: { overview: DailyOve
       <h3>最近检查点</h3>
       {history.records.map(row => <article key={row.id}>
         <div className="checkpoint-meta"><time dateTime={row.capturedAt}>{new Date(row.capturedAt).toLocaleString('zh-CN',{ month:'numeric', day:'numeric', hour:'2-digit',minute:'2-digit',timeZone:overview.timezone })}</time>
+          <span>{checkpointSourceLabel(row.source)}</span>
           {row.taskId && <span>{overview.tasks.find(t => t.id === row.taskId)?.title ?? '已移除的任务'}</span>}</div>
         <strong>{row.summary}</strong>
         {!!row.completedParts?.length && <p>已完成　{row.completedParts.join('、')}</p>}

@@ -98,7 +98,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
       </div>
       {source.localWorkspace && overview && <div className="workspace-views" role="group" aria-label="工作台视图">
         <button type="button" aria-pressed={view === 'today'} onClick={() => setView('today')}>今天任务</button>
-        <button type="button" aria-pressed={view === 'screen'} onClick={() => { setScreenOpened(true); setView('screen'); }}>屏幕记录</button>
+        <button type="button" aria-pressed={view === 'screen'} onClick={() => { setScreenOpened(true); setView('screen'); }} aria-label="屏幕记录">屏幕记录<span className="workspace-capture-indicator"> · 周期采样</span></button>
         <button type="button" aria-pressed={view === 'review'} onClick={() => { setReviewOpened(true); setView('review'); }}>每日回顾</button>
       </div>}
       <div hidden={view !== 'today'}>

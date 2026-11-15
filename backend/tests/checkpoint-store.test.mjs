@@ -25,3 +25,21 @@ test('confirmed observations survive restart and concurrent saves, and contain n
   await assert.rejects(store.add(row), {status:503});
   assert.equal(await readFile(file+'.checkpoints.json','utf8'), 'broken');
 });
+
+test('keeps manual and automatic origin after restart and deletion, treating old records as reviewed', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'focusdesk-sources-'));
+  t.after(() => rm(dir, { recursive:true, force:true }));
+  const file = path.join(dir, 'tasks.json');
+  const old = { id:randomUUID(), capturedAt:'2026-11-16T01:00:00.000Z', taskId:'paper', summary:'Reading the paper', nextStep:'', progress:null };
+  await writeFile(file + '.checkpoints.json', JSON.stringify({version:1, records:[old]}));
+  const store = createCheckpointStore(file);
+  await store.add({...old, source:'manual'});
+  const auto = {...old, id:randomUUID(), source:'automatic', completedParts:['Introduction']};
+  await store.add(auto);
+  const restarted = createCheckpointStore(file);
+  assert.deepEqual((await restarted.read()).records.map(r => r.source), ['manual','automatic']);
+  assert.throws(() => store.add({...auto, source:'unknown'}), {status:400});
+  assert.throws(() => store.add({...auto, taskId:null}), {status:400});
+  await restarted.remove(auto.id);
+  assert.deepEqual((await store.read()).records.map(r => r.id), [old.id]);
+});

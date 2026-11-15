@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { open, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { FOCUS_DURATION_MS, MAX_OVERVIEW_BYTES, type DailyOverview, type FocusSession } from '../../contracts/daily-overview.ts';
-import type { ConfirmedObservation, FocusReview, ReviewExperiment, ReviewSegment } from '../../contracts/focus-review.ts';
+import { checkpointSourceLabel } from '../../contracts/screen-checkpoint.ts';
+import type { ReviewObservation, FocusReview, ReviewExperiment, ReviewSegment } from '../../contracts/focus-review.ts';
 
 const DAY = 86_400_000;
 const RETENTION = 90 * DAY;
@@ -127,22 +128,22 @@ function shortDuration(seconds: number) {
   return Math.floor(seconds / 60) + ' 分钟';
 }
 
-function summarize(sessions: ReviewSegment[], total: number, observations: ConfirmedObservation[]) {
+function summarize(sessions: ReviewSegment[], total: number, observations: ReviewObservation[]) {
   const last = observations.at(-1);
   const most = sessions.reduce((best, s) => !best || s.seconds > best.seconds ? s : best, null as ReviewSegment | null);
   const timer = most ? '共 ' + sessions.length + ' 段计时，合计 ' + shortDuration(total) + '。' +
     '最长一段用于「' + most.title + '」。' : '这一天没有留下专注计时记录。';
-  const summary = timer + (last ? '最近一次确认的屏幕观察写道：“' + last.summary + '”' : '');
+  const summary = timer + (last ? '最近一次' + checkpointSourceLabel(last.source) + '的屏幕观察写道：“' + last.summary + '”' : '');
   const next = observations.findLast(o => Boolean(o.nextStep?.trim()));
   let suggestion: FocusReview['suggestion'] = null;
-  if (next) suggestion = { action: next.nextStep!, evidence: '来自已确认的观察：“' + next.summary + '”' };
+  if (next) suggestion = { action: next.nextStep!, evidence: '来自' + checkpointSourceLabel(next.source) + '的屏幕观察：“' + next.summary + '”' };
   else if (most) suggestion = {
     action: '下次开始「' + most.title + '」前，写下一项能在一段计时内检查的成果。结束后记下是否做到。',
     evidence: '该任务今天有一段 ' + shortDuration(most.seconds) + ' 的计时记录。',
   };
   else if (last) suggestion = {
     action: '下次开始前写下要完成的一个动作，结束时再确认一次屏幕观察，核对前后的变化。',
-    evidence: '这一天已确认 ' + observations.length + ' 条屏幕观察。',
+    evidence: '这一天共有 ' + observations.length + ' 条屏幕观察。',
   };
   return { summary, suggestion };
 }
@@ -225,7 +226,7 @@ export function createFocusReview(dataPath: string, { now = Date.now }: { now?: 
       });
     },
 
-    read(date?: string, timezone?: string, observations: readonly ConfirmedObservation[] = []): Promise<FocusReview> {
+    read(date?: string, timezone?: string, observations: readonly ReviewObservation[] = []): Promise<FocusReview> {
       return run(async data => {
         const at = now();
         const zone = timezone ?? latestZone;
@@ -248,15 +249,15 @@ export function createFocusReview(dataPath: string, { now = Date.now }: { now?: 
             end: until > end ? 'continued' : s.end === 'running' && !reconciled ? 'unobserved' :
               s.end === 'running' && at >= s.start + FOCUS_DURATION_MS ? 'expired' : s.end });
         }
-        const confirmed = observations.filter(o => typeof o.summary === 'string' && o.summary.trim() &&
+        const dailyObservations = observations.filter(o => typeof o.summary === 'string' && o.summary.trim() &&
           Date.parse(o.at) >= begin && Date.parse(o.at) < end && Date.parse(o.at) <= at)
-          .map(({ id, at, summary, nextStep }) => ({ id, at, summary, ...(nextStep ? { nextStep } : {}) }))
+          .map(({ id, at, summary, nextStep, source = 'manual' }) => ({ id, at, summary, source, ...(nextStep ? { nextStep } : {}) }))
           .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
         const totalSeconds = Math.floor(elapsed / 1000);
         const keptExperiments = data.experiments.filter(e => e.date >= iso(at - RETENTION).slice(0, 10));
         return {
           date: selected, today, timezone: zone, trackingSince: iso(floor), partial: begin < floor,
-          totalSeconds, sessions, observations: confirmed, ...summarize(sessions, totalSeconds, confirmed),
+          totalSeconds, sessions, observations: dailyObservations, ...summarize(sessions, totalSeconds, dailyObservations),
           experiment: keptExperiments.find(e => e.date === selected) ?? null,
           previousExperimentDate: keptExperiments.filter(e => e.date < selected && !e.outcome)
             .map(e => e.date).sort().at(-1) ?? null,

@@ -163,14 +163,17 @@ export function buildProjectDisplay(project: ProjectStatus, revision: string): D
   if (project.total !== null) draw(project.completed.length+' / '+project.total+' parts',216,95,FONT.regular13,166);
   rect(18,109,364,12,0); rect(20,111,360,8,1);
   if(percent!==null && percent>0) rect(20,111,Math.round(360*percent/100),8,2);
+  if (project.total === null && project.evidenceSource === 'automatic') draw('Auto-recorded',216,95,FONT.regular13,166);
   draw('COMPLETED',18,149,FONT.bold11,364);
-  const named=project.completed.map(devicePart);
-  const visible=named.filter((name):name is string=>name!==null).slice(0,5);
-  visible.forEach((name,i)=>{
+  const automatic = new Set(project.automaticParts ?? []);
+  const named = project.completed.map(part => ({name: devicePart(part), auto: automatic.has(part)}));
+  const visible = named.filter(p => p.name !== null).slice(0,5);
+  visible.forEach(({name,auto},i)=>{
     rect(19,166+i*23,5,5,0);
-    draw(name,33,174+i*23,FONT.regular13,347);
+    draw(name!,33,174+i*23,FONT.regular13,auto ? 295 : 347);
+    if (auto) draw('AUTO',329,174+i*23,FONT.regular10,52);
   });
-  if (!named.length) draw('No confirmed parts yet',18,176,FONT.regular13,364);
+  if (!named.length) draw('No completed parts recorded',18,176,FONT.regular13,364);
   if (named.length>visible.length) draw('+'+(named.length-visible.length)+' more on Hub',18,292,FONT.regular10,364);
   return {schema_version:'display-1',layout_version:'goal-1',revision,width:400,height:300,commands};
 }

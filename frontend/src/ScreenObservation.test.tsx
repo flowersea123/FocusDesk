@@ -39,9 +39,9 @@ test('single capture releases tracks, resizes the frame, and saves only confirme
   expect(JSON.parse(post.mock.calls[0][1].body).taskId).toBe('lab');
   fireEvent.change(screen.getByLabelText('工作摘要'),{target:{value:'本人核对的摘要'}});
   fireEvent.change(screen.getByLabelText(/已完成的具体部分/),{target:{value:'Method\nResults'}});
-  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('checkbox', { name: /保存画面/ }));
   await click('确认并保存');
-  expect(onSave).toHaveBeenCalledWith({capturedAt:expect.any(String),taskId:'lab',summary:'本人核对的摘要',
+  expect(onSave).toHaveBeenCalledWith({source:'manual',capturedAt:expect.any(String),taskId:'lab',summary:'本人核对的摘要',
     nextStep:result.nextStep,progress:null,completedParts:['Method','Results']});
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
 });
@@ -105,4 +105,66 @@ test('upload decodes without a sharing request and a dismissed draft saves no co
   await click('放弃草稿');
   expect(onSave).not.toHaveBeenCalled();
   expect(screen.queryByLabelText('工作摘要')).not.toBeInTheDocument();
+});
+
+test('per-session opt-in saves changed observations, skips static frames and equivalent text, and keeps unknown progress unknown', async () => {
+  vi.useFakeTimers();
+  camera();
+  vi.stubGlobal('crypto', { subtle: { digest: async (_name: string, bytes: Uint8Array) => bytes } });
+  const frame = (n: number) => 'data:image/jpeg;base64,frame' + n;
+  vi.mocked(HTMLCanvasElement.prototype.toDataURL).mockReturnValueOnce(frame(1)).mockReturnValueOnce(frame(1))
+    .mockReturnValueOnce(frame(2)).mockReturnValueOnce(frame(3)).mockReturnValue(frame(4));
+  const unknown = {summary:'屏幕显示一份未标记进度的草稿。', nextStep:'', completedParts:[], progress:null};
+  const post = vi.fn().mockImplementationOnce(async()=>Response.json(result))
+    .mockImplementationOnce(async()=>Response.json({...result, completedParts:[...result.completedParts].reverse(), nextStep:'另一个建议。'}))
+    .mockImplementationOnce(async()=>Response.json(unknown))
+    .mockImplementationOnce(async()=>Response.json({...unknown, progress:{ percent:'75', evidence:'' }}))
+    .mockImplementation(async()=>Response.json(result));
+  vi.stubGlobal('fetch', post);
+  const onSave = vi.fn();
+  render(<ScreenObservation tasks={tasks} onSave={onSave}/>);
+  const option = screen.getByLabelText('周期采样时自动记录');
+  expect(option).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('关联任务'), {target:{value:'lab'}});
+  expect(option).not.toBeChecked();
+  fireEvent.click(option);
+  expect(post).not.toHaveBeenCalled();
+  await click('每分钟采样');
+  expect(onSave).toHaveBeenCalledTimes(1);
+  expect(onSave.mock.calls[0][0]).toEqual({...result, capturedAt:expect.any(String), taskId:'lab', source:'automatic'});
+  expect(JSON.parse(post.mock.calls[0][1].body).automatic).toBe(true);
+  expect(screen.queryByLabelText('工作摘要')).not.toBeInTheDocument();
+  const next = () => act(async()=>{await vi.advanceTimersByTimeAsync(60_000);});
+  await next(); expect(post).toHaveBeenCalledTimes(1);
+  await next(); expect(post).toHaveBeenCalledTimes(2); expect(onSave).toHaveBeenCalledTimes(1);
+  await next(); expect(onSave.mock.calls[1][0]).toEqual({...unknown, capturedAt:expect.any(String), taskId:'lab', source:'automatic'});
+  await next(); expect(onSave).toHaveBeenCalledTimes(2); expect(screen.getByRole('alert')).toHaveTextContent('模型结果无法读取');
+  await click('停止采样');
+  expect(option).not.toBeChecked();
+  await click('每分钟采样');
+  expect(post.mock.calls.at(-1) && JSON.parse(post.mock.calls.at(-1)![1].body).automatic).toBeUndefined();
+  expect(screen.getByLabelText('工作摘要')).toBeInTheDocument();
+  expect(onSave).toHaveBeenCalledTimes(2);
+});
+
+test('an automatic save retries using its original timestamp and drops inference arriving after Stop', async () => {
+  vi.useFakeTimers();
+  camera();
+  vi.stubGlobal('crypto', { subtle: undefined });
+  let finish!: (value: Response) => void;
+  const post = vi.fn().mockImplementationOnce(async()=>Response.json(result))
+    .mockImplementationOnce(()=>new Promise(resolve=>{finish = resolve;}));
+  vi.stubGlobal('fetch', post);
+  const onSave = vi.fn().mockRejectedValueOnce(new Error('回复中断')).mockResolvedValue(undefined);
+  render(<ScreenObservation tasks={tasks} onSave={onSave}/>);
+  fireEvent.change(screen.getByLabelText('关联任务'), {target:{value:'lab'}});
+  fireEvent.click(screen.getByLabelText('周期采样时自动记录'));
+  await click('每分钟采样');
+  expect(screen.getByRole('alert')).toHaveTextContent('回复中断');
+  await act(async()=>{await vi.advanceTimersByTimeAsync(60_000);});
+  expect(onSave.mock.calls[1][0]).toEqual(onSave.mock.calls[0][0]);
+  await click('停止采样');
+  expect(onSave.mock.calls[1][1].aborted).toBe(true);
+  await act(async()=>{finish(Response.json({...result,summary:'随后才到达的模型结果'}));});
+  expect(onSave).toHaveBeenCalledTimes(2);
 });

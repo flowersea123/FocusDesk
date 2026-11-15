@@ -102,3 +102,19 @@ test('refuses remote model hosts and incomplete model output', async t => {
   const incomplete=await setup(t,{fetcher:async()=>Response.json({ choices:[{finish_reason:'length'}] })});
   assert.equal((await incomplete.post()).status,502);
 });
+
+test('automatic capture attributes completion only to a visible, matching task title', async t => {
+  let taskLabel = 'Another report';
+  const {post} = await setup(t, {fetcher: async () => completion({...output, taskLabel,
+    completedParts:[{name:'Method',line:'✓ Method'}]})});
+  const automatic = () => post({image, taskId:'a', automatic:true}).then(r => r.json());
+  let seen = await automatic();
+  assert.deepEqual(seen.completedParts, []);
+  assert.equal(seen.progress, null);
+  assert.equal(seen.summary, output.summary);
+  taskLabel = ' LAB   REPORT ';
+  seen = await automatic();
+  assert.deepEqual(seen.completedParts, ['Method']);
+  assert.equal(seen.progress.percent, 75);
+  assert.equal((await post({image, taskId:null, automatic:true})).status, 400);
+});

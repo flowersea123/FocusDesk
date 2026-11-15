@@ -25,10 +25,13 @@ describe('DailyReview', () => {
       return Response.json(model);
     });
     vi.stubGlobal('fetch', request);
+    model.observations.push({ id:'b', at:'2026-11-16T16:21:00Z', summary:'屏幕显示批注', source:'automatic' });
     render(<DailyReview refreshKey={1}/>);
     await screen.findByText(model.summary);
     expect(screen.getByText('00:00–00:15')).toBeInTheDocument();
     expect(screen.getByText('完成两页草稿')).toBeInTheDocument();
+    expect(screen.getByText('手动确认')).toBeInTheDocument();
+    expect(screen.getByText('自动记录')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '用上面的建议填写计划' }));
     fireEvent.change(screen.getByLabelText(/复查结果/), { target: { value: '第二页已完成。' } });
     fireEvent.click(screen.getByRole('button', { name: '保存实验' }));
