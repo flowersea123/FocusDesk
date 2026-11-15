@@ -43,3 +43,25 @@ test('keeps manual and automatic origin after restart and deletion, treating old
   await restarted.remove(auto.id);
   assert.deepEqual((await store.read()).records.map(r => r.id), [old.id]);
 });
+
+test('reading confirmations require a saved matching bookmark, survive retries and preserve the original source', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'focusdesk-reading-'));
+  t.after(() => rm(dir, {recursive:true,force:true}));
+  const file = path.join(dir, 'tasks.json');
+  const store = createCheckpointStore(file);
+  const input = {id:randomUUID(),capturedAt:'2026-11-16T00:00:00.000Z',source:'automatic',taskId:'paper',
+    summary:'阅读论文正文',nextStep:'',completedParts:[],progress:null,readingDocument:'A Paper',readingSection:'Introduction'};
+  await store.add(input);
+  assert.throws(() => store.add({...input,readingConfirmed:true}), {status:400});
+  assert.throws(() => store.add({...input,readingSection:''}), {status:400});
+  assert.throws(() => store.add({...input,readingDocument:'A\nPaper'}), {status:400});
+  assert.throws(() => store.add({...input,source:'manual',taskId:null}), {status:400});
+  await assert.rejects(store.confirmReading(input.id,'Different section'), {status:409});
+  await Promise.all([store.confirmReading(input.id,'Introduction'),store.confirmReading(input.id,'Introduction')]);
+  await store.add(input);
+  const rows = (await createCheckpointStore(file).read()).records;
+  assert.equal(rows.length,1);
+  assert.deepEqual(rows[0],{...input,readingConfirmed:true});
+  await store.remove(input.id);
+  await assert.rejects(store.confirmReading(input.id,'Introduction'), {status:409});
+});

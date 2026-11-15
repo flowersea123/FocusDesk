@@ -40,6 +40,16 @@ test('checkpoint evidence drives a pinned device view and unpin restores the dai
   const labels = snapshot.commands.filter(c=>c[0]===1).map(c=>c[5]);
   for (const text of ['40%','Introduction','Method']) assert.ok(labels.includes(text));
   assert.ok(!labels.includes('Results'));
+  const nextPage = {
+    ...checkpoint, id: randomUUID(), completedParts: [], readingSection: 'Results', readingDocument: 'Read paper',
+    summary: 'Results is visible.', capturedAt: new Date().toISOString(),
+  };
+  assert.equal((await write(origin + '/api/v1/checkpoints', 'POST', nextPage)).status, 200);
+  assert.deepEqual(await display(), snapshot, 'a bookmark alone must not trigger a physical refresh');
   assert.equal((await write(endpoint,'PUT',{taskId:'paper',action:'unpin',revision:pinned.config.revision})).status,200);
   assert.deepEqual(await display(), initial);
+  const config = (await (await fetch(endpoint)).json()).config;
+  const sections = Array.from({ length: 24 }, (_, i) => '文'.repeat(60) + i);
+  assert.ok(Buffer.byteLength(JSON.stringify(sections)) > 4096);
+  assert.equal((await write(endpoint, 'PUT', { ...plan, sections, revision: config.revision })).status, 200);
 });

@@ -20,7 +20,7 @@
 .checkpoint-workspace .so-actions .so-primary { background: #50406e; border-color: #50406e; color: white; }
 .checkpoint-workspace .so-actions .so-stop { color: #92352d; }
 .checkpoint-workspace .so-actions button:disabled { opacity: .55; }
-.checkpoint-workspace .so-field select, .checkpoint-workspace .so-field textarea { padding: 9px 10px; border: 1px solid #c9c6d1; border-radius: 7px; color: var(--ink); background: white; font: inherit; }
+.checkpoint-workspace .so-field :is(select, textarea, input) { padding: 9px 10px; border: 1px solid #c9c6d1; border-radius: 7px; color: var(--ink); background: white; font: inherit; }
 .checkpoint-workspace .so-draft { border-color: var(--line); border-radius: 9px; }
 .checkpoint-workspace .so-live { border-radius: 6px; background: #f3eefb; color: #50406e; }
 

@@ -39,3 +39,32 @@ test('marks automatic evidence on Hub and device, and gives a reviewed part prec
   assert.equal(labels.filter(s=>s==='AUTO').length,1);
   assert.ok(labels.includes('Auto-recorded'));
 });
+
+test('bookmark movements track the latest section and only explicit reader confirmations advance progress', () => {
+  const reading = (id, section, minute, document = 'The Paper') => ({
+    ...row([], '2026-11-16T03:'+minute+':00.000Z'),id,source:'automatic',readingSection:section,readingDocument:document});
+  const intro = reading('a','Introduction','00');
+  const method = reading('b','Method','01');
+  const methodAgain = reading('c','Methods','02');
+  const initial = projectStatus(task,plan,[methodAgain,method,intro]);
+  assert.equal(initial.readingBookmark.current.id,'c');
+  assert.equal(initial.readingBookmark.previous.id,'a');
+  assert.equal(initial.percent,0);
+  assert.deepEqual(initial.completed,[]);
+  const updated = projectStatus(task,plan,[{...intro,readingConfirmed:true},method]);
+  assert.equal(updated.percent,20);
+  assert.deepEqual(updated.completed,['Introduction']);
+  assert.deepEqual(updated.automaticParts,[]);
+  assert.equal(updated.readingBookmark.previous.confirmed,true);
+  assert.equal(updated.readingBookmark.previous.source,'automatic');
+  assert.ok(buildProjectDisplay(updated,'display:reading').commands.some(cmd => cmd[0]===1 && cmd[5]==='Introduction'));
+  assert.equal(projectStatus(task,undefined,[intro,method]).percent,null);
+  assert.equal(projectStatus(task,plan,[intro,{...method,taskId:'another'}]).readingBookmark.current.id,'a');
+  assert.equal(projectStatus(task,plan,[method,{...intro,capturedAt:'2026-11-16T04:00:00.000Z'}]).readingBookmark.previous,undefined);
+  assert.equal(projectStatus(task,undefined,[intro,method,{...intro,capturedAt:'2026-11-16T04:00:00.000Z'}]).readingBookmark.previous,undefined);
+  assert.equal(projectStatus(task,plan,[intro,{...method,readingDocument:'Another paper'}]).readingBookmark.previous,undefined);
+  const separate = projectStatus(task,plan,[{...intro,readingConfirmed:true},{...method,readingDocument:'Another paper',readingSection:'Introduction'}]);
+  assert.equal(separate.readingBookmark.current.confirmed,false);
+  assert.equal(separate.percent,20);
+  assert.equal(projectStatus(task,plan,[{...intro,readingDocument:undefined},{...method,readingDocument:undefined}]).readingBookmark.previous,undefined);
+});

@@ -138,7 +138,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
           <button type="button" key={item.value} onClick={() => setScenario(item.value)} aria-pressed={scenario === item.value}>{item.label}</button>)}</div>}
       </details>
       </div>
-      {source.localWorkspace && overview && screenOpened && <div hidden={view !== 'screen'}><CheckpointWorkspace overview={overview} onChange={() => setCheckpointVersion(v => v + 1)} /></div>}
+      {source.localWorkspace && overview && screenOpened && <div hidden={view !== 'screen'}><CheckpointWorkspace overview={overview} active={view === 'screen'} onChange={() => setCheckpointVersion(v => v + 1)} /></div>}
       {source.localWorkspace && overview && reviewOpened && <div hidden={view !== 'review'}>
         <DailyReview refreshKey={overview.revision + ':' + checkpointVersion} />
       </div>}

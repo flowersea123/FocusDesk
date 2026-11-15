@@ -12,6 +12,15 @@ export interface ProgressConfig {
   plans: ProjectPlan[];
 }
 
+export interface ReadingLocation {
+  id: string;
+  section: string;
+  document?: string;
+  source: CheckpointSource;
+  confirmed: boolean;
+  capturedAt: string;
+}
+
 export interface ProjectStatus {
   taskId: string;
   title: string;
@@ -22,6 +31,7 @@ export interface ProjectStatus {
   evidence: string | null;
   evidenceSource?: CheckpointSource;
   automaticParts?: string[];
+  readingBookmark?: { current: ReadingLocation; previous?: ReadingLocation };
 }
 
 const translations: Record<string, string> = {
@@ -61,7 +71,37 @@ export function projectStatus(task: Task, plan: ProjectPlan | undefined, records
     .sort((a, b) => a.capturedAt.localeCompare(b.capturedAt));
   const observed = new Map<string, string>();
   const reviewed = new Set<string>();
+  const sections = plan?.sections ?? [];
+  const knownSectionIndex = (name: string) => sections.findIndex(section => section.split('|').some(alias => sectionKey(alias) === name));
+  const visited = new Set<string>();
+  const confirmedLocations = new Set<string>();
+  const documentKey = (row: ScreenCheckpoint) => row.readingDocument?.normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ') ?? '';
+  const locationKey = (row: ScreenCheckpoint) => JSON.stringify([documentKey(row) || row.id, sectionKey(row.readingSection!)]);
+  let currentDocument = '';
+  let currentKey = '';
+  let currentReading: ScreenCheckpoint | undefined;
+  let previousReading: ScreenCheckpoint | undefined;
   for (const row of rows) {
+    if (row.readingSection) {
+      const section = sectionKey(row.readingSection);
+      const document = documentKey(row);
+      const visit = JSON.stringify([document, section]);
+      if (!document || document !== currentDocument) previousReading = undefined;
+      else if (currentKey !== section) {
+        const from = knownSectionIndex(currentKey), to = knownSectionIndex(section);
+        const movingForward = from >= 0 && to >= 0 ? to > from : !visited.has(visit);
+        previousReading = movingForward ? currentReading : undefined;
+      }
+      currentDocument = document;
+      currentKey = section;
+      visited.add(visit);
+      currentReading = row;
+      if (row.readingConfirmed) {
+        confirmedLocations.add(locationKey(row));
+        observed.set(section, row.readingSection);
+        reviewed.add(section);
+      }
+    }
     for (const part of row.completedParts ?? []) {
       const key = sectionKey(part);
       observed.set(key, part);
@@ -69,8 +109,13 @@ export function projectStatus(task: Task, plan: ProjectPlan | undefined, records
     }
   }
 
-  const sections = plan?.sections ?? [];
-  const identity = { taskId: task.id, title: task.title };
+  function readingLocation(row: ScreenCheckpoint): ReadingLocation {
+    const section = row.readingSection!;
+    return { id: row.id, section, ...(row.readingDocument ? {document: row.readingDocument} : {}), source: row.source ?? 'manual', capturedAt: row.capturedAt, confirmed: confirmedLocations.has(locationKey(row)) };
+  }
+  const identity = { taskId: task.id, title: task.title,
+    ...(currentReading ? {readingBookmark: {current: readingLocation(currentReading),
+      ...(previousReading ? {previous: readingLocation(previousReading)} : {})}} : {}) };
   if (sections.length) {
     const completed: string[] = [];
     const remaining: string[] = [];

@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ScreenCheckpoint } from '../../contracts/screen-checkpoint';
+import { validReadingDocument, validReadingSection, type ScreenCheckpoint } from '../../contracts/screen-checkpoint';
+import { frameAppearance, sameAppearance, type FrameAppearance } from './screen-frame';
 import './screen-observation.css';
 
-export type ScreenObservationRecord = Omit<ScreenCheckpoint, 'id'>;
+export type ScreenObservationRecord = Omit<ScreenCheckpoint, 'id' | 'readingConfirmed'>;
 type Props = {
   tasks: { id: string; title: string }[];
   onSave: (record: ScreenObservationRecord, signal?: AbortSignal) => void | Promise<void>;
 };
-type Result = Pick<ScreenObservationRecord, 'summary' | 'nextStep' | 'progress' | 'completedParts'>;
+type Result = Pick<ScreenObservationRecord, 'summary' | 'nextStep' | 'progress' | 'completedParts' | 'readingSection' | 'readingDocument'>;
 type Mode = 'once' | 'periodic' | 'upload';
-type AutoSample = { record: ScreenObservationRecord; content: string; frame?: string };
-type AutomaticCapture = { lastContent?: string; lastFrame?: string; pending?: AutoSample };
+type SampleIdentity = { summary: string; facts?: string; frame?: string; appearance?: FrameAppearance };
+type AutoSample = { record: ScreenObservationRecord; identity: SampleIdentity };
+type AutomaticCapture = { last?: SampleIdentity; pending?: AutoSample };
 type Session = { mode: Mode; taskId: string | null; automatic?: AutomaticCapture; stream?: MediaStream; video?: HTMLVideoElement;
   timer?: ReturnType<typeof setInterval>; abort: AbortController; busy: boolean };
 type Draft = { jpg: string; capturedAt: string; taskId: string | null; result: Result; parts: string; keepPercent: boolean };
@@ -21,7 +23,7 @@ function releaseMedia(session: Session) {
   session.stream = undefined;
 }
 
-function jpeg(source: CanvasImageSource, width: number, height: number): string {
+function jpeg(source: CanvasImageSource, width: number, height: number, measure?: (canvas: HTMLCanvasElement) => void): string {
   if (!width || !height) throw new Error('画面还未就绪，请重试。');
   const scale = Math.min(1, 1440 / Math.max(width, height));
   const canvas = document.createElement('canvas');
@@ -32,6 +34,7 @@ function jpeg(source: CanvasImageSource, width: number, height: number): string 
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  measure?.(canvas);
   const data = canvas.toDataURL('image/jpeg', 0.78);
   if (!data.startsWith('data:image/jpeg;base64,')) throw new Error('当前浏览器无法生成 JPEG。');
   return data;
@@ -50,18 +53,19 @@ async function fileJpeg(file: File) {
   } finally { URL.revokeObjectURL(url); }
 }
 
-// Keep only a hash of a previously saved frame. A static window does not need another inference.
+// An identical encoded frame can skip another inference. Near matches still go through the model.
 async function frameHash(image: string) {
   if (!crypto.subtle) return undefined;
   const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(image));
   return new Uint8Array(hash).join(',');
 }
 
-function contentKey(result: Result) {
-  const normalized = (s: string) => s.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
-  // A new recommendation or a different order for checked boxes is not a change in the observed work.
-  return JSON.stringify([normalized(result.summary), result.progress?.percent ?? null,
-    normalized(result.progress?.evidence ?? ''), (result.completedParts ?? []).map(normalized).sort()]);
+const normalized = (s: string) => s.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+
+function observableFacts(result: Result) {
+  if (!result.progress && !result.completedParts?.length && !result.readingSection) return undefined;
+  return JSON.stringify([result.progress?.percent ?? null, normalized(result.progress?.evidence ?? ''),
+    normalized(result.readingSection ?? ''), normalized(result.readingDocument ?? ''), (result.completedParts ?? []).map(normalized).sort()]);
 }
 
 async function analyze(image: string, taskId: string | null, signal: AbortSignal, automatic: boolean): Promise<Result> {
@@ -70,6 +74,8 @@ async function analyze(image: string, taskId: string | null, signal: AbortSignal
   const data = await res.json();
   if (!res.ok) throw new Error(data.error?.message || '本机模型未能读取截图。');
   if (typeof data.summary !== 'string' || !data.summary.trim() || typeof data.nextStep !== 'string' ||
+      (data.readingSection !== undefined && !validReadingSection(data.readingSection)) ||
+      (data.readingDocument !== undefined && (!data.readingSection || !validReadingDocument(data.readingDocument))) ||
       !Array.isArray(data.completedParts) || data.completedParts.length > 8 || data.completedParts.some((part: unknown) => typeof part !== 'string' || !part.trim()) ||
       (data.progress !== null && (!Number.isInteger(data.progress?.percent) || data.progress.percent < 0 || data.progress.percent > 100 ||
         typeof data.progress.evidence !== 'string' || !data.progress.evidence.trim()))) {
@@ -142,8 +148,7 @@ export function ScreenObservation({ tasks, onSave }: Props) {
     const sample = auto.pending;
     if (!sample) return;
     await onSave(sample.record, session.abort.signal);
-    auto.lastContent = sample.content;
-    auto.lastFrame = sample.frame;
+    auto.last = sample.identity;
     auto.pending = undefined;
     if (isActive(session)) { setError(''); setMessage('已自动记录本次工作。'); }
   }
@@ -158,19 +163,29 @@ export function ScreenObservation({ tasks, onSave }: Props) {
       if (auto?.pending) await savePending(auto, session);
       if (!isActive(session)) return;
       const video = session.video;
-      const image = file ? await fileJpeg(file) : jpeg(video!, video!.videoWidth, video!.videoHeight);
+      let appearance: FrameAppearance | undefined;
+      const measure = auto ? (canvas: HTMLCanvasElement) => { appearance = frameAppearance(canvas); } : undefined;
+      const image = file ? await fileJpeg(file) : jpeg(video!, video!.videoWidth, video!.videoHeight, measure);
       const capturedAt = new Date().toISOString();
       const frame = auto ? await frameHash(image) : undefined;
-      if (!isActive(session) || (frame && frame === auto?.lastFrame)) return;
+      if (!isActive(session) || (frame && frame === auto?.last?.frame)) return;
       if (session.mode === 'once') releaseMedia(session);
       const result = await analyze(image, session.taskId, session.abort.signal, !!auto);
       // A result that arrived after an edit, confirmation or dismissal cannot replace it.
       if (!isActive(session) || editing.current || version !== revision.current) return;
       if (auto) {
-        const content = contentKey(result);
-        if (content === auto.lastContent) { auto.lastFrame = frame; setError(''); return; }
-        auto.pending = { content, frame, record: { capturedAt, taskId: session.taskId, source: 'automatic',
-          summary: result.summary, nextStep: result.nextStep, progress: result.progress, completedParts: result.completedParts } };
+        const identity = { summary: normalized(result.summary), facts: observableFacts(result), frame, appearance };
+        const last = auto.last;
+        // Different wording for the same evidence on an almost identical screen is one observation.
+        // Keep the last saved appearance as the reference so gradual edits can accumulate.
+        if (last && last.facts === identity.facts && (last.summary === identity.summary ||
+            (identity.facts !== undefined && sameAppearance(last.appearance, appearance)))) {
+          last.frame = frame; setError(''); return;
+        }
+        auto.pending = { identity, record: { capturedAt, taskId: session.taskId, source: 'automatic',
+          summary: result.summary, nextStep: result.nextStep, progress: result.progress, completedParts: result.completedParts,
+          ...(result.readingSection ? { readingSection: result.readingSection } : {}),
+          ...(result.readingDocument ? { readingDocument: result.readingDocument } : {}) } };
         await savePending(auto, session);
         return;
       }
@@ -224,6 +239,8 @@ export function ScreenObservation({ tasks, onSave }: Props) {
     editing.current = true; revision.current++; setSaving(true); setError('');
     try {
       await onSave({ source: 'manual', capturedAt: draft.capturedAt, taskId: draft.taskId, summary: draft.result.summary.trim(),
+        ...(draft.taskId && draft.result.readingSection?.trim() ? {readingSection: draft.result.readingSection.trim(),
+          ...(draft.result.readingDocument?.trim() ? {readingDocument: draft.result.readingDocument.trim()} : {})} : {}),
         nextStep: draft.result.nextStep.trim(), progress: draft.keepPercent ? draft.result.progress : null, completedParts: parts });
       if (mounted.current) { dismiss(); setMessage('已保存检查点。'); }
     } catch (cause) {
@@ -242,7 +259,7 @@ export function ScreenObservation({ tasks, onSave }: Props) {
     </label>
     <label className="so-auto"><input type="checkbox" aria-describedby="auto-sampling-description" checked={automatic && !!validTask} disabled={!validTask || !supportsShare || !!mode || !!draft}
       onChange={event => setAutomatic(event.target.checked)} /> 周期采样时自动记录</label>
-    <p className="so-note" id="auto-sampling-description">选择任务后可开启，仅对本次共享生效。自动记录由模型直接写入，可在下方核对或删除。</p>
+    <p className="so-note" id="auto-sampling-description">选择任务后可开启，仅对本次共享生效。自动记录由模型直接写入，可在下方核对或删除。任务名与论文标题不同时，请先手动保存一次正文书签。</p>
     <div className="so-actions">
       <button type="button" disabled={!supportsShare || !!mode || !!draft} onClick={() => void share('once')}>截取一次</button>
       <button type="button" disabled={!supportsShare || !!mode || !!draft} onClick={() => void share('periodic')}>每分钟采样</button>
@@ -263,6 +280,12 @@ export function ScreenObservation({ tasks, onSave }: Props) {
         onChange={event => change({ result: { ...draft.result, summary: event.target.value } })} /></label>
       <label className="so-field">下一步<textarea value={draft.result.nextStep} maxLength={350} disabled={saving}
         onChange={event => change({ result: { ...draft.result, nextStep: event.target.value } })} /></label>
+      {draft.taskId && <label className="so-field">阅读书签 <small>当前打开的论文章节，可留空</small>
+        <input value={draft.result.readingSection ?? ''} maxLength={64} disabled={saving}
+          onChange={event => change({ result: { ...draft.result, readingSection: event.target.value } })} /></label>}
+      {draft.taskId && draft.result.readingSection?.trim() && <label className="so-field">文档标题 <small>确认后，自动采样可将同名论文关联到此任务</small>
+        <input value={draft.result.readingDocument ?? ''} maxLength={180} disabled={saving}
+          onChange={event => change({ result: { ...draft.result, readingDocument: event.target.value } })} /></label>}
       <label className="so-field">已完成的具体部分 <small>每行一项，最多 8 项</small>
         <textarea value={draft.parts} disabled={saving} placeholder="例如 Introduction、Method，分别填写"
           onChange={event => change({ parts: event.target.value })} /></label>

@@ -13,7 +13,19 @@ export interface ScreenCheckpoint {
   summary: string;
   nextStep: string;
   completedParts?: string[];
+  /** Visible document section. Only a separate, explicit reader confirmation completes it. */
+  readingSection?: string;
+  readingDocument?: string;
+  readingConfirmed?: true;
   progress: { percent: number; evidence: string } | null;
+}
+
+export function validReadingSection(value: unknown): value is string {
+  return typeof value === 'string' && !!value.trim() && value.length <= 64 && !/[\p{Cc}\p{Zl}\p{Zp}]/u.test(value);
+}
+
+export function validReadingDocument(value: unknown): value is string {
+  return typeof value === 'string' && !!value.trim() && value.length <= 180 && !/[\p{Cc}\p{Zl}\p{Zp}]/u.test(value);
 }
 
 export interface CheckpointHistory {

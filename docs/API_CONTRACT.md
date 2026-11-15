@@ -230,3 +230,7 @@ Display schema display-1, layout goal-1, 4096-byte transport, 64 commands and dr
 ### 每日回顾与专注时段
 
 本机 GET /api/v1/focus-review?date=YYYY-MM-DD 提供对应日的计时时段、总秒数、观察文字及改进实验。PUT /api/v1/focus-review/experiment 以日期和 revision 保存计划、复查结果。POST /api/v1/focus-review/synthesis 接收日期，调用本机模型总结当日检查点并返回参与生成的数量和引用原文。超过 12 条时沿时间轴取样。原始图像不写入日记，计时仅依据 Hub 记录的专注会话。
+
+### 论文阅读书签
+
+屏幕观察和检查点可携带 readingSection 和 readingDocument，分别表示正文位置与画面中识别出的文档标题。只有章节位置时保留阅读进度候选。GET /api/v1/project-progress 的 statuses[].readingBookmark 提供当前书签以及可确认的上一个章节。PATCH /api/v1/checkpoints 以 id 和 readingSection 幂等确认对应记录，保留最初的手动或自动来源并记录 readingConfirmed。已确认的章节作为当前大任务的完成依据。自动采样将画面标题与任务名或同任务手动审阅过的文档标题作完整规范化匹配。删除最后一条对应的手动记录后，该文档关联失效。

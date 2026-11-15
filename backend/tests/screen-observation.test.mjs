@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createCheckpointStore } from '../src/checkpoint-store.ts';
 import { once } from 'node:events';
 import { createScreenObservationHandler } from '../src/screen-observation.ts';
 
@@ -117,4 +122,92 @@ test('automatic capture attributes completion only to a visible, matching task t
   assert.deepEqual(seen.completedParts, ['Method']);
   assert.equal(seen.progress.percent, 75);
   assert.equal((await post({image, taskId:null, automatic:true})).status, 400);
+});
+
+test('binds a bookmark to document prose, excludes outlines and ambiguities, and never infers reading completion', async t => {
+  const candidate = { ...output, readingPage:'body', sectionHeading:'2. Method',
+    bodyQuote:'Participants reviewed one article before returning to the experimental task.',
+    completedParts:[{name:'Method',line:'Method completed'}] };
+  let response = candidate;
+  const {post} = await setup(t, {fetcher:async () => completion(response)});
+  const observe = async (taskId = 'a', automatic = true) => (await post({image,taskId,automatic})).json();
+  const section = await observe();
+  assert.equal(section.readingSection, 'Method');
+  assert.equal(section.readingDocument, 'Lab Report');
+  assert.deepEqual(section.completedParts, []);
+  assert.equal(section.progress, null);
+  for (const change of [{readingPage:'contents'}, {readingPage:'other'}, {bodyQuote:''},
+    {bodyQuote:'Introduction .... 4'}, {sectionHeading:'A Very Long Heading',bodyQuote:'A Very Long Heading'},
+    {taskLabel:'An Example Very Long Document Title',bodyQuote:'An Example Very Long Document Title'}, {sectionHeading:'Contents'}, {sectionHeading:'Lab Report'}, {taskLabel:'Different Paper'}]) {
+    response = {...candidate, ...change};
+    const found = await observe();
+    assert.equal(found.readingSection, undefined, JSON.stringify(change));
+    assert.equal(found.readingDocument, undefined);
+    if (change.readingPage === 'contents') assert.equal(found.summary,'正在查看《Lab Report》的目录。');
+  }
+  response = {...candidate, taskLabel:'Different Paper'};
+  assert.equal((await observe('a',false)).readingDocument, 'Different Paper');
+  assert.equal((await observe(null,false)).readingSection, undefined);
+});
+
+test('automatic reading under a short task label requires an existing manually reviewed document for that same task', async t => {
+  const dir = await mkdtemp(join(tmpdir(),'focusdesk-reviewed-paper-'));
+  t.after(() => rm(dir,{recursive:true,force:true}));
+  const store = createCheckpointStore(join(dir,'tasks.json'));
+  const title = 'A Long Paper Title About Returning to a Task After an Interruption';
+  const sample = {readingPage:'body',sectionHeading:'Method',
+    bodyQuote:'Participants read the long article before working on a secondary task.'};
+  let visibleTitle = title;
+  const {post} = await setup(t,{getTasks:async () => [{id:'a',title:'Read paper'},{id:'b',title:'Another task'}],
+    getKnownDocuments:store.reviewedDocuments,fetcher:async () => completion({...output,...sample,taskLabel:visibleTitle})});
+  const observed = async (taskId='a',automatic=true) => (await post({taskId,image,automatic})).json();
+  const record = taskId => ({taskId,id:randomUUID(),capturedAt:new Date().toISOString(),source:'manual',
+    readingSection:'Introduction',readingDocument:title,summary:'正在阅读。',nextStep:'',completedParts:[],progress:null});
+  assert.equal((await observed()).readingSection,undefined);
+  assert.equal((await observed('a',false)).readingDocument,title);
+  const automatic = {...record('a'),source:'automatic'};
+  await store.add(automatic);
+  await store.confirmReading(automatic.id,'Introduction');
+  await store.add(record('b'));
+  assert.equal((await observed()).readingSection,undefined);
+  const first = record('a'),second = record('a');
+  await store.add(first);
+  await store.add(second);
+  visibleTitle = '  '+ title.replace('Long','LONG  ')+'  ';
+  assert.equal((await observed()).readingSection,'Method');
+  visibleTitle = title+' Appendix';
+  assert.equal((await observed()).readingSection,undefined);
+  visibleTitle = title;
+  await store.remove(first.id);
+  assert.equal((await observed()).readingSection,'Method');
+  await store.remove(second.id);
+  assert.equal((await observed()).readingSection,undefined);
+  assert.equal((await observed('b')).readingSection,'Method');
+});
+
+test('rereads unlabeled status marks once for an evidenced percentage; unmarked, empty or conflicting rows do not count', async t => {
+  const candidates = ['Input','Draft','Edited'].map(name=>({name,line:name}));
+  let variant = output;
+  let marks = [{name:'Input',mark:'[x]'}, {name:'Draft',mark:'[ ]'}, {name:'Edited',mark:''}, {name:'Other',mark:'[x]'}];
+  let rereads = 0;
+  const {post} = await setup(t,{fetcher: async (_url, init) => {
+    const body = JSON.parse(init.body);
+    if (body.response_format.json_schema.name === 'observation') return completion({...variant, completedParts:candidates});
+    rereads++;
+    assert.ok(!body.messages[1].content[0].text.includes('Edited'));
+    return marks ? completion({rows:marks}) : new Response('',{status:503});
+  }});
+  const inspect=async()=>(await post()).json();
+  variant={...output,summary:'Input, Draft and Edited are done.',nextStep:'Submit all three.'};
+  const partial = await inspect();
+  assert.deepEqual(partial.completedParts,['Input']);
+  assert.match(partial.summary,/75%.*Input/);assert.doesNotMatch(partial.summary,/Draft|Edited/);assert.equal(partial.nextStep,'');
+  marks.push({name:'Input',mark:''});
+  assert.deepEqual((await inspect()).completedParts,[]);
+  marks = null;
+  const unavailable = await inspect();assert.deepEqual(unavailable.completedParts,[]);assert.equal(unavailable.progress.percent,75);
+  assert.equal(unavailable.summary,'《Lab Report》显示整体进度为 75%。');assert.equal(unavailable.nextStep,'');
+  variant={...output,readingPage:'contents'}; assert.deepEqual((await inspect()).completedParts,[]);
+  variant={...output,taskLabel:'Other'}; assert.deepEqual((await inspect()).completedParts,[]);
+  assert.equal(rereads,3);
 });

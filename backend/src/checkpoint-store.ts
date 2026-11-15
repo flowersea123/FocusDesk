@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { open, readFile, rename, rm } from 'node:fs/promises';
-import type { ScreenCheckpoint, CheckpointHistory } from '../../contracts/screen-checkpoint.ts';
+import { validReadingDocument, validReadingSection, type ScreenCheckpoint, type CheckpointHistory } from '../../contracts/screen-checkpoint.ts';
 
 export const CHECKPOINT_LIMIT = 1000;
 export class CheckpointError extends Error {
@@ -32,7 +32,12 @@ function parseRecord(row: Partial<ScreenCheckpoint>): ScreenCheckpoint {
   const parts = row.completedParts ?? [];
   if (!Array.isArray(parts) || parts.length > 8) inputError();
   const completedParts = [...new Set(parts.map(part => text(part, 64)))];
-  return { completedParts, source, id, capturedAt: row.capturedAt, taskId: row.taskId, summary: text(row.summary, 500), nextStep: text(row.nextStep, 350, true), progress };
+  if (row.readingSection !== undefined && (!row.taskId || !validReadingSection(row.readingSection))) inputError();
+  if (row.readingDocument !== undefined && (!row.readingSection || !validReadingDocument(row.readingDocument))) inputError();
+  if (row.readingConfirmed !== undefined && (row.readingConfirmed !== true || !row.readingSection)) inputError();
+  return { completedParts, source, ...(row.readingSection ? {readingSection:row.readingSection.trim()} : {}),
+    ...(row.readingDocument ? {readingDocument:row.readingDocument.trim()} : {}),
+    ...(row.readingConfirmed ? {readingConfirmed:true} : {}), id, capturedAt: row.capturedAt, taskId: row.taskId, summary: text(row.summary, 500), nextStep: text(row.nextStep, 350, true), progress };
 }
 
 export function createCheckpointStore(dataPath: string) {
@@ -64,18 +69,40 @@ export function createCheckpointStore(dataPath: string) {
   }
   return {
     read: () => serial(read),
+    reviewedDocuments(taskId: string) {
+      return serial(async () => {
+        const { records } = await read();
+        return [...new Set(records.flatMap(row => row.taskId === taskId && row.source !== 'automatic' && row.readingDocument ? [row.readingDocument] : []))];
+      });
+    },
     add(input: ScreenCheckpoint) {
       const record = parseRecord(input);
+      if (record.readingConfirmed) inputError();
       return serial(async () => {
         const state = await read();
         const existing = state.records.find(row => row.id === record.id);
         if (existing) {
-          if (JSON.stringify(existing) !== JSON.stringify(record)) throw new CheckpointError(409, '该检查点的内容已变化，请刷新后重试。');
+          const savedObservation = { ...existing };
+          delete savedObservation.readingConfirmed;
+          if (JSON.stringify(savedObservation) !== JSON.stringify(record)) throw new CheckpointError(409, '该检查点的内容已变化，请刷新后重试。');
           return;
         }
         if (state.records.length >= CHECKPOINT_LIMIT) throw new CheckpointError(409, '检查点已满，请先移除不再需要的记录。');
         state.records.push(record);
         await persist(state);
+      });
+    },
+    confirmReading(value: unknown, section: unknown) {
+      const id = checkpointId(value);
+      if (!validReadingSection(section)) inputError();
+      return serial(async () => {
+        const state = await read();
+        const row = state.records.find(item => item.id === id);
+        if (!row || row.readingSection !== section) throw new CheckpointError(409, '阅读书签已变化，请重新载入。');
+        if (!row.readingConfirmed) {
+          row.readingConfirmed = true;
+          await persist(state);
+        }
       });
     },
     remove(value: unknown) {

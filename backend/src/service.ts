@@ -66,7 +66,8 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
     }
   }
   const projects = createProjectProgress(dataPath, checkpoints, () => loader.load());
-  const screenObservation = createScreenObservationHandler({ getTasks: async () => (await loader.load()).tasks });
+  const screenObservation = createScreenObservationHandler({ getTasks: async () => (await loader.load()).tasks,
+    getKnownDocuments: taskId => checkpoints.reviewedDocuments(taskId) });
   const server = createServer(async (request, response) => {
     const head = request.method === 'HEAD';
     try {
@@ -148,9 +149,13 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
           let payload;
           if (pathname === DISPLAY_PATH) {
             const project = await projects.pinned(overview);
-            payload = project
-              ? buildProjectDisplay(project, 'project:' + createHash('sha256').update(JSON.stringify(project)).digest('hex'))
-              : buildDisplaySnapshot(overview);
+            if (project) {
+              const snapshot = buildProjectDisplay(project, '');
+              // Reading positions may change while all visible device pixels remain the same.
+              snapshot.revision = 'project:' + createHash('sha256')
+                .update(snapshot.layout_version).update(JSON.stringify(snapshot.commands)).digest('hex');
+              payload = snapshot;
+            } else payload = buildDisplaySnapshot(overview);
           } else payload = overview;
           const body = JSON.stringify(payload);
           if (Buffer.byteLength(body) > MAX_OVERVIEW_BYTES) throw new SourceError('DISPLAY_SNAPSHOT_TOO_LARGE', 'Display snapshot exceeds the response limit.');

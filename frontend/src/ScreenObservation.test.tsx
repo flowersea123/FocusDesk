@@ -168,3 +168,71 @@ test('an automatic save retries using its original timestamp and drops inference
   await act(async()=>{finish(Response.json({...result,summary:'随后才到达的模型结果'}));});
   expect(onSave).toHaveBeenCalledTimes(2);
 });
+
+test('preserves an editable reading location separately from completed parts', async () => {
+  camera();
+  const observed = {summary:'正在阅读论文。',nextStep:'',progress:null,completedParts:[],
+    readingSection:'Introduction',readingDocument:'Lab Report'};
+  vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>Response.json(observed)));
+  const onSave = vi.fn();
+  render(<ScreenObservation tasks={tasks} onSave={onSave}/>);
+  fireEvent.change(screen.getByLabelText('关联任务'), {target:{value:'lab'}});
+  await click('截取一次');
+  expect(screen.getByLabelText(/阅读书签/)).toHaveValue('Introduction');
+  expect(screen.getByLabelText(/文档标题/)).toHaveValue('Lab Report');
+  fireEvent.change(screen.getByLabelText(/文档标题/),{target:{value:'Reviewed Paper Title'}});
+  fireEvent.change(screen.getByLabelText(/阅读书签/),{target:{value:'Methods'}});
+  expect(screen.getByLabelText(/已完成的具体部分/)).toHaveValue('');
+  await click('确认并保存');
+  expect(onSave.mock.calls[0][0]).toMatchObject({source:'manual',readingSection:'Methods',readingDocument:'Reviewed Paper Title',completedParts:[],progress:null});
+  expect(onSave.mock.calls[0][0].readingConfirmed).toBeUndefined();
+  await click('截取一次');
+  fireEvent.change(screen.getByLabelText(/阅读书签/),{target:{value:''}});
+  await click('确认并保存');
+  expect(onSave.mock.calls[1][0].readingSection).toBeUndefined();
+  expect(onSave.mock.calls[1][0].readingDocument).toBeUndefined();
+});
+
+test('autosaving a section transition keeps a bookmark even when the model summary repeats', async () => {
+  vi.useFakeTimers();
+  camera();
+  vi.stubGlobal('crypto',{subtle:undefined});
+  const observed = {summary:'正在阅读同一篇论文。',nextStep:'',progress:null,completedParts:[],readingDocument:'Lab Report'};
+  vi.stubGlobal('fetch',vi.fn().mockImplementationOnce(async()=>Response.json({...observed,readingSection:'Introduction'}))
+    .mockImplementation(async()=>Response.json({...observed,readingSection:'Method'})));
+  const onSave = vi.fn();
+  render(<ScreenObservation tasks={tasks} onSave={onSave}/>);
+  fireEvent.change(screen.getByLabelText('关联任务'), {target:{value:'lab'}});
+  fireEvent.click(screen.getByLabelText('周期采样时自动记录'));
+  await click('每分钟采样');
+  await act(async()=>{await vi.advanceTimersByTimeAsync(120_000);});
+  expect(onSave.mock.calls.map(call=>call[0].readingSection)).toEqual(['Introduction','Method']);
+  expect(onSave.mock.calls.every(call=>call[0].source==='automatic' && !call[0].completedParts.length && !call[0].readingConfirmed)).toBe(true);
+});
+
+test('deduplicates reworded notes only when the captured evidence and screen remain alike', async () => {
+  vi.useFakeTimers();
+  const { drawImage } = camera();
+  vi.spyOn(HTMLVideoElement.prototype, 'videoWidth', 'get').mockReturnValue(24);
+  vi.spyOn(HTMLVideoElement.prototype, 'videoHeight', 'get').mockReturnValue(12);
+  vi.stubGlobal('crypto', {subtle: undefined});
+  let shade = 40;
+  const getImageData = () => ({data:Uint8ClampedArray.from({length:24*12*4}, (_,i) =>
+    i%4===3 ? 255 : (Math.floor(i/4)%24 < 12 ? shade : 40))});
+  vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue({fillRect:vi.fn(), drawImage, getImageData} as unknown as CanvasRenderingContext2D);
+  let note = result;
+  vi.stubGlobal('fetch',async()=>Response.json(note));
+  const onSave = vi.fn();
+  render(<ScreenObservation tasks={tasks} onSave={onSave}/>);
+  fireEvent.change(screen.getByLabelText('关联任务'),{target:{value:'lab'}});
+  fireEvent.click(screen.getByLabelText('周期采样时自动记录'));
+  await click('每分钟采样');
+  const sample = () => act(async()=>{await vi.advanceTimersByTimeAsync(60_000);});
+  note = {...result, summary:'相同进度，另一种模型措辞。'}; shade = 41;
+  await sample(); expect(onSave).toHaveBeenCalledTimes(1);
+  note = {...result, summary:'正文新增一段实验说明。'}; shade = 95;
+  await sample(); expect(onSave).toHaveBeenCalledTimes(2);
+  note = {...note, completedParts:['Introduction','Method','Results']};
+  await sample(); expect(onSave).toHaveBeenCalledTimes(3);
+  await click('停止采样');
+});

@@ -11,7 +11,11 @@ export async function checkpointRequest<T>(path: string, options?: RequestInit):
   if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : '本机服务未能完成请求。');
   return result;
 }
-export function CheckpointWorkspace({ overview, onChange }: { overview: DailyOverview; onChange?: () => void }) {
+export function confirmReadingBookmark(id: string, section: string) {
+  return checkpointRequest('/api/v1/checkpoints', { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, readingSection: section }) });
+}
+export function CheckpointWorkspace({ overview, onChange, active = true }: { overview: DailyOverview; onChange?: () => void; active?: boolean }) {
   const [history, setHistory] = useState<CheckpointHistory>({ records: [] });
   const [error, setError] = useState('');
   const [removing, setRemoving] = useState('');
@@ -25,7 +29,7 @@ export function CheckpointWorkspace({ overview, onChange }: { overview: DailyOve
       if (request === sequence.current) { setHistory(result); setError(''); }
     } catch (err) { if (request === sequence.current) setError((err as Error).message); }
   }, []);
-  useEffect(() => { void load(); return () => { sequence.current++; }; }, [load]);
+  useEffect(() => { if (active) void load(); return () => { sequence.current++; }; }, [load, active]);
 
   async function save(record: Omit<ScreenCheckpoint, 'id'>, signal?: AbortSignal) {
     const key = JSON.stringify(record);
@@ -33,6 +37,15 @@ export function CheckpointWorkspace({ overview, onChange }: { overview: DailyOve
     await checkpointRequest('/api/v1/checkpoints', { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...record, id: pendingSave.current.id }) });
     await load();
     onChange?.();
+  }
+  async function confirmRead(row: ScreenCheckpoint) {
+    if (!row.readingSection || working) return;
+    setWorking(true);
+    try {
+      await confirmReadingBookmark(row.id, row.readingSection);
+      await load(); onChange?.();
+    } catch (err) { setError((err as Error).message); }
+    finally { setWorking(false); }
   }
   async function remove(id: string) {
     setWorking(true);
@@ -52,6 +65,8 @@ export function CheckpointWorkspace({ overview, onChange }: { overview: DailyOve
           <span>{checkpointSourceLabel(row.source)}</span>
           {row.taskId && <span>{overview.tasks.find(t => t.id === row.taskId)?.title ?? '已移除的任务'}</span>}</div>
         <strong>{row.summary}</strong>
+        {row.readingSection && <p>阅读书签　{row.readingSection}　{row.readingConfirmed ? '已确认读完' :
+          <button type="button" disabled={working} onClick={() => void confirmRead(row)}>确认已读 {row.readingSection}</button>}</p>}
         {!!row.completedParts?.length && <p>已完成　{row.completedParts.join('、')}</p>}
         {row.nextStep && <p>下一步　{row.nextStep}</p>}
         {row.progress && <p>进度 {row.progress.percent}% · {row.progress.evidence}</p>}

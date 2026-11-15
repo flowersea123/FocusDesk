@@ -19,4 +19,9 @@
 .project-plan label {font-weight:650;}
 .project-plan textarea {width:100%;}
 
-.project-device-canvas { display:block; width:100%; height:auto; image-rendering:pixelated; }
+.project-device-canvas { display:block; width:100%; height:auto; image-rendering:auto; }
+
+.reading-bookmark { margin: 16px 0; padding: 10px 14px; border-left: 3px solid #8b75ae; background: #f6f3f9; border-radius: 0 7px 7px 0; overflow-wrap: anywhere; }
+.reading-bookmark h3 { margin: 0 0 4px; }
+.reading-bookmark p { margin: 0; }
+.reading-bookmark button { margin-top: 8px; }
