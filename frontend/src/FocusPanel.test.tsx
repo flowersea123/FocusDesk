@@ -23,6 +23,16 @@ describe('Focus Mode', () => {
     expect(save).toHaveBeenCalledExactlyOnceWith({ revision: data.revision, action: 'start', task_id: raw.tasks[2].id });
   });
 
+  it('counts down from the confirmed end time, without focus write controls on a read-only source', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-03T15:55:30.000Z'));
+    render(<FocusPanel overview={active()} saving={false} />);
+    expect(screen.getByRole('timer')).toHaveTextContent('19:30');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(screen.getByRole('timer')).toHaveTextContent('19:29');
+  });
+
   it('disables start for empty/completed lists and while another write is saving', () => {
     const save = vi.fn(); const data = idle();
     const view = render(<FocusPanel overview={{ ...data, tasks: [] }} saving={false} onSave={save} />);

@@ -30,7 +30,7 @@ test('built Dashboard, focus writes and device reads share the same state throug
   const page = await fetch(origin); assert.equal(page.status, 200);
   const html = await page.text(); const script = html.match(/<script[^>]+src="([^"]+)"/);
   const bundle = await fetch(new URL(script[1], origin)); const code = await bundle.text();
-  assert.ok(code.includes('/focus') && code.includes('Focus Mode'), 'build must include focus controls and adapter');
+  assert.ok(code.includes('/focus') && code.includes('开始专注'), 'build must include focus controls and adapter');
   const read = async () => parseDailyOverviewText(await (await fetch(origin + '/api/v1/daily-overview')).text());
   const idle = await read();
   const startedResponse = await fetch(origin + '/api/v1/daily-overview/focus', {
@@ -76,7 +76,7 @@ test('built Dashboard and task API share one service; file edits publish new sna
   assert.equal(bundle.status, 200);
   assert.match(bundle.headers.get('content-type'), /javascript/);
   const code = await bundle.text();
-  assert.ok(code.includes('/connect') && code.includes('Device connection'), 'built UI must include the local device connection entry');
+  assert.ok(code.includes('/connect') && code.includes('连接设备'), 'built UI must include the local device connection entry');
   assert.ok(code.includes('/api/v1/daily-overview') && code.includes('/ai-suggestion') && code.includes('保存建议') && code.includes('保存更改'), 'built Hub must include the real task and suggestion read/write controls');
 
   const read = async () => {

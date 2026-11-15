@@ -85,6 +85,6 @@ describe('browser preview', () => {
     for (const task of data.tasks.filter(task => task.status === 'todo')) expect(transcript).toHaveTextContent(task.title);
     for (const task of data.tasks.filter(task => task.status === 'done')) expect(transcript).not.toHaveTextContent(task.title);
     expect(transcript).toHaveTextContent('AI RECOMMENDATION No suggestion yet.');
-    expect(within(screen.getByLabelText('Four display colors')).getByText('Red')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('电子纸四色')).getByText('红')).toBeInTheDocument();
   });
 });

@@ -1,12 +1,55 @@
-.focus-panel { margin: 24px 0 8px; padding: 21px; border: 1px solid #000; border-left: 4px solid #d22020; background: #fff; }
-.focus-panel h3 { margin: 6px 0 16px; font-size: 22px; }
-.focus-panel label { display: block; margin-bottom: 9px; font-size: 14px; }
-.focus-panel select { width: 100%; padding: 12px; color: #000; background: #fff; border: 1px solid #000; font: inherit; }
-.focus-action { margin-top: 14px; padding: 11px 18px; border: 1px solid #000; background: #000; color: #fff; cursor: pointer; font: inherit; }
-.focus-action:disabled { opacity: 1; cursor: default; background: #fff; color: #000; border-style: dashed; }
-.focus-action:focus-visible, .focus-panel select:focus-visible { outline: 3px solid #ffda00; outline-offset: 3px; }
-.focus-task { display: block; overflow-wrap: anywhere; font-size: 20px; line-height: 1.4; }
-.focus-time { font-size: 15px; line-height: 1.6; }
-.focus-time span { font-size: 12px; }
-.focus-hint { margin: 12px 0 0; font-size: 12px; line-height: 1.7; color: #000; }
-.focus-error { color: #d22020; font-size: 14px; }
+.focus-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(18px, 3vw, 42px);
+  min-height: 238px;
+  padding: clamp(24px, 3vw, 40px);
+  border: 1px solid #343141;
+  border-radius: 15px;
+  color: #faf9ff;
+  background: radial-gradient(ellipse at 87% 70%, #363044 0, transparent 59%), #23212b;
+}
+.focus-body { min-width: 0; }
+.focus-label { display: flex; align-items: center; gap: 8px; color: #d5c9ff; font-size: 13px; font-weight: 600; margin: 0; }
+.focus-label i { width: 9px; height: 9px; border: 2px solid #bda7fb; border-radius: 50%; }
+.focus-task { margin: 13px 0 0; color: #fff; font-size: clamp(25px, 2.5vw, 36px); font-weight: 600; line-height: 1.23; letter-spacing: -.045em; overflow-wrap: anywhere; text-wrap: balance; }
+.focus-time { margin: 9px 0 0; color: #d1cdd9; font-size: 12px; line-height: 1.6; }
+.focus-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 18px; margin-top: 24px; }
+.focus-panel .focus-action { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 40px; padding: 0 15px; border: 1px solid #d1c3ff; border-radius: 7px; background: #d6c6ff; color: #272034; font-size: 13px; font-weight: 650; }
+.focus-panel .focus-action:enabled:hover { background: #e6ddff; }
+.focus-panel .focus-action:disabled { background: #4b4658; border-color: #5a5465; border-style: solid; color: #d8d2e2; }
+.play-icon { width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 6px solid currentColor; }
+.stop-icon { width: 8px; height: 8px; background: currentColor; border-radius: 1px; }
+.focus-chooser { display: inline-flex; align-items: center; position: relative; min-height: 40px; padding: 0 2px; color: #e6e0ee; font-size: 13px; }
+.focus-chooser > span { display: flex; align-items: center; gap: 8px; }
+.focus-chooser i { width: 6px; height: 6px; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: translateY(-2px) rotate(45deg); }
+.focus-chooser select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.focus-chooser:has(select:disabled) { color: #aaa3b4; }
+.focus-chooser:focus-within, .focus-panel .focus-action:focus-visible { outline: 2px solid #ded0ff; outline-offset: 3px; border-radius: 5px; }
+.focus-error { margin: 12px 0 0; color: #ffc6c6; font-size: 13px; }
+.focus-dial { position: relative; width: clamp(120px, 12vw, 165px); aspect-ratio: 1; display: grid; place-items: center; border: 1px solid #494354; border-radius: 50%; }
+.focus-dial::before, .focus-dial::after { content: ''; position: absolute; border-radius: 50%; }
+.focus-dial::before { inset: 6px; background: repeating-conic-gradient(from -.5deg, #93879d 0 1deg, transparent 1deg 6deg); mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px)); }
+.focus-dial::after { inset: 15px; background: conic-gradient(#c0a4ff var(--time-arc), #514a62 0); mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px)); }
+.focus-dial-face { text-align: center; }
+.dial-label { display: block; margin: 0 0 3px; color: #d1c6e2; font-size: 11px; }
+.dial-clock { font-family: 'Inter', 'Helvetica Neue', sans-serif; font-size: clamp(25px, 3.05vw, 42px); font-weight: 400; font-variant-numeric: tabular-nums; letter-spacing: -.065em; line-height: 1.12; }
+@media (max-width: 600px) {
+  .focus-panel {
+    min-height: 184px; padding: 21px 20px; gap: 0 13px;
+    grid-template-areas: "label dial" "task dial" "time dial" "actions actions" "error error";
+  }
+  .focus-body { display: contents; }
+  .focus-label { grid-area: label; align-self: end; }
+  .focus-task { grid-area: task; align-self: start; font-size: 25px; margin-top: 8px; }
+  .focus-time { grid-area: time; }
+  .focus-error { grid-area: error; }
+  .focus-dial { grid-area: dial; width: 93px; }
+  .focus-dial::before { inset: 4px; mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px)); }
+  .focus-dial::after { inset: 10px; }
+  .dial-clock { font-size: 25px; }
+  .dial-label { font-size: 10px; margin-bottom: 1px; }
+  .focus-actions { grid-area: actions; column-gap: 16px; margin-top: 12px; }
+  .focus-panel .focus-action { font-size: 12px; padding: 0 11px; }
+}

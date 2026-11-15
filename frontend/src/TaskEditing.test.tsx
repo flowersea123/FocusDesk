@@ -91,13 +91,13 @@ describe('Dashboard task saves', () => {
     const preview = screen.getByRole('img', { name: '400 × 300 e-paper preview' });
     expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(tasks.filter(task => task.status === 'todo').map(task => task.title));
     expect(preview).toHaveAttribute('data-source-revision', data.revision);
-    expect(screen.getByText('Unsaved preview')).toBeVisible();
+    expect(screen.getByText('未保存草稿')).toBeVisible();
     expect(document.getElementById('preview-transcript')).not.toHaveTextContent('FOCUS - UNTIL');
     expect(update).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: '取消编辑' }));
     expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(data.tasks.filter(task => task.status === 'todo').map(task => task.title));
     expect(document.getElementById('preview-transcript')).toHaveTextContent('FOCUS - UNTIL 09:25');
-    expect(screen.getByText('Design preview')).toBeVisible();
+    expect(screen.getByText('当前任务预览')).toBeVisible();
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -111,12 +111,12 @@ describe('Dashboard task saves', () => {
     const preview = screen.getByRole('img', { name: '400 × 300 e-paper preview' });
     expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(data.tasks.slice(1).filter(task => task.status === 'todo').map(task => task.title));
     expect(document.getElementById('preview-transcript')).not.toHaveTextContent('FOCUS - UNTIL');
-    expect(screen.getByText('Unsaved preview')).toBeVisible();
+    expect(screen.getByText('未保存草稿')).toBeVisible();
     expect(update).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: '取消编辑' }));
     expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(data.tasks.filter(task => task.status === 'todo').map(task => task.title));
     expect(document.getElementById('preview-transcript')).toHaveTextContent('FOCUS - UNTIL 09:25');
-    expect(screen.getByText('Design preview')).toBeVisible();
+    expect(screen.getByText('当前任务预览')).toBeVisible();
     expect(update).not.toHaveBeenCalled();
   });
 

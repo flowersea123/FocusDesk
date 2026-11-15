@@ -23,7 +23,7 @@ describe('AI suggestion editor', () => {
     await user.type(field, '先完成提纲，再专注 25 分钟。');
     const preview = screen.getByRole('img', { name: '400 × 300 e-paper preview' });
     expect(preview.querySelector('.paper-recommendation p')).toHaveTextContent('先完成提纲，再专注 25 分钟。');
-    expect(screen.getByText('Unsaved preview')).toBeVisible();
+    expect(screen.getByText('未保存草稿')).toBeVisible();
     expect(updateAISuggestion).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: '保存建议' }));
     expect(await screen.findByText('AI 建议已保存。')).toBeVisible();

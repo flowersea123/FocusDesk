@@ -30,7 +30,7 @@ export default function EpaperPreview({ overview, draft }: { overview: DailyOver
     ...visible.map(task => task.title), !visible.length && emptyLabel, hidden && `+${hidden} more`,
     'AI RECOMMENDATION', recommendation].filter(Boolean).join(' ') : '';
   return <section className="preview-card" aria-labelledby="preview-title">
-    <div className="section-heading"><div><p className="eyebrow">ON YOUR DESK</p><h2 id="preview-title">E-paper preview</h2></div><span className="dimension-label">400 × 300</span></div>
+    <div className="section-heading"><h2 id="preview-title">电子纸预览</h2><span className="dimension-label">400 × 300</span></div>
     <div className="preview-source-options" role="group" aria-label="预览内容">
       <button type="button" aria-pressed={!sample} onClick={() => setSample(false)}>当前任务</button>
       <button type="button" aria-pressed={sample} onClick={() => setSample(true)}>多任务示例</button>
@@ -51,9 +51,9 @@ export default function EpaperPreview({ overview, draft }: { overview: DailyOver
       </div>
     </div></div>
     <div id="preview-transcript" className="sr-only">{transcript}</div>
-    <div className="preview-status"><span className={draft ? 'draft-dot' : 'saved-dot'} /><strong>{draft ? 'Unsaved preview' : 'Design preview'}</strong></div>
-    <p className="preview-note">Browser-only design preview.{sample ? ' 示例任务与 AI 建议用于查看排版效果。' : ' 当前任务与编辑草稿实时显示。'}</p>
-    <div className="display-colors" aria-label="Four display colors"><span><i className="color-black" />Black</span><span><i className="color-white" />White</span><span><i className="color-yellow" />Yellow</span><span><i className="color-red" />Red</span></div>
-    <a className="connection-link" href="/connect">Device connection <span aria-hidden="true">↗</span></a>
+    <div className="preview-status"><span className={draft ? 'draft-dot' : 'saved-dot'} /><strong>{draft ? '未保存草稿' : sample ? '示例预览' : '当前任务预览'}</strong></div>
+    <p className="preview-note">{sample ? '合成任务仅用于查看排版。' : '浏览器内随编辑更新，设备下次读取时使用已保存的内容。'}</p>
+    <div className="display-colors" aria-label="电子纸四色"><span><i className="color-black" />黑</span><span><i className="color-white" />白</span><span><i className="color-yellow" />黄</span><span><i className="color-red" />红</span></div>
+    <a className="connection-link" href="/connect">连接设备 <span aria-hidden="true">↗</span></a>
   </section>;
 }
