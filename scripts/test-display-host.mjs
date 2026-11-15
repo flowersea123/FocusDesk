@@ -68,7 +68,7 @@ async function archiveBytes(archive) {
 async function recordInputs() {
   const sourceFiles = [
     'scripts/test-display-host.mjs', 'scripts/check-display-parity.mjs',
-    'contracts/display-snapshot.ts', 'contracts/display-fonts.ts',
+    'contracts/display-snapshot.ts', 'contracts/display-fonts.ts', 'contracts/project-progress.ts',
     'contracts/fixtures/device-demo.json', 'contracts/fixtures/focus.json',
     'tests/firmware/v02_snapshot_test.cpp', 'tests/firmware/device_sync_test.cpp',
     'tests/firmware/live_fakes/Arduino.h', 'tests/firmware/live_fakes/SPI.h',

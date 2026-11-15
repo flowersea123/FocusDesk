@@ -1,4 +1,4 @@
-import { lstat, mkdir, open, readFile, readdir, rmdir, unlink } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, readdir, realpath, rmdir, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDailyOverview } from '../contracts/daily-overview.ts';
@@ -126,6 +126,6 @@ async function main() {
   console.log(`FocusDesk portable directory: ${result.output}\n${result.files} files exported. Target PC requires Node.js 24+; no npm install is needed.\nOpen Start FocusDesk.cmd. Existing personal tasks and private device configuration were not copied.`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && await realpath(process.argv[1]).catch(() => '') === fileURLToPath(import.meta.url)) {
   main().catch(error => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });
 }

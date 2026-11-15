@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { once } from 'node:events';
+import { cp, copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { packageLan } from '../../scripts/package-lan.mjs';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -107,6 +108,41 @@ test('exported runtime starts from an unrelated cwd without npm or development d
   });
   assert.equal(result.status, 0, result.stderr || result.error?.message);
   assert.match(result.stdout, /PORTABLE_READY 1\.0 Synthetic portable task/);
+});
+
+test('the exported Hub serves device, checkpoint, project and daily review data', async t => {
+  const { project, output } = await fixture(t);
+  await cp(path.join(ROOT, 'backend/src'), path.join(project, 'backend/src'), { recursive: true });
+  for (const entry of await readdir(path.join(ROOT, 'contracts'), { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith('.ts')) {
+      await copyFile(path.join(ROOT, 'contracts', entry.name), path.join(project, 'contracts', entry.name));
+    }
+  }
+  await packageLan({ projectRoot: project, output });
+  const { createDemoServer } = await import(pathToFileURL(path.join(output, 'backend/src/service.ts')).href);
+  const server = createDemoServer({
+    dataPath: path.join(output, 'backend/data/tasks.json'), distPath: path.join(output, 'frontend/dist'),
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  try {
+    const origin = 'http://127.0.0.1:' + server.address().port;
+    const display = await fetch(origin + '/api/v1/display-snapshot');
+    assert.equal(display.status, 200);
+    assert.equal((await display.json()).schema_version, 'display-1');
+    const history = await fetch(origin + '/api/v1/checkpoints');
+    assert.equal(history.status, 200);
+    assert.deepEqual((await history.json()).records, []);
+    const projects = await fetch(origin + '/api/v1/project-progress');
+    assert.equal(projects.status, 200);
+    assert.equal((await projects.json()).statuses.length, SEED.tasks.length);
+    const review = await fetch(origin + '/api/v1/focus-review');
+    assert.equal(review.status, 200);
+    assert.deepEqual((await review.json()).sessions, []);
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  }
 });
 
 test('refuses an existing output directory without replacing its files', async t => {

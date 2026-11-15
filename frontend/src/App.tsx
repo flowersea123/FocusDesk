@@ -3,6 +3,7 @@ import type { DailyOverview, Task } from '../../contracts/daily-overview';
 import { createConfiguredSource, type DemoScenario, type OverviewSource } from './data/overview-source';
 import { useOverview } from './data/use-overview';
 import { CheckpointWorkspace } from './CheckpointWorkspace';
+import DailyReview from './DailyReview';
 import ProjectProgress from './ProjectProgress';
 import type { ProjectStatus } from '../../contracts/project-progress';
 import TaskEditor from './TaskEditor';
@@ -40,7 +41,8 @@ function TaskList({ overview }: { overview: DailyOverview }) {
 }
 
 export default function App({ source = defaultSource }: { source?: OverviewSource }) {
-  const [view, setView] = useState<'today' | 'screen'>('today');
+  const [view, setView] = useState<'today' | 'screen' | 'review'>('today');
+  const [reviewOpened, setReviewOpened] = useState(false);
   const [screenOpened, setScreenOpened] = useState(false);
   const [checkpointVersion, setCheckpointVersion] = useState(0);
   const [pinned, setPinned] = useState<ProjectStatus | null>(null);
@@ -97,6 +99,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
       {source.localWorkspace && overview && <div className="workspace-views" role="group" aria-label="工作台视图">
         <button type="button" aria-pressed={view === 'today'} onClick={() => setView('today')}>今天任务</button>
         <button type="button" aria-pressed={view === 'screen'} onClick={() => { setScreenOpened(true); setView('screen'); }}>屏幕记录</button>
+        <button type="button" aria-pressed={view === 'review'} onClick={() => { setReviewOpened(true); setView('review'); }}>每日回顾</button>
       </div>}
       <div hidden={view !== 'today'}>
       <div className="desk-grid">
@@ -136,6 +139,9 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
       </details>
       </div>
       {source.localWorkspace && overview && screenOpened && <div hidden={view !== 'screen'}><CheckpointWorkspace overview={overview} onChange={() => setCheckpointVersion(v => v + 1)} /></div>}
+      {source.localWorkspace && overview && reviewOpened && <div hidden={view !== 'review'}>
+        <DailyReview refreshKey={overview.revision + ':' + checkpointVersion} />
+      </div>}
     </main>
   </div>;
 }

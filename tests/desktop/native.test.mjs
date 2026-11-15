@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
-import { mkdtemp, mkdir, cp, copyFile, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, copyFile, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { collectPayloadSources } from '../../scripts/build-installer.mjs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const RUNTIME = path.join(ROOT, '.cache/m1-toolchain/node-v24.16.0-win-x64/node.exe');
@@ -30,10 +31,7 @@ async function setup(t) {
     assert.equal(path.dirname(path.resolve(base)), path.resolve(tmpdir())); assert.ok(path.basename(base).startsWith('FocusDesk native 测试 '));
     await rm(base, { recursive: true, force: true });
   });
-  for (const directory of ['backend/src', 'backend/public', 'frontend/dist']) await cp(path.join(ROOT, directory), path.join(app, directory), { recursive: true });
-  for (const file of ['backend/server.ts', 'package.json', 'contracts/daily-overview.ts', 'contracts/task-update.ts', 'contracts/focus-update.ts',
-    'contracts/work-state.ts', 'contracts/ai-suggestion.ts', 'contracts/display-snapshot.ts', 'contracts/display-fonts.ts', 'contracts/DISPLAY_FONT_LICENSE.txt',
-    'scripts/desktop-host.mjs', 'scripts/desktop-logs.mjs', 'scripts/desktop-paths.mjs', 'scripts/import-client.mjs']) {
+  for (const file of ['package.json', ...await collectPayloadSources(ROOT)]) {
     await mkdir(path.dirname(path.join(app, file)), { recursive: true }); await copyFile(path.join(ROOT, file), path.join(app, file));
   }
   await mkdir(path.join(app, 'runtime'), { recursive: true }); await copyFile(RUNTIME, path.join(app, 'runtime/node.exe'));

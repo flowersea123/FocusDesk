@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
+import { createFocusReview } from './focus-review.ts';
+import { createReviewHttp } from './focus-review-http.ts';
 import { createProjectProgress } from './project-progress.ts';
 import { createServer, type ServerResponse } from 'node:http';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createOverviewLoader, FocusActiveError, RevisionConflictError, SourceError } from './overview-loader.ts';
-import { MAX_OVERVIEW_BYTES, OverviewValidationError } from '../../contracts/daily-overview.ts';
+import { MAX_OVERVIEW_BYTES, OverviewValidationError, type DailyOverview } from '../../contracts/daily-overview.ts';
 import { parseTaskUpdateText } from '../../contracts/task-update.ts';
 import { parseFocusUpdateText } from '../../contracts/focus-update.ts';
 import { parseWorkStateUpdateText } from '../../contracts/work-state.ts';
@@ -50,6 +52,19 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
   const root = path.resolve(distPath);
   const checkpoints = createCheckpointStore(dataPath);
   const checkpointHttp = createCheckpointHttp(checkpoints, () => loader.load());
+  const reviews = createFocusReview(dataPath, { now });
+  const reviewHttp = createReviewHttp(reviews, checkpoints, () => loader.load());
+  let reviewUnavailable = false;
+  async function observe(overview: DailyOverview, cause: 'start' | 'stop' | 'snapshot' = 'snapshot') {
+    try {
+      await reviews.observe(overview, cause);
+      reviewUnavailable = false;
+    } catch {
+      // A review history write can fail after a successful task update.
+      if (!reviewUnavailable) console.warn('FocusDesk could not update the focus review history.');
+      reviewUnavailable = true;
+    }
+  }
   const projects = createProjectProgress(dataPath, checkpoints, () => loader.load());
   const screenObservation = createScreenObservationHandler({ getTasks: async () => (await loader.load()).tasks });
   const server = createServer(async (request, response) => {
@@ -65,6 +80,10 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
       const segments = pathname.split('/');
       if (!pathname.startsWith('/') || /[\\\x00-\x1f:]/.test(pathname) || segments.some(part => part === '..' || (part.startsWith('.') && part !== ''))) {
         json(response, 403, 'FORBIDDEN_PATH', 'Path is not available.', head);
+        return;
+      }
+      if (['/api/v1/focus-review', '/api/v1/focus-review/experiment', '/api/v1/focus-review/synthesis'].includes(pathname)) {
+        await reviewHttp(request, response);
         return;
       }
       if (pathname === '/api/v1/project-progress') { await projects.handle(request, response); return; }
@@ -83,10 +102,16 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
           checkWritePolicy(request.socket.remoteAddress, request.headers.host, request.headers.origin, request.headers['content-type']);
           const body = await readUpdateBody(request, writeTimeoutMs);
           let overview;
+          let cause: 'start' | 'stop' | 'snapshot' = 'snapshot';
           if (aiSuggestion) overview = await loader.updateAISuggestion(parseAISuggestionUpdateText(body));
           else if (workState) overview = await loader.updateWorkState(parseWorkStateUpdateText(body));
-          else if (focus) overview = await loader.updateFocus(parseFocusUpdateText(body));
+          else if (focus) {
+            const input = parseFocusUpdateText(body);
+            cause = input.action;
+            overview = await loader.updateFocus(input);
+          }
           else overview = await loader.update(parseTaskUpdateText(body));
+          await observe(overview, cause);
           send(response, 200, JSON.stringify(overview), 'application/json; charset=utf-8', false);
         } catch (error) {
           // Rejected uploads need not be drained; close after the error so an
@@ -119,6 +144,7 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
       if (pathname === API_PATH || pathname === DISPLAY_PATH) {
         try {
           const overview = await loader.load();
+          await observe(overview);
           let payload;
           if (pathname === DISPLAY_PATH) {
             const project = await projects.pinned(overview);
