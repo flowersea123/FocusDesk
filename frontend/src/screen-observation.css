@@ -1,27 +1,22 @@
-.screen-observation { border-top: 2px solid currentColor; padding: 20px 0; }
-.screen-observation h3, .screen-observation h4 { margin: 0 0 8px; }
+.screen-observation h4 { margin: 0; }
 .screen-observation p, .screen-observation small, .screen-observation summary { font-size: 13px; line-height: 1.55; }
-.screen-observation > p { margin: 0 0 14px; }
+.screen-observation > p { margin: 0 0 14px; color: var(--muted); }
 .so-field { display: grid; gap: 5px; margin: 12px 0; font-size: 13px; font-weight: 600; }
-.so-field :is(select, textarea) { width: 100%; font-weight: 400; }
-.so-field small { font-weight: 400; }
+.so-field :is(select, textarea, input) { width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid #c9c6d1; border-radius: 7px; color: var(--ink); background: white; font: inherit; font-weight: 400; }
+.so-field small { font-weight: 400; color: var(--muted); }
 .so-actions, .so-draft-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.so-actions button { padding: 8px 12px; border: 1px solid #000; border-radius: 0; background: #fff; color: #000; font-size: 13px; }
-.so-actions .so-primary, .so-actions .so-stop { background: #000; color: #fff; }
-.so-actions button:disabled { border-style: dashed; color: #666; background: #fff; }
-.so-live, .so-error, .so-note { margin: 10px 0 0; }
-.screen-observation .so-live { padding: 8px; background: #ffda00; color: #000; }
-.so-error { color: #9a1919; }
-.so-draft { margin-top: 16px; padding: 14px; border: 1px solid #111; }
+.so-actions button { padding: 8px 12px; font: inherit; font-size: 13px; border: 1px solid #c9c6d1; border-radius: 7px; color: var(--ink); background: white; }
+.so-actions .so-primary { background: #50406e; border-color: #50406e; color: white; }
+.so-actions button:disabled { opacity: .55; }
+.screen-observation :is(.so-note, .so-error) { margin: 10px 0 0; }
+.screen-observation .so-error { color: #963930; }
+.so-draft { margin-top: 16px; padding: 14px; border: 1px solid var(--line); border-radius: 9px; }
 .so-draft-head { justify-content: space-between; }
 .so-draft-head time { font-size: 12px; }
 .so-draft details { margin: 7px 0; }
 .so-draft summary { cursor: pointer; text-decoration: underline; }
 .so-draft img { display: block; max-width: 100%; max-height: 320px; margin-top: 8px; object-fit: contain; }
 .so-progress { padding: 10px 0; font-size: 13px; }
-.so-progress input { accent-color: #111; margin-right: 6px; }
+.so-progress input { accent-color: var(--accent); margin-right: 6px; }
 .so-progress p { margin: 4px 0; overflow-wrap: anywhere; }
 .so-draft > .so-actions { margin-top: 12px; }
-
-.so-auto { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; margin: 12px 0 3px; }
-.so-auto input { width: 16px; height: 16px; accent-color: var(--accent, #50406e); }

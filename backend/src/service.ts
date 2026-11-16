@@ -17,7 +17,9 @@ import { getServerInfo } from './network-info.ts';
 import { fileURLToPath } from 'node:url';
 import { createCheckpointStore } from './checkpoint-store.ts';
 import { createCheckpointHttp } from './checkpoint-http.ts';
-import { createScreenObservationHandler } from './screen-observation.ts';
+import { createScreenObservationService } from './screen-observation.ts';
+import { createForegroundRecorder, type RecorderOptions } from './foreground-recorder.ts';
+import { createRecorderHttp } from './recorder-http.ts';
 
 const API_PATH = '/api/v1/daily-overview';
 const UPDATE_PATH = `${API_PATH}/tasks`;
@@ -47,7 +49,11 @@ function within(root: string, target: string): boolean {
   return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
 }
 
-export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, now, loader: sharedLoader }: { dataPath: string; distPath: string; writeTimeoutMs?: number; now?: () => number; loader?: ReturnType<typeof createOverviewLoader> }) {
+type RecorderDriver = Pick<RecorderOptions, 'support' | 'open' | 'pollMs' | 'samePageMs'>;
+export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, now, loader: sharedLoader, recorderDriver }: {
+  dataPath: string; distPath: string; writeTimeoutMs?: number; now?: () => number;
+  loader?: ReturnType<typeof createOverviewLoader>; recorderDriver?: RecorderDriver;
+}) {
   const loader = sharedLoader ?? createOverviewLoader(dataPath, { now });
   const root = path.resolve(distPath);
   const checkpoints = createCheckpointStore(dataPath);
@@ -66,8 +72,37 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
     }
   }
   const projects = createProjectProgress(dataPath, checkpoints, () => loader.load());
-  const screenObservation = createScreenObservationHandler({ getTasks: async () => (await loader.load()).tasks,
-    getKnownDocuments: taskId => checkpoints.reviewedDocuments(taskId) });
+  const normalizeTitle = (title: string) => title.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+  const screenObservation = createScreenObservationService({
+    getTasks: async () => (await loader.load()).tasks,
+    getKnownDocuments: taskId => checkpoints.reviewedDocuments(taskId),
+    getDocumentOwners: async title => {
+      const key = normalizeTitle(title);
+      const { records } = await checkpoints.read();
+      return records.flatMap(r => r.taskId && r.readingDocument && r.source !== 'automatic' &&
+        normalizeTitle(r.readingDocument) === key ? [r.taskId] : []);
+    },
+  });
+  const platform = process.platform === 'darwin' || process.platform === 'win32' || process.platform === 'linux' ? process.platform : 'other';
+  const driver = () => platform === 'darwin' ? import('./foreground-mac/adapter.ts') : import('./foreground-platform/index.ts');
+  const recorder = createForegroundRecorder({
+    platform,
+    support: async () => (await driver()).foregroundSupport(),
+    open: async options => (await driver()).openForegroundCapture(options),
+    ...recorderDriver,
+    analyze: screenObservation.foreground,
+    save: async (record, signal) => {
+      if (record.taskId && !(await loader.load()).tasks.some(task => task.id === record.taskId)) {
+        record.taskId = null;
+        record.progress = null;
+        record.completedParts = [];
+        delete record.readingSection;
+        delete record.readingDocument;
+      }
+      await checkpoints.add(record, signal);
+    },
+  });
+  const recorderHttp = createRecorderHttp(recorder);
   const server = createServer(async (request, response) => {
     const head = request.method === 'HEAD';
     try {
@@ -88,7 +123,8 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
         return;
       }
       if (pathname === '/api/v1/project-progress') { await projects.handle(request, response); return; }
-      if (pathname === '/api/v1/screen-observation') { await screenObservation(request, response); return; }
+      if (pathname === '/api/v1/recorder') { await recorderHttp(request, response); return; }
+      if (pathname === '/api/v1/screen-observation') { await screenObservation.handle(request, response); return; }
       if (pathname === '/api/v1/checkpoints') { await checkpointHttp(request, response); return; }
       if (pathname === UPDATE_PATH || pathname === FOCUS_PATH || pathname === WORK_STATE_PATH || pathname === AI_SUGGESTION_PATH) {
         const focus = pathname === FOCUS_PATH;
@@ -192,5 +228,6 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
       else response.destroy();
     }
   });
-  return server;
+  server.once('close', () => void recorder.close());
+  return Object.assign(server, { stopRecording: recorder.close });
 }

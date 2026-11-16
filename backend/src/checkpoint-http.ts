@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { isLocalRequest, checkWritePolicy, readUpdateBody, WriteRequestError } from './write-policy.ts';
-import { CheckpointError, createCheckpointStore } from './checkpoint-store.ts';
+import { CHECKPOINT_LIMIT, CheckpointError, createCheckpointStore } from './checkpoint-store.ts';
 import type { DailyOverview } from '../../contracts/daily-overview.ts';
 
 export function privateJson(response: ServerResponse, status: number, value: unknown) {
@@ -29,8 +29,12 @@ export function createCheckpointHttp(store: ReturnType<typeof createCheckpointSt
     try {
       checkPrivateRequest(request);
       if (request.method === 'GET') {
+        const query = new URL(request.url!, 'http://localhost').searchParams;
+        const limit = Number(query.get('limit') ?? 12);
+        if (!Number.isInteger(limit) || limit < 1 || limit > CHECKPOINT_LIMIT) throw new CheckpointError(400, '记录条数无效。');
         const state = await store.read();
-        privateJson(response, 200, { records: state.records.slice(-12).reverse() });
+        const latest = state.records.sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
+        privateJson(response, 200, { records: latest.slice(0, limit), ...(latest.length > limit ? {hasMore: true} : {}) });
         return;
       }
       if (!['POST','PATCH','DELETE'].includes(request.method ?? '')) { response.setHeader('Allow', 'GET, POST, PATCH, DELETE'); privateJson(response, 405, { error: '不支持此操作。' }); return; }

@@ -8,6 +8,12 @@ export function checkpointSourceLabel(source?: CheckpointSource): string {
 export interface ScreenCheckpoint {
   id: string;
   source?: CheckpointSource;
+  /** Display name of the frontmost application for a desktop recording. */
+  appName?: string;
+  /** Page title reported by the foreground application at capture time. */
+  pageTitle?: string;
+  /** The system supplied the page title while local image analysis was unavailable. */
+  detailSource?: 'window-title';
   capturedAt: string;
   taskId: string | null;
   summary: string;
@@ -30,4 +36,5 @@ export function validReadingDocument(value: unknown): value is string {
 
 export interface CheckpointHistory {
   records: ScreenCheckpoint[];
+  hasMore?: true;
 }

@@ -1,8 +1,14 @@
 # 统一 API 与数据模型草案
 
+## 前台页面记录（2026-11-16）
+
+`GET /api/v1/recorder` 只查询能力和状态，不打开屏幕录制权限。对同一路径发送同源 JSON `{"action":"start"}` 或 `{"action":"stop"}` 启停本次本地会话。启动与停止均可重复请求，页面关闭或刷新不改变会话；Hub 退出或系统录制控制停止时结束。Hub 重启回到待机。状态字段为 `state`（idle、starting、recording、stopping、error、unavailable）、`supported`、`message`、`platform`、`sessionStartedAt`、`savedCount` 和 `lastSavedAt`。时间为 UTC ISO 字符串，尚无相应事件时为 null。本机回环与同源写入限制同下。
+
+前台记录沿用检查点和每日回顾。记录源为 automatic，含前台应用的 `appName` 和可选 `pageTitle`。画面可唯一对应任务时填写 `taskId`。未匹配时为 null，不写任务进度或完成项。模型不可用时，`detailSource:"window-title"` 表示内容仅来自系统提供的应用/页面标题。截图只在内存中处理。
+
 ## 本机屏幕检查点（2026-11-16）
 
-`POST /api/v1/screen-observation` 接收用户选择的截图与可选任务 ID，返回 AI 摘要、下一步、明确进度的原句和完成项候选。推理在本机运行。图片按请求处理，保存操作仅提交文本。`GET /api/v1/checkpoints` 返回最近 12 条已保存的文字记录，包含手动或自动来源（旧记录默认为手动）；`POST` 以客户端 UUID 幂等保存；`DELETE` 以 ID 删除。记录与任务数据文件配套存储，最多 1000 条。接口限定本机，写入要求同源 JSON。
+`POST /api/v1/screen-observation` 接收用户选择的截图与可选任务 ID，返回 AI 摘要、下一步、明确进度的原句和完成项候选。推理在本机运行。图片按请求处理，保存操作仅提交文本。`GET /api/v1/checkpoints` 按采集时间倒序返回最近 12 条已保存的文字记录，可通过 `?limit=N` 请求 1 至 1000 条。有更早记录时响应携带 `hasMore:true`。每条含手动或自动来源，旧记录默认为手动。`POST` 以客户端 UUID 幂等保存，`DELETE` 以 ID 删除。记录与任务数据文件配套存储，容量为 1000 条。接口限定本机，写入要求同源 JSON。
 
 ## 网页 AI 建议编辑（2026-11-12）
 

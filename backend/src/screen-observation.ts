@@ -93,13 +93,18 @@ function parseInput(raw: string): { taskId: string | null; image: string; automa
       typeof data.image !== 'string' || !data.image.startsWith('data:image/jpeg;base64,')) {
     reject(400, 'BAD_REQUEST', '请从检查点页面选择任务和截图。');
   }
-  const base64 = data.image.slice('data:image/jpeg;base64,'.length);
+  validateObservationImage(data.image);
+  return data;
+}
+
+function validateObservationImage(image: string) {
+  if (typeof image !== 'string' || !image.startsWith('data:image/jpeg;base64,')) reject(400, 'INVALID_IMAGE', '无法读取这张页面截图。');
+  const base64 = image.slice('data:image/jpeg;base64,'.length);
   if (base64.length > 4 * Math.ceil(MAX_BYTES / 3)) reject(413, 'IMAGE_TOO_LARGE', '截图超过 1 MiB。');
   const bytes = Buffer.from(base64, 'base64');
   if (bytes.length > MAX_BYTES || bytes.toString('base64') !== base64 || !validJpeg(bytes)) {
     reject(400, 'INVALID_IMAGE', '截图须为长边不超过 1440 像素的有效 JPEG。');
   }
-  return data;
 }
 
 const normalize = (s: string) => s.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -133,6 +138,7 @@ function progressFrom(matchesTask: boolean, evidence: string): Progress | null {
 type Options = {
   getTasks: () => Promise<readonly Task[]>;
   getKnownDocuments?: (taskId: string) => Promise<readonly string[]>;
+  getDocumentOwners?: (title: string) => Promise<readonly string[]>;
   endpoint?: string;
   model?: string;
   fetcher?: typeof fetch;
@@ -140,7 +146,8 @@ type Options = {
   uploadTimeoutMs?: number;
 };
 
-export function createScreenObservationHandler({ getTasks, getKnownDocuments = async () => [], endpoint = process.env.FOCUSDESK_MODEL_URL || 'http://127.0.0.1:18187',
+export function createScreenObservationService({ getTasks, getKnownDocuments = async () => [], getDocumentOwners = async () => [],
+  endpoint = process.env.FOCUSDESK_MODEL_URL || 'http://127.0.0.1:18187',
   model = process.env.FOCUSDESK_MODEL_NAME || 'focusdesk-mail', fetcher = fetch, timeoutMs = 90_000, uploadTimeoutMs = 10_000 }: Options) {
   let busy = false;
   // The first pass can correctly name checked rows but omit the graphic in its copied text.
@@ -168,7 +175,7 @@ export function createScreenObservationHandler({ getTasks, getKnownDocuments = a
     } catch { return []; } // Preserve the primary observation when the optional second reading is inconclusive.
   }
 
-  async function observe(image: string, task: Task | undefined, automatic: boolean, signal: AbortSignal) {
+  async function observe(image: string, selection: Task | 'foreground' | undefined, automatic: boolean, signal: AbortSignal) {
     const url = new URL(endpoint);
     if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) ||
         url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
@@ -210,11 +217,19 @@ export function createScreenObservationHandler({ getTasks, getKnownDocuments = a
           !/\b(not|pending|unread|incomplete|unfinished|to read)\b|未完成|未读|待办|待阅读|☐|\[ \]/i.test(line) &&
           !completedParts.includes(name)) completedParts.push(name);
     }
-    const matchesTask = !!task && normalize(task.title) === normalize(result.taskLabel);
-    const visibleSection = task ? readingSectionFrom(result, result.taskLabel) : undefined;
     const title = validReadingDocument(result.taskLabel) ? result.taskLabel.trim() : undefined;
-    let section = visibleSection;
-    if (section && automatic && !matchesTask) {
+    const visibleSection = selection ? readingSectionFrom(result, result.taskLabel) : undefined;
+    let task: Task | undefined;
+    if (selection === 'foreground') {
+      if (title) {
+        const owners = visibleSection ? await getDocumentOwners(title) : [];
+        const candidates = (await getTasks()).filter(t => normalize(t.title) === normalize(title) || owners.includes(t.id));
+        if (candidates.length === 1) task = candidates[0];
+      }
+    } else task = selection;
+    const matchesTask = !!task && normalize(task.title) === normalize(result.taskLabel);
+    let section = task ? visibleSection : undefined;
+    if (section && automatic && !matchesTask && selection !== 'foreground') {
       const known = task && title ? await getKnownDocuments(task.id) : [];
       if (!title || !known.some(name => normalize(name) === normalize(title))) section = undefined;
     }
@@ -225,25 +240,29 @@ export function createScreenObservationHandler({ getTasks, getKnownDocuments = a
       ? (title ? '正在查看《' + title + '》的目录。' : '画面显示文档目录。')
       : result.summary.trim();
     const progress = readingPage ? null : progressFrom(matchesTask, result.evidence.trim());
+    let useVerifiedProgress = selection === 'foreground';
     if (progress && unmarkedNames.length) {
       const checked = await rereadMarks(url, image, unmarkedNames, signal);
       for (const name of checked) if (!completedParts.includes(name)) completedParts.push(name);
       if (unmarkedNames.some(name => !completedParts.includes(name))) {
         // The free-text draft can make the same unsupported completion claim as the rejected rows.
-        summary = '《' + task!.title + '》显示整体进度为 ' + progress.percent + '%。';
-        const list = completedParts.join('、');
-        if (list) summary += list.length <= 300 ? '有明确完成标记的部分为' + list + '。' : '有 ' + completedParts.length + ' 项带有明确完成标记。';
+        useVerifiedProgress = true;
         nextStep = '';
       }
     }
+    if (useVerifiedProgress && progress && task) {
+      const names = completedParts.join('、');
+      summary = '《' + task.title + '》显示整体进度为 ' + progress.percent + '%。';
+      if (names) summary += names.length <= 300 ? '有明确完成标记的部分为' + names + '。' : '有 ' + completedParts.length + ' 项带有明确完成标记。';
+    }
     // The manual draft can be corrected. An unattended sample cannot mark steps in a different document.
-    return { summary, nextStep,
+    return { taskId: task?.id ?? null, result: { summary, nextStep,
       ...(section ? { readingSection: section } : {}), ...(document ? { readingDocument: document } : {}),
       progress,
-      completedParts: readingPage || (automatic && !matchesTask) ? [] : completedParts };
+      completedParts: readingPage || (automatic && !matchesTask) ? [] : completedParts } };
   }
 
-  return async function handleScreenObservation(req: IncomingMessage, res: ServerResponse) {
+  async function handle(req: IncomingMessage, res: ServerResponse) {
     let ownsSlot = false;
     const abort = new AbortController();
     const closed = () => abort.abort();
@@ -267,7 +286,7 @@ export function createScreenObservationHandler({ getTasks, getKnownDocuments = a
         task = tasks.find(t => t.id === taskId);
         if (!task) reject(409, 'TASK_CHANGED', '绑定的任务已移除，请刷新后重新选择。');
       }
-      const result = await observe(image, task, automatic, AbortSignal.any([abort.signal, AbortSignal.timeout(timeoutMs)]));
+      const { result } = await observe(image, task, automatic, AbortSignal.any([abort.signal, AbortSignal.timeout(timeoutMs)]));
       if (!res.destroyed) res.end(JSON.stringify(result));
     } catch (error) {
       if (res.destroyed) return;
@@ -285,5 +304,19 @@ export function createScreenObservationHandler({ getTasks, getKnownDocuments = a
       res.off('close', closed);
       if (ownsSlot) busy = false;
     }
-  };
+  }
+
+  async function foreground(image: string, signal: AbortSignal) {
+    if (busy) reject(429, 'OBSERVATION_BUSY', '本机模型正在读取另一页。');
+    busy = true;
+    try {
+      signal.throwIfAborted();
+      validateObservationImage(image);
+      const { taskId, result } = await observe(image, 'foreground', true, AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]));
+      return { taskId, ...result };
+    } finally { busy = false; }
+  }
+  return { handle, foreground };
 }
+
+export function createScreenObservationHandler(options: Options) { return createScreenObservationService(options).handle; }

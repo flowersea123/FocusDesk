@@ -1,0 +1,1 @@
+^(?:FocusDesk\s*·\s*(?:今日概览|设备连接)|Outlook\s*邮箱\s*·\s*FocusDesk|FocusDesk 正在记录前台窗口)(?:$|\s+[-–—|]\s+)

@@ -1,0 +1,22 @@
+.foreground-record { padding: clamp(18px, 3vw, 28px); border: 1px solid var(--line); border-radius: 13px; background: white; }
+.recorder-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.foreground-record h2 { margin: 0; color: var(--ink); font-size: 20px; font-weight: 650; line-height: 1.4; }
+.recorder-controls p { margin: 5px 0 0; color: var(--muted); font-size: 14px; }
+.recorder-toggle { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 9px; min-height: 44px; padding: 9px 19px;
+  border: 1px solid #50406e; border-radius: 8px; background: #50406e; color: white; font: inherit; font-weight: 620; }
+.recorder-toggle:hover:enabled { background: #413359; }
+.recorder-toggle:disabled { opacity: .58; cursor: default; }
+.recorder-button-mark { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+.recorder-toggle.is-active { color: #823b37; border-color: #dbc7c5; background: #fff; }
+.recorder-toggle.is-active:hover:enabled { background: #f9eeee; }
+.recorder-toggle.is-active .recorder-button-mark { border-radius: 2px; }
+.recorder-status { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 16px; margin-top: 19px; font-size: 12px; color: var(--muted); }
+.recorder-state { display: inline-flex; gap: 6px; align-items: center; font-weight: 650; }
+.recorder-state i { width: 7px; height: 7px; border: 1.5px solid currentColor; border-radius: 50%; }
+.recorder-state.is-live { color: #327155; }
+.recorder-state.is-live i { background: currentColor; }
+.foreground-record .recorder-note, .foreground-record .recorder-error { margin: 8px 0 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.foreground-record .recorder-error { color: #963930; }
+@media (max-width: 480px) {
+  .recorder-controls { align-items: flex-start; gap: 13px; }
+}

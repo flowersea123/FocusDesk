@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DailyOverview, Task } from '../../contracts/daily-overview';
 import { createConfiguredSource, type DemoScenario, type OverviewSource } from './data/overview-source';
 import { useOverview } from './data/use-overview';
 import { CheckpointWorkspace } from './CheckpointWorkspace';
+import { useForegroundRecorder } from './ForegroundRecord';
 import DailyReview from './DailyReview';
 import ProjectProgress from './ProjectProgress';
 import type { ProjectStatus } from '../../contracts/project-progress';
@@ -40,11 +41,20 @@ function TaskList({ overview }: { overview: DailyOverview }) {
   })}</ul>;
 }
 
+type View = 'today' | 'screen' | 'review';
+
+function linkedView(): View {
+  return window.location.hash === '#record' ? 'screen' : window.location.hash === '#review' ? 'review' : 'today';
+}
+
 export default function App({ source = defaultSource }: { source?: OverviewSource }) {
-  const [view, setView] = useState<'today' | 'screen' | 'review'>('today');
-  const [reviewOpened, setReviewOpened] = useState(false);
-  const [screenOpened, setScreenOpened] = useState(false);
+  const [view, setView] = useState<View>(() => source.localWorkspace ? linkedView() : 'today');
+  const [reviewOpened, setReviewOpened] = useState(view === 'review');
+  const [screenOpened, setScreenOpened] = useState(view === 'screen');
   const [checkpointVersion, setCheckpointVersion] = useState(0);
+  const checkpointsChanged = useCallback(() => setCheckpointVersion(value => value + 1), []);
+  const recorder = useForegroundRecorder(!!source.localWorkspace, checkpointsChanged);
+  const recording = recorder.status?.state === 'recording' && !recorder.readError;
   const [pinned, setPinned] = useState<ProjectStatus | null>(null);
   const [scenario, setScenario] = useState<DemoScenario>('today');
   const [taskDraft, setTaskDraft] = useState<Task[] | null>(null);
@@ -54,6 +64,30 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
   const count = overview?.tasks.length ?? 0;
   const mock = source.kind === 'mock';
   const local = !mock && Boolean(source.updateTasks);
+  const showView = useCallback((next: View) => {
+    if (next === 'screen') setScreenOpened(true);
+    if (next === 'review') setReviewOpened(true);
+    setView(next);
+  }, []);
+  useEffect(() => {
+    if (!source.localWorkspace) return;
+    const followLink = () => {
+      const hash = window.location.hash;
+      if (!hash || hash === '#record' || hash === '#review') showView(linkedView());
+    };
+    window.addEventListener('hashchange', followLink);
+    window.addEventListener('popstate', followLink);
+    return () => {
+      window.removeEventListener('hashchange', followLink);
+      window.removeEventListener('popstate', followLink);
+    };
+  }, [source.localWorkspace, showView]);
+  function navigate(next: View) {
+    showView(next);
+    const hash = next === 'screen' ? '#record' : next === 'review' ? '#review' : '';
+    if (window.location.hash !== hash) window.history.pushState(window.history.state, '', window.location.pathname + window.location.search + hash);
+  }
+
   const previewOverview = useMemo(() => {
     if (!overview) return null;
     const tasks = taskDraft ?? overview.tasks;
@@ -96,10 +130,12 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
         </div>}
         {loading && <p className={overview ? 'sr-only' : 'loading-line'} role="status">{overview ? '正在读取，暂时保留上次内容…' : '正在读取今日概览…'}</p>}
       </div>
-      {source.localWorkspace && overview && <div className="workspace-views" role="group" aria-label="工作台视图">
-        <button type="button" aria-pressed={view === 'today'} onClick={() => setView('today')}>今天任务</button>
-        <button type="button" aria-pressed={view === 'screen'} onClick={() => { setScreenOpened(true); setView('screen'); }} aria-label="屏幕记录">屏幕记录<span className="workspace-capture-indicator"> · 周期采样</span></button>
-        <button type="button" aria-pressed={view === 'review'} onClick={() => { setReviewOpened(true); setView('review'); }}>每日回顾</button>
+      {source.localWorkspace && <div className="workspace-views" role="group" aria-label="工作台视图">
+        <button type="button" aria-pressed={view === 'today'} onClick={() => navigate('today')}>今天任务</button>
+        <button type="button" aria-pressed={view === 'screen'} onClick={() => navigate('screen')} aria-label="屏幕记录"
+          aria-describedby={recording ? 'nav-recorder-state' : undefined}>屏幕记录{recording &&
+            <span className="workspace-capture-indicator" id="nav-recorder-state">记录中</span>}</button>
+        <button type="button" aria-pressed={view === 'review'} onClick={() => navigate('review')}>每日回顾</button>
       </div>}
       <div hidden={view !== 'today'}>
       <div className="desk-grid">
@@ -138,7 +174,8 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
           <button type="button" key={item.value} onClick={() => setScenario(item.value)} aria-pressed={scenario === item.value}>{item.label}</button>)}</div>}
       </details>
       </div>
-      {source.localWorkspace && overview && screenOpened && <div hidden={view !== 'screen'}><CheckpointWorkspace overview={overview} active={view === 'screen'} onChange={() => setCheckpointVersion(v => v + 1)} /></div>}
+      {source.localWorkspace && screenOpened && <div hidden={view !== 'screen'}><CheckpointWorkspace overview={overview} recorder={recorder}
+        active={view === 'screen'} refreshKey={checkpointVersion} onChange={checkpointsChanged} /></div>}
       {source.localWorkspace && overview && reviewOpened && <div hidden={view !== 'review'}>
         <DailyReview refreshKey={overview.revision + ':' + checkpointVersion} />
       </div>}

@@ -20,7 +20,12 @@ function parseRecord(row: Partial<ScreenCheckpoint>): ScreenCheckpoint {
   if (!row || typeof row !== 'object') inputError();
   const id = checkpointId(row.id);
   const source = row.source === undefined ? 'manual' : row.source;
-  if ((source !== 'manual' && source !== 'automatic') || (source === 'automatic' && !row.taskId)) inputError();
+  const appName = row.appName === undefined ? undefined : text(row.appName, 120);
+  const pageTitle = row.pageTitle === undefined ? undefined : text(row.pageTitle, 320);
+  if (pageTitle && (!appName || [...pageTitle].length > 160 || /[\p{Cc}\p{Zl}\p{Zp}]/u.test(pageTitle))) inputError();
+  if ((source !== 'manual' && source !== 'automatic') || (appName && (source !== 'automatic' || /\p{Cc}/u.test(appName))) ||
+      (source === 'automatic' && !row.taskId && !appName)) inputError();
+  if (row.detailSource !== undefined && (row.detailSource !== 'window-title' || !appName || row.taskId !== null || row.nextStep)) inputError();
   if (typeof row.capturedAt !== 'string' || !Number.isFinite(Date.parse(row.capturedAt)) ||
       new Date(row.capturedAt).toISOString() !== row.capturedAt) inputError();
   if (row.taskId !== null && (typeof row.taskId !== 'string' || !/^[\x21-\x7e]{1,64}$/.test(row.taskId))) inputError();
@@ -32,10 +37,12 @@ function parseRecord(row: Partial<ScreenCheckpoint>): ScreenCheckpoint {
   const parts = row.completedParts ?? [];
   if (!Array.isArray(parts) || parts.length > 8) inputError();
   const completedParts = [...new Set(parts.map(part => text(part, 64)))];
+  if (source === 'automatic' && !row.taskId && completedParts.length) inputError();
   if (row.readingSection !== undefined && (!row.taskId || !validReadingSection(row.readingSection))) inputError();
   if (row.readingDocument !== undefined && (!row.readingSection || !validReadingDocument(row.readingDocument))) inputError();
   if (row.readingConfirmed !== undefined && (row.readingConfirmed !== true || !row.readingSection)) inputError();
-  return { completedParts, source, ...(row.readingSection ? {readingSection:row.readingSection.trim()} : {}),
+  return { completedParts, source, ...(appName ? {appName} : {}), ...(pageTitle ? {pageTitle} : {}), ...(row.detailSource ? {detailSource:row.detailSource} : {}),
+    ...(row.readingSection ? {readingSection:row.readingSection.trim()} : {}),
     ...(row.readingDocument ? {readingDocument:row.readingDocument.trim()} : {}),
     ...(row.readingConfirmed ? {readingConfirmed:true} : {}), id, capturedAt: row.capturedAt, taskId: row.taskId, summary: text(row.summary, 500), nextStep: text(row.nextStep, 350, true), progress };
 }
@@ -75,10 +82,11 @@ export function createCheckpointStore(dataPath: string) {
         return [...new Set(records.flatMap(row => row.taskId === taskId && row.source !== 'automatic' && row.readingDocument ? [row.readingDocument] : []))];
       });
     },
-    add(input: ScreenCheckpoint) {
+    add(input: ScreenCheckpoint, signal?: AbortSignal) {
       const record = parseRecord(input);
       if (record.readingConfirmed) inputError();
       return serial(async () => {
+        signal?.throwIfAborted();
         const state = await read();
         const existing = state.records.find(row => row.id === record.id);
         if (existing) {
@@ -88,6 +96,7 @@ export function createCheckpointStore(dataPath: string) {
           return;
         }
         if (state.records.length >= CHECKPOINT_LIMIT) throw new CheckpointError(409, '检查点已满，请先移除不再需要的记录。');
+        signal?.throwIfAborted();
         state.records.push(record);
         await persist(state);
       });

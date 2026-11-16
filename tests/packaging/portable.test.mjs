@@ -110,7 +110,7 @@ test('exported runtime starts from an unrelated cwd without npm or development d
   assert.match(result.stdout, /PORTABLE_READY 1\.0 Synthetic portable task/);
 });
 
-test('the exported Hub serves device, checkpoint, project and daily review data', async t => {
+test('the exported Hub serves device, recorder, checkpoint, project and daily review data', async t => {
   const { project, output } = await fixture(t);
   await cp(path.join(ROOT, 'backend/src'), path.join(project, 'backend/src'), { recursive: true });
   for (const entry of await readdir(path.join(ROOT, 'contracts'), { withFileTypes: true })) {
@@ -127,6 +127,16 @@ test('the exported Hub serves device, checkpoint, project and daily review data'
   await once(server, 'listening');
   try {
     const origin = 'http://127.0.0.1:' + server.address().port;
+    const recorder = await fetch(origin + '/api/v1/recorder');
+    assert.equal(recorder.status, 200);
+    const status = await recorder.json();
+    assert.ok(['idle', 'unavailable'].includes(status.state));
+    assert.equal(status.savedCount, 0);
+    assert.equal(status.sessionStartedAt, null);
+    for (const source of ['foreground-mac/FocusDeskCapture.swift', 'foreground-mac/Info.plist',
+      'foreground-platform/windows.cs', 'foreground-platform/x11.py', 'foreground-platform/focusdesk-pages.txt', 'foreground-platform/sensitive-pattern.txt']) {
+      assert.ok((await readFile(path.join(output, 'backend/src', source))).length > 0, source);
+    }
     const display = await fetch(origin + '/api/v1/display-snapshot');
     assert.equal(display.status, 200);
     assert.equal((await display.json()).schema_version, 'display-1');

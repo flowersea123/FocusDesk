@@ -1,13 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
+import { createServer, get } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createCheckpointStore } from '../src/checkpoint-store.ts';
 import { once } from 'node:events';
-import { createScreenObservationHandler } from '../src/screen-observation.ts';
+import { createScreenObservationHandler, createScreenObservationService } from '../src/screen-observation.ts';
+import { createDemoServer } from '../src/service.ts';
+import { setTimeout as delay } from 'node:timers/promises';
 
 // A two-pixel square re-encoded by the browser's JPEG encoder.
 const image = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/2wBDARESEhgVGC8aGi9jQjhCY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2P/wAARCAACAAIDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJ+AD//Z';
@@ -16,6 +18,87 @@ const output = { summary: '正在核对报告。', nextStep: '继续讨论部分
 function completion(result = output) {
   return Response.json({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(result) } }] });
 }
+
+test('foreground inference links only a unique visible task or reviewed paper and never extrapolates unrelated progress', async () => {
+  const article = { ...output, taskLabel: 'Paper Title', readingPage: 'body', sectionHeading: 'Method',
+    bodyQuote: 'We compare the results of three independent training runs.' };
+  let seen = article, tasks = [{ id: 'paper', title: 'Read paper' }];
+  const observer = createScreenObservationService({ getTasks: async () => tasks, getDocumentOwners: async s => s === 'Paper Title' ? ['paper'] : [],
+    fetcher: async () => completion(seen) });
+  const inspect = () => observer.foreground(image, new AbortController().signal);
+  assert.equal((await inspect()).readingSection, 'Method');
+  assert.equal((await inspect()).taskId, 'paper');
+  seen = { ...article, taskLabel: 'Unrelated report' };
+  assert.equal((await inspect()).taskId, null);
+  assert.equal((await inspect()).readingSection, undefined);
+  seen = { ...output, taskLabel: 'Read paper', completedParts: [{name: 'Method', line: '[x] Method'}] };
+  assert.equal((await inspect()).progress.percent, 75);
+  tasks = [...tasks, { id: 'duplicate', title: ' read  PAPER ' }];
+  const ambiguous = await inspect();
+  assert.equal(ambiguous.taskId, null);
+  assert.equal(ambiguous.progress, null);
+  assert.deepEqual(ambiguous.completedParts, []);
+});
+
+test('real Hub recorder follows two supplied applications, enforces local control and persists only text for the daily review', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'focusdesk-record-http-'));
+  const dataPath = join(dir, 'tasks.json');
+  const today = new Date().toISOString().slice(0, 10);
+  await writeFile(dataPath, JSON.stringify({ date: today, timezone: 'UTC',
+    tasks: [{ id: 'report', title: 'Lab Report', status: 'todo', due_at: null }] }));
+  let modelOutput = output;
+  const model = createServer(async (req, res) => {
+    for await (const chunk of req) { /* drain the synthetic image body */ }
+    res.end(await completion(modelOutput).text());
+  });
+  model.listen(0, '127.0.0.1'); await once(model, 'listening');
+  const oldEndpoint = process.env.FOCUSDESK_MODEL_URL;
+  process.env.FOCUSDESK_MODEL_URL = 'http://127.0.0.1:' + model.address().port;
+  let current = { app: 'Fixture Browser', image, pageKey: 'tab-1', pageTitle: 'Lab Report' }, opens = 0;
+  const server = createDemoServer({ dataPath, distPath: dir, recorderDriver: {
+    support: async () => ({ supported: true, message: '' }), pollMs: 5, samePageMs: 10,
+    open: async () => { opens++; return { capture: async () => current, close() {} }; },
+  } });
+  if (oldEndpoint === undefined) delete process.env.FOCUSDESK_MODEL_URL; else process.env.FOCUSDESK_MODEL_URL = oldEndpoint;
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(async () => {
+    await server.stopRecording();
+    for (const s of [server, model]) { s.closeAllConnections(); await new Promise(resolve => s.close(resolve)); }
+    await rm(dir, { recursive: true, force: true });
+  });
+  const base = 'http://127.0.0.1:' + server.address().port;
+  const url = base + '/api/v1/recorder';
+  const control = (action, origin = base) => fetch(url, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) });
+  const status = () => fetch(url).then(r => r.json());
+  async function waitFor(condition) {
+    for (let i = 0; i < 300; i++) { if (condition(await status())) return; await delay(5); }
+    assert.fail('Recorder did not reach expected state');
+  }
+  assert.equal((await status()).state, 'idle');
+  assert.equal((await control('start', 'https://example.org')).status, 403);
+  const foreignStatus = await new Promise((resolve, reject) => {
+    get(url, {headers: {Host: 'foreign.test'}}, res => { res.resume(); resolve(res.statusCode); }).on('error', reject);
+  });
+  assert.equal(foreignStatus, 403);
+  assert.equal((await control('other')).status, 400);
+  assert.equal(opens, 0);
+  assert.equal((await control('start')).status, 200);
+  await waitFor(s => s.savedCount === 1);
+  modelOutput = { ...output, taskLabel: 'Unrelated paper', summary: '正在阅读其他论文。' };
+  current = { ...current, app: 'PDF Viewer', pageKey: 'pdf-2' };
+  await waitFor(s => s.savedCount === 2);
+  await control('stop');
+  await waitFor(s => s.state === 'idle');
+  const { records } = await fetch(base + '/api/v1/checkpoints').then(r => r.json());
+  assert.deepEqual(records.map(r => [r.appName, r.taskId]), [['PDF Viewer', null], ['Fixture Browser', 'report']]);
+  assert.equal(records[1].progress.percent, 75); assert.equal(records[0].progress, null);
+  const one = await fetch(base + '/api/v1/checkpoints?limit=1').then(r => r.json());
+  assert.equal(one.hasMore, true); assert.equal(one.records.length, 1);
+  const review = await fetch(base + '/api/v1/focus-review?date=' + today).then(r => r.json());
+  assert.equal(review.observations.length, 2); assert.equal(review.totalSeconds, 0);
+  assert.equal((await createCheckpointStore(dataPath).read()).records.length, 2);
+  assert.doesNotMatch(await readFile(dataPath + '.checkpoints.json', 'utf8'), /data:image|tab-1|pdf-2/);
+});
 async function setup(t, options = {}) {
   const server = createServer(createScreenObservationHandler({ getTasks: async () => [{id:'a', title:'Lab Report'}],
     fetcher: async () => completion(), ...options }));
