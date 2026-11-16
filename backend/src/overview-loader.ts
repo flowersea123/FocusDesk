@@ -97,9 +97,6 @@ export function createOverviewLoader(dataPath: string, persistence: PersistenceO
     if (!['Asia/Shanghai', 'UTC'].includes(validated.timezone)) {
       throw new SourceError('UNSUPPORTED_DEVICE_TIMEZONE', 'This device demo supports only Asia/Shanghai or UTC.');
     }
-    if (validated.tasks.some(task => !/^[\x20-\x7e]{1,40}$/.test(task.title))) {
-      throw new SourceError('UNSUPPORTED_DEVICE_TEXT', 'This device demo requires printable ASCII task titles (1-40 characters).');
-    }
     const now = (persistence.now ?? Date.now)();
     const focus = validated.focus && Date.parse(validated.focus.started_at) <= now && now < Date.parse(validated.focus.ends_at) ? validated.focus : null;
     validated.focus = focus;

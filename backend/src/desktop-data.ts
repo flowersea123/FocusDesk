@@ -31,7 +31,7 @@ export function validateDesktopSource(source: unknown): DesktopSource {
     if (Buffer.byteLength(JSON.stringify(source)) > MAX_OVERVIEW_BYTES) throw new Error('Too large');
     const input = source as Record<string, unknown>;
     const valid = parseDailyOverview({ schema_version: '1.0', revision: '0'.repeat(64), updated_at: new Date().toISOString(), date: input.date, timezone: input.timezone, tasks: input.tasks, focus: input.focus, work_state: input.work_state, signals: input.signals, ai_suggestion: input.ai_suggestion });
-    if (!['Asia/Shanghai', 'UTC'].includes(valid.timezone) || valid.tasks.some(task => !/^[\x20-\x7e]{1,40}$/.test(task.title))) throw new Error('Unsupported device profile');
+    if (!['Asia/Shanghai', 'UTC'].includes(valid.timezone)) throw new Error('Unsupported device profile');
     const result: DesktopSource = { date: valid.date, timezone: valid.timezone, tasks: valid.tasks };
     if (input.focus !== undefined) result.focus = valid.focus;
     if (input.work_state !== undefined) result.work_state = valid.work_state;

@@ -6,7 +6,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rm, utimes, symlink } from 'node:f
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createDemoServer } from '../src/service.ts';
-import { MAX_TASKS, parseDailyOverviewText } from '../../contracts/daily-overview.ts';
+import { MAX_OVERVIEW_BYTES, MAX_TASKS, parseDailyOverviewText } from '../../contracts/daily-overview.ts';
 
 const fixture = JSON.parse(await readFile(new URL('../../contracts/fixtures/device-demo.json', import.meta.url), 'utf8'));
 const seed = { date: fixture.date, timezone: fixture.timezone, tasks: fixture.tasks };
@@ -126,7 +126,7 @@ for (const [name, value, code] of [
   ['invalid date', { ...seed, date: '2026-02-30' }, 'INVALID_TASK_SOURCE'],
   ['unknown source field', { ...seed, revision: 'user-controlled' }, 'INVALID_TASK_SOURCE'],
   ['too many tasks', { ...seed, tasks: Array.from({ length: MAX_TASKS + 1 }, (_, index) => ({ ...seed.tasks[0], id: `task-${index}` })) }, 'INVALID_TASK_SOURCE'],
-  ['Chinese title', { ...seed, tasks: [{ ...seed.tasks[0], title: '中文任务' }] }, 'UNSUPPORTED_DEVICE_TEXT'],
+  ['bad device alias', { ...seed, tasks: [{ ...seed.tasks[0], device_title: '中文' }] }, 'INVALID_TASK_SOURCE'],
   ['unsupported device timezone', { ...seed, timezone: 'Europe/London' }, 'UNSUPPORTED_DEVICE_TIMEZONE'],
   ['oversized bytes including whitespace', ' '.repeat(4097), 'TASK_SOURCE_TOO_LARGE'],
 ]) {
@@ -151,6 +151,47 @@ test('4096 raw source bytes are accepted but 4097 are rejected', async t => {
   assert.equal((await get()).status, 200);
   await write(padded + ' ');
   assert.equal((await get()).json().error.code, 'TASK_SOURCE_TOO_LARGE');
+});
+
+test('a 4 KiB workspace keeps its Chinese titles while the legacy device view compacts only expanded labels', async t => {
+  const { get, write } = await setup(t);
+  const tasks = [
+    { id: 'frames', title: '检查双床房窗框', status: 'todo', due_at: '2026-11-03T01:00:00.1Z' },
+    { id: 'windows', title: '装修双窗框', status: 'todo', due_at: null },
+    { id: 'meeting', title: '周会', device_title: 'Team sync', status: 'todo', due_at: null },
+    { id: 'read', title: 'Read notes', status: 'done', due_at: null },
+  ];
+  const endpoint = '/api/v1/daily-overview';
+  await write({ ...seed, tasks });
+  const workspace = await get(endpoint + '?view=workspace');
+  const device = await get(endpoint + '?view=device');
+  assert.equal(workspace.status, 200);
+  assert.equal(device.status, 200);
+  assert.match(device.json().tasks[0].title, /^Jian cha shuang /);
+  assert.match(device.json().tasks[1].title, /^Zhuang xiu /);
+  assert.equal(device.json().tasks[2].title, 'Team sync');
+
+  // Fractional seconds allow a valid timestamp to exercise the exact transport limit.
+  const padding = MAX_OVERVIEW_BYTES - Buffer.byteLength(workspace.body);
+  assert.ok(padding > 0);
+  assert.ok(Buffer.byteLength(device.body) + padding > MAX_OVERVIEW_BYTES, 'the full pinyin DTO would exceed the limit');
+  tasks[0].due_at = tasks[0].due_at.slice(0, -1) + '1'.repeat(padding) + 'Z';
+  await write({ ...seed, tasks });
+
+  const full = await get(endpoint + '?view=workspace');
+  const compact = await get(endpoint + '?view=device');
+  assert.equal(full.status, 200);
+  assert.equal(Buffer.byteLength(full.body), MAX_OVERVIEW_BYTES);
+  assert.deepEqual(full.json().tasks, tasks);
+  assert.equal(compact.status, 200);
+  const bytes = Buffer.byteLength(compact.body);
+  assert.ok(bytes <= MAX_OVERVIEW_BYTES);
+  assert.equal(Number(compact.headers['content-length']), bytes);
+  const expectedLabels = ['1', '2', 'Team sync', 'Read notes'];
+  assert.deepEqual(parseDailyOverviewText(compact.body).tasks, tasks.map((task, index) => ({
+    id: task.id, title: expectedLabels[index], status: task.status, due_at: task.due_at,
+  })));
+  assert.deepEqual((await get(endpoint + '?view=workspace')).json(), full.json());
 });
 
 test('missing task file remains missing and returns 503 without being recreated', async t => {

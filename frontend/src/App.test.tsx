@@ -6,6 +6,8 @@ import { createMockSource, type OverviewSource } from './data/overview-source';
 import { parseDailyOverview, type DailyOverview } from '../../contracts/daily-overview';
 import today from '../../contracts/fixtures/today.json';
 
+const deviceTitles = ['Zheng li jin tian de zhong dian ren wu', 'Wan cheng Dashboard ye mian yan zheng'];
+
 afterEach(() => vi.useRealTimers());
 
 describe('Dashboard', () => {
@@ -53,10 +55,10 @@ describe('Dashboard', () => {
     expect(preview).toHaveAttribute('data-height', '300');
     expect(preview).toHaveAttribute('data-source-revision', today.revision);
     expect(preview).toHaveAttribute('data-preview-mode', 'workspace');
-    expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(today.tasks.filter(task => task.status === 'todo').map(task => task.title));
+    expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(deviceTitles);
     const transcript = document.getElementById('preview-transcript')!;
     expect(transcript).toHaveTextContent('FOCUSDESK');
-    for (const task of today.tasks.filter(task => task.status === 'todo')) expect(transcript).toHaveTextContent(task.title);
+    for (const label of deviceTitles) expect(transcript).toHaveTextContent(label);
     expect(transcript).toHaveTextContent('AI RECOMMENDATION No suggestion yet.');
     expect(screen.getByLabelText('1 项已完成，共 3 项')).toBeInTheDocument();
   });
@@ -81,7 +83,7 @@ describe('Dashboard', () => {
     await user.click(screen.getByRole('button', { name: '当前任务' }));
     expect(preview).toHaveAttribute('data-preview-mode', 'workspace');
     expect(preview.querySelector('.paper-recommendation p')).toHaveTextContent('No suggestion yet.');
-    expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(data.tasks.filter(task => task.status === 'todo').map(task => task.title));
+    expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(deviceTitles);
     expect(screen.getByRole('button', { name: '当前任务' })).toHaveAttribute('aria-pressed', 'true');
   });
 

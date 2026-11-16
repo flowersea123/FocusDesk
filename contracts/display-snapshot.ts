@@ -1,3 +1,4 @@
+import { deviceTaskLabel } from './device-task-label.ts';
 import { devicePart, type ProjectStatus } from './project-progress.ts';
 import type { DailyOverview } from './daily-overview.ts';
 import { DISPLAY_FONTS } from './display-fonts.ts';
@@ -103,7 +104,7 @@ export function buildDisplaySnapshot(overview: DailyOverview): DisplaySnapshot {
     // Eight straight segments form a ten-pixel rounded checkbox.
     for (const [x, y, width, height] of [[2, 0, 6, 1], [1, 1, 1, 1], [8, 1, 1, 1], [0, 2, 1, 6],
       [9, 2, 1, 6], [1, 8, 1, 1], [8, 8, 1, 1], [2, 9, 6, 1]]) rect(32 + x, top + y, width, height, 0);
-    text(task.title, 54, 97 + index * 24, index === 0 ? FONT.bold16 : FONT.regular16, 0, 330);
+    text(deviceTaskLabel(task), 54, 97 + index * 24, index === 0 ? FONT.bold16 : FONT.regular16, 0, 330);
   });
   if (visible.length) rect(16, 84, 2, 16, 3);
   else text(overview.tasks.length ? 'All tasks done' : 'No tasks for today', 16, 97, FONT.regular16);
@@ -160,7 +161,7 @@ export function buildProjectDisplay(project: ProjectStatus, revision: string): D
   const section = page ? page.section : project.readingBookmark?.current.section;
   const reading = !!(page || section);
   draw('FOCUSDESK  /  TASK PROGRESS',18,25,FONT.bold11,360);
-  draw(project.title,18,reading ? 48 : 61,FONT.bold17,364);
+  draw(deviceTaskLabel({id:project.taskId,title:project.title,device_title:project.deviceTitle}),18,reading ? 48 : 61,FONT.bold17,364);
   if (reading) {
     draw('READING POSITION',18,71,FONT.bold11,137);
     if (page) {

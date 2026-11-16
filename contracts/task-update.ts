@@ -11,9 +11,7 @@ export interface TaskUpdateRequest {
   restoreTaskId?: string;
 }
 
-export function isDeviceTaskTitle(value: string): boolean {
-  return /^[\x20-\x7e]{1,40}$/.test(value) && value.trim().length > 0;
-}
+export { isDeviceTaskTitle } from './daily-overview.ts';
 
 /** Writable profile: task edits only; date/timezone remain server-owned. */
 export function parseTaskUpdateRequest(input: unknown): TaskUpdateRequest {
@@ -29,9 +27,6 @@ export function parseTaskUpdateRequest(input: unknown): TaskUpdateRequest {
     date: '2000-01-01', timezone: 'UTC', updated_at: '2000-01-01T00:00:00Z',
     tasks: source.tasks,
   });
-  if (normalized.tasks.some(task => !isDeviceTaskTitle(task.title))) {
-    throw new OverviewValidationError('Task titles must be 1-40 printable ASCII characters, not blank');
-  }
   const { restoreTaskId } = source;
   if (restoreTaskId !== undefined && (typeof restoreTaskId !== 'string' || !normalized.tasks.some(task => task.id === restoreTaskId))) {
     throw new OverviewValidationError('restoreTaskId must identify the restored row in the task list');

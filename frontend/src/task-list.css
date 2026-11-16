@@ -19,6 +19,13 @@
 .task-composer input { flex: 1 1 120px; min-width: 0; border: 1px solid #bdb5c9; border-radius: 6px; padding: 8px 10px; color: var(--ink); background: white; font: inherit; }
 .task-composer input[aria-invalid=true] { border-color: #a34242; }
 .task-list-control .task-save, .task-list-control .task-add { color: var(--accent); border-color: #dbd5e4; background: #faf8fc; }
+.task-list-control .task-compose-actions .task-save:enabled, .task-list-control .task-add:enabled {
+  border-color: var(--accent, #6650a5); background: var(--accent, #6650a5); color: #fff; font-weight: 600;
+}
+.task-list-control .task-compose-actions .task-save:enabled:hover, .task-list-control .task-add:enabled:hover { filter: brightness(.92); }
+.task-device-title { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+.task-device-title summary { width: fit-content; padding-block: 4px; cursor: pointer; }
+.task-device-title input { display: block; width: min(100%, 27em); }
 .task-list-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px; margin-top: 8px; }
 .task-list-footer small, .task-list-notice, .task-form-note { color: var(--muted); font-size: 12px; }
 .task-list-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }

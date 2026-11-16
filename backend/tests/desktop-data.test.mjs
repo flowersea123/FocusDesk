@@ -65,7 +65,7 @@ test('external config supports CLI precedence and rejects explicitly missing or 
 
 test('source validation rejects wrong format, device profile, byte limit, and invalid focus', () => {
   for (const bad of [null, [], { ...source, unknown: true }, { ...source, date: '2026-02-30' },
-    { ...source, timezone: 'Europe/London' }, { ...source, tasks: [{ ...task, title: '中文' }] },
+    { ...source, timezone: 'Europe/London' }, { ...source, tasks: [{ ...task, device_title: '中文' }] },
     ' '.repeat(4097), { ...source, focus: { task_id: task.id, started_at: 'bad', ends_at: 'bad' } }]) {
     assert.throws(() => validateDesktopSource(bad), error => error.code === 'IMPORT_INVALID_SOURCE');
   }
@@ -89,7 +89,7 @@ test('unconfirmed, stale, and invalid import never mutate data or create backups
   const store = createOverviewLoader(paths.dataPath); const current = await store.load();
   await assert.rejects(store.importSource(source, { revision: current.revision, confirmed: false, backupsPath: paths.backupsPath }), error => error.code === 'IMPORT_CONFIRMATION_REQUIRED');
   await assert.rejects(store.importSource(source, { revision: 'stale', confirmed: true, backupsPath: paths.backupsPath }), { name: 'RevisionConflictError' });
-  assert.throws(() => store.importSource({ ...source, tasks: [{ ...task, title: '中文' }] }, { revision: current.revision, confirmed: true, backupsPath: paths.backupsPath }));
+  assert.throws(() => store.importSource({ ...source, tasks: [{ ...task, device_title: '中文' }] }, { revision: current.revision, confirmed: true, backupsPath: paths.backupsPath }));
   assert.deepEqual(await readFile(paths.dataPath), raw); assert.deepEqual(await readdir(paths.backupsPath), []);
 });
 
@@ -100,6 +100,23 @@ test('expired focus is preserved on disk and naturally excluded from reads', asy
   const saved = await store.importSource(expired, { revision: current.revision, confirmed: true, backupsPath: paths.backupsPath });
   assert.equal(saved.focus, null);
   assert.deepEqual(JSON.parse(await readFile(paths.dataPath, 'utf8')).focus, expired.focus);
+});
+
+test('Unicode tasks round-trip through edits, focus, reloading, and desktop source validation', async t => {
+  const paths = await setup(t);
+  const store = createOverviewLoader(paths.dataPath);
+  const initial = await store.load();
+  const paper = { id:'new-paper', title:'看论文', device_title:'Read paper', status:'todo', due_at:null };
+  const created = await store.update({revision:initial.revision,tasks:[paper]});
+  assert.deepEqual(created.tasks,[paper]);
+  const started = await store.updateFocus({revision:created.revision,action:'start',task_id:paper.id});
+  const renamed = {...paper, title:'读第二章 📖'};
+  const changed = await store.update({revision:started.revision,tasks:[renamed]});
+  assert.equal(changed.focus?.task_id,paper.id);
+  assert.deepEqual(changed.tasks,[renamed]);
+  const source = validateDesktopSource(await readFile(paths.dataPath,'utf8'));
+  assert.deepEqual(source.tasks,[renamed]);
+  assert.deepEqual((await createOverviewLoader(paths.dataPath).load()).tasks,[renamed]);
 });
 
 test('active focus survives import without starting a new 25-minute session', async t => {

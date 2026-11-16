@@ -1,5 +1,6 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { MAX_TASKS, type DailyOverview, type Task } from '../../contracts/daily-overview';
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { isTaskTitle, MAX_TASKS, type DailyOverview, type Task } from '../../contracts/daily-overview';
+import { deviceTaskLabel } from '../../contracts/device-task-label';
 import { validCalendarId } from '../../contracts/calendar';
 import { isDeviceTaskTitle, type TaskUpdateRequest } from '../../contracts/task-update';
 import { OverviewRequestError } from './data/overview-source';
@@ -18,16 +19,22 @@ interface Props {
 }
 type Draft = {
   kind: 'add' | 'edit'; id: string; text: string; initial: string;
-  after: string | null; date: string; returnTo: string;
+  deviceText: string; initialDeviceText: string; after: string | null; date: string; returnTo: string;
 };
 type Removed = { task: Task; endedFocus: boolean; previous?: string; next?: string; index: number; date: string };
 
 const newId = () => globalThis.crypto?.randomUUID?.() ?? `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 function proposed(tasks: Task[], draft: Draft): Task[] {
-  if (draft.kind === 'edit') return tasks.map(task => task.id === draft.id ? { ...task, title: draft.text } : task);
+  const titleFields = { title: draft.text, ...(draft.deviceText ? { device_title: draft.deviceText } : {}) };
+  if (draft.kind === 'edit') return tasks.map(task => {
+    if (task.id !== draft.id) return task;
+    const updated = { ...task, ...titleFields };
+    if (!draft.deviceText) delete updated.device_title;
+    return updated;
+  });
   const at = draft.after ? tasks.findIndex(task => task.id === draft.after) : -1;
   const index = at < 0 ? tasks.length : at + 1;
-  return [...tasks.slice(0, index), { id: draft.id, title: draft.text, status: 'todo', due_at: null }, ...tasks.slice(index)];
+  return [...tasks.slice(0, index), { id: draft.id, ...titleFields, status: 'todo', due_at: null }, ...tasks.slice(index)];
 }
 
 const iconPath = {
@@ -43,6 +50,7 @@ function TaskIcon({ action }: { action: keyof typeof iconPath }) {
 }
 
 export default function TaskEditor({ overview, saving, onSave, onDraftChange, selectedId, observedId, manual, onSelect, active = true }: Props) {
+  const formId = useId();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [ack, setAck] = useState<{ parent: DailyOverview; value: DailyOverview } | null>(null);
   const [removed, setRemoved] = useState<Removed[]>([]);
@@ -64,10 +72,11 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
   const original = draft && tasks.find(task => task.id === draft.id);
   const missingAnchor = !!(draft?.after && !tasks.some(task => task.id === draft.after));
   const changed = !!draft && (draft.date !== current.date ||
-    (draft.kind === 'edit' ? original?.title !== draft.initial : !!original || missingAnchor));
+    (draft.kind === 'edit' ? original?.title !== draft.initial || (original?.device_title ?? '') !== draft.initialDeviceText : !!original || missingAnchor));
   const conflict = !!draft && (changed || !!failedRevision);
-  const canSave = !!draft && !busy && !conflict && isDeviceTaskTitle(draft.text) &&
-    (draft.kind === 'add' ? !full : draft.text !== draft.initial);
+  const canSave = !!draft && !busy && !conflict && isTaskTitle(draft.text) &&
+    (!draft.deviceText || isDeviceTaskTitle(draft.deviceText)) &&
+    (draft.kind === 'add' ? !full : draft.text !== draft.initial || draft.deviceText !== draft.initialDeviceText);
   const undo = removed.filter(item => item.date === current.date && !tasks.some(task => task.id === item.task.id)).at(-1);
   useEffect(() => {
     setRemoved(items => {
@@ -77,7 +86,8 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
   }, [current.date, tasks]);
   // A service may commit before its reply is lost. A later snapshot confirms the same UUID.
   useEffect(() => {
-    if (busy || draft?.kind !== 'add' || draft.date !== current.date || !original || original.title !== draft.text) return;
+    if (busy || draft?.kind !== 'add' || draft.date !== current.date || !original || original.title !== draft.text ||
+      (original.device_title ?? '') !== draft.deviceText) return;
     setDraft(null); setFailedRevision(''); setFailure(''); setMessage('任务已添加。'); setFocusKey('edit:' + original.id);
   }, [busy, draft, current.date, original]);
   useEffect(() => {
@@ -110,6 +120,7 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
     if (!active || !onSave || locked || writing.current || (kind === 'add' && full)) return;
     const editing = kind === 'edit' ? task : undefined;
     setDraft({ kind, id: editing?.id ?? newId(), text: editing?.title ?? '', initial: editing?.title ?? '',
+      deviceText: editing?.device_title ?? '', initialDeviceText: editing?.device_title ?? '',
       after: kind === 'add' ? task?.id ?? null : null, date: current.date, returnTo: trigger });
     setFailure(''); setFailedRevision(''); setMessage(''); setFocusKey('input');
   }
@@ -169,10 +180,13 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
   function rebaseDraft() {
     if (!draft || busy) return;
     if (original && draft.date === current.date) {
-      setDraft({ ...draft, kind: 'edit', initial: original.title, after: null, returnTo: 'edit:' + original.id });
+      setDraft({ ...draft, kind: 'edit', initial: original.title, initialDeviceText: original.device_title ?? '',
+        text: draft.text === draft.initial ? original.title : draft.text,
+        deviceText: draft.deviceText === draft.initialDeviceText ? original.device_title ?? '' : draft.deviceText,
+        after: null, returnTo: 'edit:' + original.id });
     } else {
       const keepAnchor = !missingAnchor && draft.date === current.date && draft.kind === 'add';
-      setDraft({ ...draft, id: draft.kind === 'add' && !original ? draft.id : newId(), kind: 'add', initial: '',
+      setDraft({ ...draft, id: draft.kind === 'add' && !original ? draft.id : newId(), kind: 'add', initial: '', initialDeviceText: '',
         after: keepAnchor ? draft.after : null, date: current.date, returnTo: 'add' });
     }
     setFailure(''); setFailedRevision(''); setFocusKey('input');
@@ -212,21 +226,41 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
   function compose() {
     if (!draft) return null;
     const label = draft.kind === 'add' ? '新任务标题' : '任务标题';
-    const invalid = !!draft.text && !isDeviceTaskTitle(draft.text);
+    const returnTo = draft.returnTo;
+    const invalid = !!draft.text && !isTaskTitle(draft.text);
+    const deviceInvalid = !!draft.deviceText && !isDeviceTaskTitle(draft.deviceText);
+    const showDeviceTitle = !!draft.initialDeviceText || !!draft.deviceText || (isTaskTitle(draft.text) && !isDeviceTaskTitle(draft.text));
+    const autoLabel = showDeviceTitle ? deviceTaskLabel({ id: draft.id, title: draft.text }) : '';
+    const titleError = !draft.text.trim() ? '请输入任务名称。' : [...draft.text].length > 40 ?
+      '任务名称最多 40 个字符，当前 ' + [...draft.text].length + ' 个。' : '任务名称不能包含换行或控制字符。';
+    function draftKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+      if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (event.key === 'Enter') { event.preventDefault(); void saveDraft(); }
+      if (event.key === 'Escape' && !busy) { event.preventDefault(); finishDraft(returnTo); }
+    }
     return <div className="task-composer" role="group" aria-label={draft.kind === 'add' ? '添加新任务' : '编辑任务标题'}>
-      <input type="text" data-task-focus="input" aria-label={label} aria-invalid={invalid} maxLength={40} placeholder="输入英文任务标题"
-        value={draft.text} disabled={busy} onChange={event => setDraft({ ...draft, text: event.target.value })}
-        onKeyDown={event => {
-          if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-          if (event.key === 'Enter') { event.preventDefault(); void saveDraft(); }
-          if (event.key === 'Escape' && !busy) { event.preventDefault(); finishDraft(draft.returnTo); }
-        }} />
-      <div className="task-compose-actions"><button type="button" className="task-save" disabled={!canSave} onClick={() => void saveDraft()}>保存</button>
+      <input type="text" data-task-focus="input" aria-label={label} aria-invalid={invalid}
+        aria-describedby={invalid ? formId + '-title-error' : undefined} placeholder="输入任务名称"
+        value={draft.text} disabled={busy} onChange={event => setDraft({ ...draft, text: event.target.value })} onKeyDown={draftKeyDown} />
+      <div className="task-compose-actions"><button type="button" className="task-save" disabled={!canSave}
+        onClick={() => void saveDraft()}>{draft.kind === 'add' ? '添加任务' : '保存'}</button>
         <button type="button" disabled={busy} onClick={() => finishDraft(draft.returnTo)}>取消</button></div>
-      {invalid && <p className="task-form-note">请输入 1–40 个可打印英文字符。</p>}
+      {invalid && <p className="task-form-note" id={formId + '-title-error'}>{titleError}</p>}
+      {draft.kind === 'add' && full && <p className="task-form-note">已达 {MAX_TASKS} 项上限，任务草稿已保留。</p>}
+      {showDeviceTitle && <details className="task-device-title"><summary>电子屏短标题</summary>
+        <input type="text" aria-label="电子屏短标题" value={draft.deviceText} disabled={busy} placeholder={autoLabel}
+          aria-invalid={deviceInvalid} aria-describedby={formId + (deviceInvalid ? '-device-error' : '-device-note')}
+          onChange={event => setDraft({ ...draft, deviceText: event.target.value })} onKeyDown={draftKeyDown}/>
+        <p id={formId + '-device-note'} className="task-form-note">留空时电子屏会显示「{autoLabel}」。</p>
+      </details>}
+      {deviceInvalid && <p id={formId + '-device-error'} className="task-form-note">
+        电子屏短标题限 1–40 个可打印英文字符，留空可使用自动短标题。
+      </p>}
       {conflict && <div role="alert" className="task-form-conflict">
-        <p>任务列表已变更，草稿已保留。{draft.kind === 'edit' && original ? '当前标题为「' + original.title + '」。' :
-          missingAnchor ? '原插入位置已被移除。' : ''}</p>
+        <p>任务列表已变更，草稿已保留。{missingAnchor && '原插入位置已被移除。'}
+          {draft.kind === 'edit' && original && original.title !== draft.initial && '当前标题为「' + original.title + '」。'}
+          {draft.kind === 'edit' && original && (original.device_title ?? '') !== draft.initialDeviceText &&
+            '当前电子屏短标题为「' + deviceTaskLabel(original) + '」。'}</p>
         <button type="button" disabled={busy || (!!failedRevision && failedRevision === current.revision)} onClick={rebaseDraft}>
           {draft.kind === 'edit' && !original ? '另存为新任务' : missingAnchor ? '改到列表末尾' : '保留草稿并使用最新版本'}</button>
       </div>}
@@ -234,7 +268,7 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
   }
 
   return <div className="task-list-control" ref={group} aria-busy={busy}>
-    {tasks.length === 0 && <p className="desk-empty">今天没有安排的任务</p>}
+    {tasks.length === 0 && !draft && <p className="desk-empty">今天没有安排的任务</p>}
     <ul className="desk-tasks task-items">{tasks.map(task => {
       const done = task.status === 'done';
       const selected = !!onSelect && selectedId === task.id;
@@ -273,7 +307,7 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
       {draft && ((draft.kind === 'add' && (!draft.after || missingAnchor)) || (draft.kind === 'edit' && !original)) &&
         <li className="task-compose-row">{compose()}</li>}
     </ul>
-    {onSave && <div className="task-list-footer">
+    {onSave && !draft && <div className="task-list-footer">
       <button type="button" className="task-add" data-task-focus="add" disabled={locked || full} aria-label="添加任务"
         aria-keyshortcuts="Alt+Shift+N" title="添加任务（Alt + Shift + N）" onClick={() => openDraft('add')}><span aria-hidden="true">＋</span> 添加任务</button>
       <small className={full ? undefined : 'task-shortcut-note'}>{full ? '已达 ' + MAX_TASKS + ' 项上限' : '任务行内按 Shift + Enter 插入'}</small>

@@ -26,6 +26,7 @@ export interface ProjectStatus {
   calendarReminder?: { title: string; count: number };
   taskId: string;
   title: string;
+  deviceTitle?: string;
   percent: number | null;
   total: number | null;
   completed: string[];
@@ -150,7 +151,7 @@ export function projectStatus(task: Task, plan: ProjectPlan | undefined, records
   }
 
   const observation = rows.filter(row => row.detailSource !== 'window-title' && row.summary?.trim()).at(-1);
-  const identity = { taskId:task.id, title:task.title, ...readingState(rows, sections),
+  const identity = { taskId:task.id, title:task.title, ...(task.device_title ? {deviceTitle:task.device_title} : {}), ...readingState(rows, sections),
     ...(observation ? {latestObservation:{summary:observation.summary, capturedAt:observation.capturedAt, source:observation.source ?? 'manual'}} : {}) };
   if (sections.length) {
     const completed: string[] = [];

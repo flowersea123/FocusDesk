@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DailyOverview, Task } from '../../contracts/daily-overview';
+import { deviceTaskLabel } from '../../contracts/device-task-label';
 import type { ProjectStatus } from '../../contracts/project-progress';
 import { buildProjectDisplay, type DisplaySnapshot } from '../../contracts/display-snapshot';
 import { paintDisplaySnapshot } from './simulator/canvas';
@@ -25,7 +26,7 @@ export default function EpaperPreview({ overview, draft, project }: { overview: 
   const focus = sample ? null : overview?.focus;
   const priority = pending.find(task => task.id === focus?.task_id) ?? pending[0];
   const ordered = priority ? [priority, ...pending.filter(task => task.id !== priority.id)] : [];
-  const visible = ordered.slice(0, 5);
+  const visible = ordered.slice(0, 5).map(task => ({ ...task, title:deviceTaskLabel(task) }));
   const hidden = Math.max(0, ordered.length - visible.length);
   const date = overview?.date ?? '2026-11-12';
   const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })

@@ -138,7 +138,7 @@ export function createHttpSource({ baseUrl, timeoutMs = 5_000, fetcher = fetch,
   return {
     kind: 'http',
     localWorkspace: canWrite && new URL(endpoint, pageOrigin).pathname === '/api/v1/daily-overview',
-    read(_scenario, signal) { return request(endpoint, signal); },
+    read(_scenario, signal) { return request(canWrite || !pageOrigin ? endpoint : endpoint + '?view=workspace', signal); },
     ...(canWrite ? {
       updateTasks(input: TaskUpdateRequest, signal: AbortSignal) {
         return request(`${endpoint}/tasks`, signal, JSON.stringify(parseTaskUpdateRequest(input)));

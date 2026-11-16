@@ -105,7 +105,7 @@ for (const [name, body, headers, expected] of [
 test('rejects invalid task fields and attempts to write date/timezone', async t => {
   const { read, put, dataPath } = await setup(t); const first = await read(); const original = await readFile(dataPath);
   for (const input of [
-    { revision: first.revision, tasks: [{ ...first.tasks[0], title: '中文' }] },
+    { revision: first.revision, tasks: [{ ...first.tasks[0], device_title: '中文' }] },
     { revision: first.revision, tasks: first.tasks, date: '2026-11-03' },
     { revision: first.revision, tasks: Array.from({ length: MAX_TASKS + 1 }, (_, index) => ({ ...first.tasks[0], id: `task-${index}` })) },
   ]) assert.equal((await put(input)).status, 400);

@@ -17,6 +17,7 @@ export interface FocusSession {
 export interface Task {
   id: string;
   title: string;
+  device_title?: string;
   status: TaskStatus;
   due_at: string | null;
 }
@@ -90,15 +91,17 @@ function timestamp(value: unknown, label: string): string {
   return result;
 }
 
-function title(value: unknown): string {
-  const result = text(value, 'task.title');
-  if (
-    result.trim().length === 0 ||
-    [...result].length > 40 ||
-    encoder.encode(result).byteLength > 160 ||
-    /[\p{Cc}\p{Zl}\p{Zp}]/u.test(result)
-  ) fail('task.title must contain 1-40 code points, at most 160 UTF-8 bytes, and no line breaks or control characters');
-  return result;
+export function isTaskTitle(value: string): boolean;
+export function isTaskTitle(value: unknown): value is string;
+export function isTaskTitle(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0 &&
+    [...value].length <= 40 && !/[\p{Cc}\p{Cs}\p{Zl}\p{Zp}]/u.test(value);
+}
+
+export function isDeviceTaskTitle(value: string): boolean;
+export function isDeviceTaskTitle(value: unknown): value is string;
+export function isDeviceTaskTitle(value: unknown): boolean {
+  return typeof value === 'string' && /^[\x20-\x7e]{1,40}$/.test(value) && value.trim().length > 0;
 }
 
 /** Validate the candidate DTO and return a fresh object containing known fields. */
@@ -137,10 +140,13 @@ export function parseDailyOverview(input: unknown): DailyOverview {
     const id = identifier(item.id, 'task.id');
     if (ids.has(id)) fail('task IDs must be unique');
     ids.add(id);
-    const taskTitle = title(item.title);
+    if (!isTaskTitle(item.title)) fail('task.title must contain 1-40 Unicode code points and no line breaks or control characters');
+    if (item.device_title !== undefined && !isDeviceTaskTitle(item.device_title)) {
+      fail('task.device_title must be 1-40 printable ASCII characters, not blank');
+    }
     if (item.status !== 'todo' && item.status !== 'done') fail('unsupported task.status');
     const due_at = item.due_at === null ? null : timestamp(item.due_at, 'task.due_at');
-    return { id, title: taskTitle, status: item.status, due_at };
+    return { id, title: item.title, status: item.status, due_at, ...(item.device_title !== undefined ? {device_title:item.device_title} : {}) };
   });
   const result: DailyOverview = { schema_version: SCHEMA_VERSION, revision, date, timezone, updated_at, tasks };
   if (source.work_state !== undefined) result.work_state = parseWorkState(source.work_state);

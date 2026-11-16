@@ -1,3 +1,4 @@
+import { deviceTaskLabel } from '../../contracts/device-task-label.ts';
 import { open, readFile, rename, rm } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -50,7 +51,7 @@ export function createProjectProgress(dataPath: string, checkpoints: ReturnType<
     const calendar = await loadCalendar();
     const published = new Set(calendar.entries.filter(entry => entry.status === 'published').map(entry => entry.id));
     const planned = otherTasks.filter(task => published.has(task.id));
-    return planned.length ? { ...project, calendarReminder: { title: planned[0].title, count: planned.length } } : project;
+    return planned.length ? { ...project, calendarReminder: { title: deviceTaskLabel(planned[0]), count: planned.length } } : project;
   }
   return {
     async pinned(overview:DailyOverview) {

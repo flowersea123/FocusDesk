@@ -18,11 +18,20 @@ test('accepts task edits as fresh data and supports an explicit empty task list'
   assert.deepEqual(parseTaskUpdateText(JSON.stringify(maximum)), maximum);
 });
 
+test('accepts Chinese and mixed-language titles and preserves optional device labels', () => {
+  const rows = [
+    { ...source.tasks[0], title: '看论文', device_title: 'Read paper' },
+    { ...source.tasks[0], id: 'second', title: '重读 Chapter 3 📖' },
+  ];
+  const request = { ...source, tasks: rows };
+  assert.deepEqual(parseTaskUpdateText(JSON.stringify(request)), request);
+});
+
 for (const [name, edit] of [
   ['date write', x => { x.date = '2026-11-03'; }],
   ['missing revision', x => { delete x.revision; }],
   ['missing tasks', x => { delete x.tasks; }],
-  ['unsupported text', x => { x.tasks[0].title = '中文'; }],
+  ['invalid device title', x => { x.tasks[0].device_title = '中文'; }],
   ['blank title', x => { x.tasks[0].title = ' '; }],
   ['too many tasks', x => { x.tasks = Array.from({ length: MAX_TASKS + 1 }, (_, i) => ({ ...x.tasks[0], id: `task-${i}` })); }],
   ['duplicate IDs', x => { x.tasks.push({...x.tasks[0]}); }],

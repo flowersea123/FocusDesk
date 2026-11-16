@@ -1,3 +1,4 @@
+import { deviceTaskLabel } from '../../contracts/device-task-label.ts';
 import { createHash } from 'node:crypto';
 import { createFocusReview } from './focus-review.ts';
 import { createAiActivitySources } from './ai-activity-sources.ts';
@@ -15,7 +16,7 @@ import { parseFocusUpdateText } from '../../contracts/focus-update.ts';
 import { parseWorkStateUpdateText } from '../../contracts/work-state.ts';
 import { parseAISuggestionUpdateText } from '../../contracts/ai-suggestion.ts';
 import { buildDisplaySnapshot, buildProjectDisplay } from '../../contracts/display-snapshot.ts';
-import { checkWritePolicy, readUpdateBody, WriteRequestError } from './write-policy.ts';
+import { checkWritePolicy, isLoopback, readUpdateBody, WriteRequestError } from './write-policy.ts';
 import { getServerInfo } from './network-info.ts';
 import { fileURLToPath } from 'node:url';
 import { createCheckpointStore } from './checkpoint-store.ts';
@@ -24,6 +25,20 @@ import { CalendarError } from '../../contracts/calendar.ts';
 import { createScreenObservationService } from './screen-observation.ts';
 import { createForegroundRecorder, type RecorderOptions } from './foreground-recorder.ts';
 import { createRecorderHttp } from './recorder-http.ts';
+
+/** Older firmware reads the task DTO directly and can only draw ASCII. */
+function deviceOverview(overview: DailyOverview) {
+  const tasks = overview.tasks.map(task => ({
+    id:task.id, title:deviceTaskLabel(task), status:task.status, due_at:task.due_at,
+  }));
+  const device = {...overview, tasks};
+  if (Buffer.byteLength(JSON.stringify(device)) > MAX_OVERVIEW_BYTES) {
+    for (const [i,task] of tasks.entries()) {
+      if (!overview.tasks[i].device_title && Buffer.byteLength(JSON.stringify(task.title)) > Buffer.byteLength(JSON.stringify(overview.tasks[i].title))) task.title = String(i+1);
+    }
+  }
+  return device;
+}
 
 const API_PATH = '/api/v1/daily-overview';
 const UPDATE_PATH = `${API_PATH}/tasks`;
@@ -219,7 +234,11 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
                 .update(snapshot.layout_version).update(JSON.stringify(snapshot.commands)).digest('hex');
               payload = snapshot;
             } else payload = buildDisplaySnapshot(overview);
-          } else payload = overview;
+          } else {
+            const view = new URLSearchParams(request.url?.split('?')[1]).get('view');
+            const legacyDevice = view === 'device' || (view !== 'workspace' && !isLoopback(request.socket.remoteAddress));
+            payload = legacyDevice ? deviceOverview(overview) : overview;
+          }
           const body = JSON.stringify(payload);
           if (Buffer.byteLength(body) > MAX_OVERVIEW_BYTES) throw new SourceError('DISPLAY_SNAPSHOT_TOO_LARGE', 'Display snapshot exceeds the response limit.');
           send(response, 200, body, 'application/json; charset=utf-8', head);
