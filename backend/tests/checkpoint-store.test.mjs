@@ -65,3 +65,21 @@ test('reading confirmations require a saved matching bookmark, survive retries a
   await store.remove(input.id);
   await assert.rejects(store.confirmReading(input.id,'Introduction'), {status:409});
 });
+
+test('page position survives restart with its document and never counts as completed work', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'focusdesk-reading-page-'));
+  t.after(() => rm(dir, {recursive:true,force:true}));
+  const file = path.join(dir, 'tasks.json');
+  const row = {id:randomUUID(), capturedAt:new Date().toISOString(), source:'automatic', taskId:'paper',
+    summary:'正在阅读论文正文', nextStep:'', progress:null, readingDocument:'A paper', readingPosition:{page:6,total:12}};
+  const store = createCheckpointStore(file);
+  for (const bad of [{page:0,total:10}, {page:10,total:8}, {page:1.5,total:2}, {page:1,total:100001}, {}]) {
+    assert.throws(() => store.add({...row,readingPosition:bad}), {status:400});
+  }
+  assert.throws(() => store.add({...row,readingDocument:undefined}), {status:400});
+  assert.throws(() => store.add({...row,taskId:null,appName:'Preview'}), {status:400});
+  await store.add(row);
+  const [saved] = (await createCheckpointStore(file).read()).records;
+  assert.deepEqual(saved.readingPosition, {page:6,total:12}); assert.deepEqual(saved.completedParts, []);
+  assert.equal(saved.progress, null); assert.equal(saved.readingConfirmed, undefined);
+});

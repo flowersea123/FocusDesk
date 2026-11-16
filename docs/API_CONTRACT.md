@@ -2,6 +2,10 @@
 
 ## 前台页面记录（2026-11-16）
 
+今日任务页一键开始会自动识别当前任务。手动核对某项任务时，`POST /api/v1/recorder` 可以携带 `{"action":"start","taskId":"…"}`。已在录制时用 `{"action":"target","taskId":"…"}` 指定后续采样要核对的任务，传 null 恢复自动匹配。`targetTaskId` 为用户在本次会话指定的核对对象。自动识别结果放在 `observedTaskId` 和 `observedAt`，未匹配时前者为 null，尚未分析画面时两者均为 null。采集时保存任务上下文，切换目标后拍到的画面才采用新目标。
+
+检查点的可选 `readingPosition:{page,total}` 与 `readingDocument` 配套保存。两数为实际页面计数器中的正整数，page 不超过 total，total 最多 100000。项目状态单独返回阅读位置、章节书签与完成项。阅读位置的百分比表示所在页在文档中的位置。
+
 `GET /api/v1/recorder` 只查询能力和状态，不打开屏幕录制权限。对同一路径发送同源 JSON `{"action":"start"}` 或 `{"action":"stop"}` 启停本次本地会话。启动与停止均可重复请求，页面关闭或刷新不改变会话；Hub 退出或系统录制控制停止时结束。Hub 重启回到待机。状态字段为 `state`（idle、starting、recording、stopping、error、unavailable）、`supported`、`message`、`platform`、`sessionStartedAt`、`savedCount` 和 `lastSavedAt`。时间为 UTC ISO 字符串，尚无相应事件时为 null。本机回环与同源写入限制同下。
 
 前台记录沿用检查点和每日回顾。记录源为 automatic，含前台应用的 `appName` 和可选 `pageTitle`。画面可唯一对应任务时填写 `taskId`。未匹配时为 null，不写任务进度或完成项。模型不可用时，`detailSource:"window-title"` 表示内容仅来自系统提供的应用/页面标题。截图只在内存中处理。
@@ -239,4 +243,4 @@ Display schema display-1, layout goal-1, 4096-byte transport, 64 commands and dr
 
 ### 论文阅读书签
 
-屏幕观察和检查点可携带 readingSection 和 readingDocument，分别表示正文位置与画面中识别出的文档标题。只有章节位置时保留阅读进度候选。GET /api/v1/project-progress 的 statuses[].readingBookmark 提供当前书签以及可确认的上一个章节。PATCH /api/v1/checkpoints 以 id 和 readingSection 幂等确认对应记录，保留最初的手动或自动来源并记录 readingConfirmed。已确认的章节作为当前大任务的完成依据。自动采样将画面标题与任务名或同任务手动审阅过的文档标题作完整规范化匹配。删除最后一条对应的手动记录后，该文档关联失效。
+屏幕观察和检查点可携带 readingSection 和 readingDocument，分别表示正文位置与画面中识别出的文档标题。只有章节位置时保留阅读进度候选。GET /api/v1/project-progress 的 statuses[].readingBookmark 提供当前书签以及可确认的上一个章节。PATCH /api/v1/checkpoints 以 id 和 readingSection 幂等确认对应记录，保留最初的手动或自动来源并记录 readingConfirmed。已确认的章节作为当前大任务的完成依据。自动采样核对画面标题、同任务手动审阅过的文档以及画面内容与待办的关系。自动归属只会对有画面依据的任务生效。多个任务都符合时，可结合用户指定的对象或专注任务消除歧义。删除最后一条对应的手动记录后，该文档关联失效。

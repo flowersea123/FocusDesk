@@ -31,7 +31,7 @@ test('checkpoint evidence drives a pinned device view and unpin restores the dai
   const before = await response.json();
   assert.equal(before.statuses[0].percent,0);
   assert.equal((await write(endpoint,'PUT',plan)).status,409);
-  const checkpoint = { id:randomUUID(), taskId:'paper', capturedAt:new Date().toISOString(), summary:'Read two sections', nextStep:'Read Results', progress:null, completedParts:['Method','Introduction'] };
+  const checkpoint = { id:randomUUID(), taskId:'paper', capturedAt:'2026-11-16T01:00:00.000Z', summary:'Read two sections', nextStep:'Read Results', progress:null, completedParts:['Method','Introduction'] };
   assert.equal((await write(origin+'/api/v1/checkpoints','POST',checkpoint)).status,200);
   const pinned = await (await write(endpoint,'PUT',{taskId:'paper',action:'pin',revision:before.config.revision})).json();
   assert.equal(pinned.statuses[0].percent,40);
@@ -40,12 +40,26 @@ test('checkpoint evidence drives a pinned device view and unpin restores the dai
   const labels = snapshot.commands.filter(c=>c[0]===1).map(c=>c[5]);
   for (const text of ['40%','Introduction','Method']) assert.ok(labels.includes(text));
   assert.ok(!labels.includes('Results'));
-  const nextPage = {
-    ...checkpoint, id: randomUUID(), completedParts: [], readingSection: 'Results', readingDocument: 'Read paper',
-    summary: 'Results is visible.', capturedAt: new Date().toISOString(),
-  };
-  assert.equal((await write(origin + '/api/v1/checkpoints', 'POST', nextPage)).status, 200);
-  assert.deepEqual(await display(), snapshot, 'a bookmark alone must not trigger a physical refresh');
+  async function recordReading(minute, details = {}) {
+    const row = { ...checkpoint, id:randomUUID(), readingDocument:'Example Paper', readingSection:'Results',
+      completedParts:[], summary:'Results is visible.', capturedAt:`2026-11-16T01:${minute}:00.000Z`, ...details };
+    assert.equal((await write(origin + '/api/v1/checkpoints', 'POST', row)).status, 200);
+    return display();
+  }
+  const section = await recordReading('01');
+  assert.notEqual(section.revision, snapshot.revision);
+  const sectionLabels = section.commands.filter(c=>c[0]===1).map(c=>c[5]);
+  assert.ok(sectionLabels.includes('Section: Results'));
+  assert.ok(sectionLabels.includes('40%'));
+  const page = await recordReading('02', { readingPosition:{page:6,total:12} });
+  assert.notEqual(page.revision, section.revision);
+  assert.ok(page.commands.some(c=>c[0]===1 && c[5]==='Page 6/12'));
+  const repeated = await recordReading('03', { readingPosition:{page:6,total:12}, summary:'A different paragraph is visible.' });
+  assert.deepEqual(repeated, page, 'new evidence at the same visible position keeps the device revision');
+  const advanced = await recordReading('04', { readingPosition:{page:7,total:12} });
+  assert.notEqual(advanced.revision, page.revision);
+  assert.ok(advanced.commands.some(c=>c[0]===1 && c[5]==='Page 7/12'));
+  assert.equal((await (await fetch(endpoint)).json()).statuses[0].percent, 40);
   assert.equal((await write(endpoint,'PUT',{taskId:'paper',action:'unpin',revision:pinned.config.revision})).status,200);
   assert.deepEqual(await display(), initial);
   const config = (await (await fetch(endpoint)).json()).config;

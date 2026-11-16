@@ -15,6 +15,30 @@ const result = summary => ({ summary, nextStep: '', taskId: null, progress: null
 const frame = (page, image = page, app = 'Fixture Browser') => ({ pageKey: page, pageTitle: page, image, app });
 const supported = async () => ({ supported: true, message: '' });
 
+test('changing the task mid-inference uses capture-time context and identifies a fresh frame from the same window', async t => {
+  let resolveFirst, current = frame('same'), closes = 0;
+  const targets = [], saved = [];
+  const recorder = createForegroundRecorder({ platform:'darwin', support:supported, pollMs:3, samePageMs:5,
+    open:async () => ({capture:async () => current, close() { closes++; }}),
+    analyze:async (image, signal, target) => {
+      targets.push(target); if (targets.length === 1) await new Promise(ok => {resolveFirst = ok});
+      return {...result(image),taskId:image === 'news' ? null : target};
+    }, save:async r => { saved.push(r); } });
+  t.after(() => { resolveFirst?.(); return recorder.close(); });
+  assert.throws(() => recorder.target('t1'), {status:409});
+  recorder.start('t1'); await until(() => !!resolveFirst);
+  assert.equal(recorder.target('t2').observedTaskId, null); resolveFirst();
+  await until(() => saved.length === 2);
+  assert.deepEqual(saved.map(r=>r.taskId), ['t1','t2']);
+  assert.equal((await recorder.readStatus()).observedTaskId,'t2');
+  current = frame('news');
+  await until(() => saved.length === 3);
+  assert.equal((await recorder.readStatus()).observedTaskId,null);
+  assert.ok((await recorder.readStatus()).observedAt);
+  await recorder.close(); assert.equal(closes,1);
+  assert.equal((await recorder.readStatus()).targetTaskId,null);
+});
+
 test('start is explicit and idempotent; tab, active app and within-page changes follow the foreground only', async t => {
   let current = frame('First tab'), stops = 0, starts = 0, menuStop;
   const analyzed = [], rows = [];

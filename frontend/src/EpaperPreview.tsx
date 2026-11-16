@@ -1,15 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DailyOverview, Task } from '../../contracts/daily-overview';
 import type { ProjectStatus } from '../../contracts/project-progress';
-import { buildProjectDisplay } from '../../contracts/display-snapshot';
+import { buildProjectDisplay, type DisplaySnapshot } from '../../contracts/display-snapshot';
 import { paintDisplaySnapshot } from './simulator/canvas';
 import './epaper-preview.css';
 
-function ProjectCanvas({ project }: { project: ProjectStatus }) {
+function ProjectCanvas({ snapshot }: { snapshot: DisplaySnapshot }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    if (canvas.current) paintDisplaySnapshot(canvas.current, buildProjectDisplay(project, 'preview'));
-  }, [project]);
+    if (canvas.current) paintDisplaySnapshot(canvas.current, snapshot);
+  }, [snapshot]);
   return <canvas ref={canvas} width={400} height={300} aria-hidden="true" className="project-device-canvas"/>;
 }
 
@@ -38,7 +38,8 @@ export default function EpaperPreview({ overview, draft, project }: { overview: 
   const recommendation = (overview?.ai_suggestion ?? (sample ? 'Draft the outline, then focus for 25 min.' : '')).trim() || 'No suggestion yet.';
   const available = Boolean(overview || sample);
   const pinned = !sample && project;
-  const transcript = pinned ? [pinned.title, pinned.percent === null ? '进度待确认' : pinned.percent + '%', ...pinned.completed].join(' ') : available ? ['FOCUSDESK', dateLabel, 'Tasks', progress, focusLabel,
+  const snapshot = useMemo(() => pinned ? buildProjectDisplay(pinned, 'preview') : null, [pinned]);
+  const transcript = snapshot ? snapshot.commands.flatMap(command => command[0] === 1 ? [command[5]] : []).join(' ') : available ? ['FOCUSDESK', dateLabel, 'Tasks', progress, focusLabel,
     ...visible.map(task => task.title), !visible.length && emptyLabel, hidden && `+${hidden} more`,
     'AI RECOMMENDATION', recommendation].filter(Boolean).join(' ') : '';
   return <section className="preview-card" aria-labelledby="preview-title">
@@ -50,7 +51,7 @@ export default function EpaperPreview({ overview, draft, project }: { overview: 
     <div className="device-stage"><div className="device-frame">
       <div className="paper-design" role="img" aria-label="400 × 300 e-paper preview" aria-describedby="preview-transcript"
         data-width="400" data-height="300" data-source-revision={overview?.revision ?? ''} data-preview-mode={sample ? 'sample' : 'workspace'}>
-        {pinned ? <ProjectCanvas project={pinned} /> : available ? <div className="paper-layout" aria-hidden="true">
+        {snapshot ? <ProjectCanvas snapshot={snapshot} /> : available ? <div className="paper-layout" aria-hidden="true">
           <div className="paper-heading"><strong>FOCUSDESK</strong><span>{dateLabel}</span></div>
           <div className="paper-summary"><strong>Tasks</strong><span>{progress}</span></div>
           {focusLabel && <div className="paper-focus-caption">{focusLabel}</div>}

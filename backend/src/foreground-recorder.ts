@@ -10,7 +10,7 @@ export interface ForegroundFrame {
   pageKey: string;
   pageTitle?: string;
 }
-type ObservedPage = Pick<ScreenCheckpoint, 'taskId' | 'summary' | 'nextStep' | 'progress' | 'completedParts' | 'readingDocument' | 'readingSection'>;
+type ObservedPage = Pick<ScreenCheckpoint, 'taskId' | 'summary' | 'nextStep' | 'progress' | 'completedParts' | 'readingDocument' | 'readingSection' | 'readingPosition'>;
 export interface CaptureSession {
   capture(signal: AbortSignal): Promise<ForegroundFrame | null>;
   close(): void | Promise<void>;
@@ -20,12 +20,12 @@ export interface RecorderOptions {
   platform: RecorderStatus['platform'];
   support(): Promise<Support>;
   open(options: { signal: AbortSignal; onStop: (reason?: string) => void }): Promise<CaptureSession>;
-  analyze(image: string, signal: AbortSignal): Promise<ObservedPage>;
+  analyze(image: string, signal: AbortSignal, targetTaskId?: string): Promise<ObservedPage>;
   save(record: ScreenCheckpoint, signal: AbortSignal): Promise<void>;
   pollMs?: number;
   samePageMs?: number;
 }
-type Sample = { frame: ForegroundFrame; capturedAt: string };
+type Sample = { frame: ForegroundFrame; capturedAt: string; targetTaskId: string | null; generation: number };
 
 function clean(value: string | undefined, limit: number) {
   return Array.from((value ?? '').replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ').trim()).slice(0, limit).join('');
@@ -36,9 +36,10 @@ function messageOf(error: unknown) {
 
 export function createForegroundRecorder({ platform, support, open, analyze, save, pollMs = 4_000, samePageMs = 45_000 }: RecorderOptions) {
   const status: RecorderStatus = { platform, state: 'idle', supported: true, message: '',
-    savedCount: 0, lastSavedAt: null, sessionStartedAt: null };
+    savedCount: 0, lastSavedAt: null, sessionStartedAt: null, targetTaskId: null, observedTaskId: null, observedAt: null };
   let current: AbortController | undefined;
   let finished: Promise<void> = Promise.resolve();
+  let targetGeneration = 0;
   let capability: { checked: number; result: Promise<Support> } | undefined;
 
   function getSupport() {
@@ -73,19 +74,19 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
     let draining: Promise<void> | undefined;
     // Keep at most three pending samples while the local model reads an earlier page.
     const queue: Sample[] = [];
-    let lastSample: { page: string; digest: string; at: number } | undefined;
+    let lastSample: { page: string; digest: string; at: number; generation: number } | undefined;
     let changingImage: string | undefined;
     let lastSaved: { page: string; facts: string; titleOnly: boolean } | undefined;
     let retryTitleAt = 0;
     const modelIssues = new Set(['MODEL_CONFIG', 'MODEL_UNAVAILABLE', 'MODEL_TIMEOUT', 'INVALID_OBSERVATION', 'INCOMPLETE_OBSERVATION', 'OBSERVATION_BUSY']);
 
-    async function record({ frame, capturedAt }: Sample) {
+    async function record({ frame, capturedAt, targetTaskId, generation }: Sample) {
       let observation: ObservedPage;
       let titleOnly = false;
       const appName = clean(frame.app, 60) || '桌面应用';
       const pageTitle = clean(frame.pageTitle, 160);
       try {
-        observation = await analyze(frame.image, signal);
+        observation = await analyze(frame.image, signal, targetTaskId ?? undefined);
       } catch (error) {
         signal.throwIfAborted();
         if (!(error instanceof WriteRequestError && modelIssues.has(error.code))) throw error;
@@ -96,13 +97,19 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
       signal.throwIfAborted();
       if (titleOnly) retryTitleAt = Date.now() + 60_000;
       const facts = JSON.stringify([observation.taskId, observation.summary, observation.readingDocument, observation.readingSection,
-        observation.progress?.percent, [...(observation.completedParts ?? [])].sort()]);
-      if (lastSaved?.page === frame.pageKey && lastSaved.facts === facts && lastSaved.titleOnly === titleOnly) return;
-      await save({ id: randomUUID(), source: 'automatic', appName, capturedAt, ...(pageTitle ? { pageTitle } : {}),
-        ...(titleOnly ? { detailSource: 'window-title' as const } : {}), ...observation }, signal);
-      lastSaved = { page: frame.pageKey, facts, titleOnly };
-      status.savedCount++;
-      status.lastSavedAt = capturedAt;
+        observation.readingPosition?.page, observation.readingPosition?.total, observation.progress?.percent, [...(observation.completedParts ?? [])].sort()]);
+      const row: ScreenCheckpoint = { id: randomUUID(), source: 'automatic', appName, capturedAt,
+        ...(pageTitle ? { pageTitle } : {}), ...(titleOnly ? { detailSource: 'window-title' as const } : {}), ...observation };
+      if (lastSaved?.page !== frame.pageKey || lastSaved.facts !== facts || lastSaved.titleOnly !== titleOnly) {
+        await save(row, signal);
+        lastSaved = { page: frame.pageKey, facts, titleOnly };
+        status.savedCount++;
+        status.lastSavedAt = capturedAt;
+      }
+      if (generation === targetGeneration) {
+        status.observedTaskId = row.taskId;
+        status.observedAt = capturedAt;
+      }
     }
 
     async function drain() {
@@ -124,21 +131,23 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
       signal.throwIfAborted();
       Object.assign(status, { state: 'recording', supported: true, message: '', sessionStartedAt: new Date().toISOString() });
       while (!signal.aborted) {
+        const generation = targetGeneration;
+        const targetTaskId = status.targetTaskId ?? null;
         const frame = await device.capture(signal);
         signal.throwIfAborted();
-        if (frame) {
+        if (frame && generation === targetGeneration) {
           const at = Date.now();
-          const changedPage = lastSample?.page !== frame.pageKey;
+          const changedPage = lastSample?.page !== frame.pageKey || lastSample?.generation !== generation;
           const digest = createHash('sha256').update(frame.image).digest('hex');
           const newPixels = digest !== lastSample?.digest;
           const intervalElapsed = !lastSample || at - lastSample.at >= samePageMs;
           const retry = lastSaved?.page === frame.pageKey && lastSaved.titleOnly && at >= retryTitleAt;
           // A settled PDF page is worth reading promptly. A video can change on every sample.
           if (changedPage || (newPixels && (changingImage === digest || intervalElapsed)) || (retry && intervalElapsed)) {
-            lastSample = { page: frame.pageKey, digest, at };
+            lastSample = { page: frame.pageKey, digest, at, generation };
             changingImage = undefined;
-            const sample = { frame, capturedAt: new Date(at).toISOString() };
-            if (queue.at(-1)?.frame.pageKey === frame.pageKey) queue[queue.length - 1] = sample;
+            const sample = { frame, capturedAt: new Date(at).toISOString(), targetTaskId, generation };
+            if (queue.at(-1)?.frame.pageKey === frame.pageKey && queue.at(-1)?.generation === generation) queue[queue.length - 1] = sample;
             else {
               if (queue.length === 3) queue.shift();
               queue.push(sample);
@@ -161,19 +170,30 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
       await draining;
       if (failure) Object.assign(status, { state: 'error', message: failure });
       else if (status.state !== 'unavailable') status.state = 'idle';
+      status.targetTaskId = null;
       current = undefined;
     }
   }
 
-  function start() {
+  function start(targetTaskId: string | null = null) {
     if (!current) {
       current = new AbortController();
       Object.assign(status, { state: 'starting', message: platform === 'darwin' ? '首次使用时，请允许 macOS 的屏幕录制请求。' : '',
-        savedCount: 0, sessionStartedAt: null, lastSavedAt: null });
+        targetTaskId, observedTaskId: null, observedAt: null, savedCount: 0, sessionStartedAt: null, lastSavedAt: null });
       finished = run(current);
     }
     return { ...status };
   }
 
-  return { readStatus, start, stop, async close() { stop(); await finished; } };
+  function target(taskId: string | null) {
+    if (status.state !== 'recording' && status.state !== 'starting') throw new WriteRequestError(409, 'NO_SESSION', '请先开始记录。');
+    if (status.targetTaskId !== taskId) {
+      status.targetTaskId = taskId;
+      status.observedTaskId = null;
+      status.observedAt = null;
+      targetGeneration++;
+    }
+    return { ...status };
+  }
+  return { readStatus, start, stop, target, async close() { stop(); await finished; } };
 }

@@ -68,7 +68,7 @@ test('real Hub recorder follows two supplied applications, enforces local contro
   });
   const base = 'http://127.0.0.1:' + server.address().port;
   const url = base + '/api/v1/recorder';
-  const control = (action, origin = base) => fetch(url, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) });
+  const control = (action, origin = base, fields = {}) => fetch(url, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...fields }) });
   const status = () => fetch(url).then(r => r.json());
   async function waitFor(condition) {
     for (let i = 0; i < 300; i++) { if (condition(await status())) return; await delay(5); }
@@ -81,12 +81,21 @@ test('real Hub recorder follows two supplied applications, enforces local contro
   });
   assert.equal(foreignStatus, 403);
   assert.equal((await control('other')).status, 400);
+  assert.equal((await control('target', base, {taskId:'report'})).status, 409);
+  assert.equal((await control('target')).status, 400);
+  assert.equal((await control('start', base, {taskId:42})).status, 400);
+  assert.equal((await control('start', base, {taskId:'missing'})).status, 409);
+  assert.equal((await control('stop', base, {taskId:'report'})).status, 400);
   assert.equal(opens, 0);
   assert.equal((await control('start')).status, 200);
   await waitFor(s => s.savedCount === 1);
+  assert.equal((await status()).observedTaskId, 'report');
   modelOutput = { ...output, taskLabel: 'Unrelated paper', summary: '正在阅读其他论文。' };
   current = { ...current, app: 'PDF Viewer', pageKey: 'pdf-2' };
   await waitFor(s => s.savedCount === 2);
+  current = null;
+  assert.equal((await (await control('target', base, {taskId:'report'})).json()).targetTaskId, 'report');
+  assert.equal((await (await control('target', base, {taskId:null})).json()).targetTaskId, null);
   await control('stop');
   await waitFor(s => s.state === 'idle');
   const { records } = await fetch(base + '/api/v1/checkpoints').then(r => r.json());
@@ -293,4 +302,137 @@ test('rereads unlabeled status marks once for an evidenced percentage; unmarked,
   variant={...output,readingPage:'contents'}; assert.deepEqual((await inspect()).completedParts,[]);
   variant={...output,taskLabel:'Other'}; assert.deepEqual((await inspect()).completedParts,[]);
   assert.equal(rereads,3);
+});
+
+const scholarly = { ...output, taskLabel:'Retrieving a Goal After an Interruption', surfaceKind:'paper',
+  workLine:'Journal of Cognitive Systems, Volume 12', readingPage:'body', sectionHeading:'3. Method',
+  bodyQuote:'We recruited forty participants for an experiment on resuming interrupted tasks.', pageCounter:'Page 4 of 12',
+  completedParts:[{name:'Method',line:'Method completed'}], evidence:'Reading progress: 4/12' };
+
+test('recognizes a paper task without setup and keeps observed PDF position independent of completed work', async t => {
+  let page = scholarly;
+  const options = { getTasks:async()=>[{id:'paper',title:'Read a research paper'},{id:'code',title:'Make a class'}],
+    fetcher:async()=>completion(page) };
+  const observer = createScreenObservationService(options);
+  const inspect = () => observer.foreground(image,new AbortController().signal);
+  const result = await inspect();
+  assert.equal(result.taskId,'paper'); assert.equal(result.readingDocument,scholarly.taskLabel);
+  assert.equal(result.readingSection,'Method'); assert.deepEqual(result.readingPosition,{page:4,total:12});
+  assert.equal(result.progress,null); assert.deepEqual(result.completedParts,[]);
+  const {post} = await setup(t,options);
+  assert.deepEqual((await (await post({taskId:'paper',image,automatic:true})).json()).readingPosition,{page:4,total:12});
+  assert.equal((await (await post({taskId:'code',image,automatic:true})).json()).readingPosition,undefined);
+  for (const counter of ['3', '1/0','0 / 12','13/12','Page 1 of 100001','Section 4/12','Zoom 40%','4/12 complete','2 / 12 and 3 / 12']) {
+    page = {...scholarly,pageCounter:counter};
+    const found=await inspect();
+    assert.equal(found.readingPosition,undefined,counter); assert.equal(found.readingSection,'Method'); assert.equal(found.progress,null);
+  }
+  page={...scholarly,sectionHeading:'',pageCounter:'第 6 页，共 12 页'};
+  const withoutHeading = await inspect();
+  assert.deepEqual(withoutHeading.readingPosition,{page:6,total:12}); assert.equal(withoutHeading.readingSection,undefined);
+  assert.equal(withoutHeading.readingDocument,scholarly.taskLabel);
+  page={...scholarly,taskLabel:'',pageCounter:'2 / 12'};
+  assert.equal((await inspect()).readingPosition,undefined);
+});
+
+test('resolves exact, reviewed and named documents before generic tasks and uses only supported tie-breakers', async () => {
+  const generic = {id:'generic',title:'Read paper'}, named = {id:'named',title:'Read “Retrieving a Goal After an Interruption”'};
+  const chinese = {id:'chinese',title:'阅读一篇论文'}, walk = {id:'walk',title:'Go for a walk'};
+  let tasks = [generic,named,chinese,walk], focus = 'generic', owners = [];
+  const observer = createScreenObservationService({getTasks:async()=>tasks, getFocusTaskId:async()=>focus,
+    getDocumentOwners:async()=>owners, fetcher:async()=>completion(scholarly)});
+  const match = async target => (await observer.foreground(image,new AbortController().signal,target)).taskId;
+  assert.equal(await match('generic'),'named');
+  tasks = [...tasks,{id:'exact',title:scholarly.taskLabel}];
+  assert.equal(await match('named'),'exact');
+  tasks = tasks.filter(t=>t.id!=='exact'); owners = ['chinese'];
+  assert.equal(await match('generic'),'chinese');
+  owners = []; tasks = [generic,chinese,walk];
+  assert.equal(await match(),'generic'); assert.equal(await match('chinese'),'chinese');
+  focus='walk'; assert.equal(await match('walk'),null);
+  tasks=[{...chinese,status:'done'},generic,{id:'finished',title:scholarly.taskLabel,status:'done'}];
+  owners=['chinese','finished']; assert.equal(await match('finished'),'generic');
+  tasks=[{id:'finished',title:scholarly.taskLabel,status:'done'}]; assert.equal(await match(),null);
+  owners=[]; tasks=[{id:'other-paper',title:'Read “Diffusion for Medical Images”'},walk];
+  assert.equal(await match('other-paper'),null);
+});
+
+test('a useful paper title or Method heading on a tutorial, README or code screen does not bind a reading task', async () => {
+  const tasks=[{id:'paper',title:'Read paper'},{id:'named',title:'Read Retrieving a Goal After an Interruption'}];
+  let page = scholarly;
+  const observer = createScreenObservationService({getTasks:async()=>tasks, getFocusTaskId:async()=>'paper',fetcher:async()=>completion(page)});
+  for (const edit of [{surfaceKind:'other'}, {surfaceKind:'code'}, {surfaceKind:'work'}, {readingPage:'contents'},
+    {workLine:'Method',bodyQuote:'Follow these steps to install and run the software package.'},
+    {workLine:'[1] Installation',bodyQuote:'This tutorial shows how to compile an example from the documentation.'},
+    {bodyQuote:'Contents .... 42'},{taskLabel:'Tutorial: Retrieving a Goal After an Interruption'}]) {
+    page={...scholarly,...edit};
+    const result=await observer.foreground(image,new AbortController().signal,'paper');
+    assert.equal(result.taskId,null,JSON.stringify(edit)); assert.equal(result.readingSection,undefined); assert.equal(result.readingPosition,undefined);
+    assert.equal(result.progress,null); assert.deepEqual(result.completedParts,[]);
+  }
+});
+
+test('recognizes real declarations without a task selection, prefers named code entities and abstains on ambiguous or incidental ones',async () => {
+  let tasks = [{id:'class',title:'make a class'},{id:'paper',title:'Read paper'}], focus=null;
+  const code = {...output,taskLabel:'cart.py',surfaceKind:'code',readingPage:'other',workLine:'def add(self, item):',
+    codeDeclarations:['class ShoppingCart:','def add(self, item):'],completedParts:[{name:'A',line:'[x] A'}]};
+  let page = code;
+  const observer = createScreenObservationService({getTasks:async()=>tasks,getFocusTaskId:async()=>focus,fetcher:async()=>completion(page)});
+  const inspect = target => observer.foreground(image,new AbortController().signal,target);
+  const first = await inspect();
+  assert.equal(first.taskId,'class'); assert.match(first.summary,/class ShoppingCart/); assert.equal(first.progress,null); assert.deepEqual(first.completedParts,[]);
+  tasks.push({id:'named',title:'实现 ShoppingCart 类'});
+  assert.equal((await inspect('class')).taskId,'named');
+  tasks = [{id:'class',title:'make a class'},{id:'same',title:'定义一个类'},{id:'paper',title:'Read paper'}];
+  assert.equal((await inspect()).taskId,null);
+  focus='same'; assert.equal((await inspect()).taskId,'same'); assert.equal((await inspect('class')).taskId,'class');
+  page={...code,codeDeclarations:[],workLine:'print("class ShoppingCart:")'};
+  assert.equal((await inspect('class')).taskId,null);
+  page={...code,surfaceKind:'other',taskLabel:'Python Tutorial'};
+  assert.equal((await inspect('class')).taskId,null);
+});
+
+test('ordinary work uses local semantic comparison of transcribed text, rejects invented quotes and never transfers numerical progress', async () => {
+  const tasks=[{id:'budget',title:'Prepare the Orion budget'},{id:'tax',title:'File personal taxes'}];
+  let observed={...output,taskLabel:'Orion cost plan',surfaceKind:'work',readingPage:'body',sectionHeading:'Travel',
+    bodyQuote:'The updated Orion cost estimate is ready for the March review.', workLine:'Orion travel budget estimate',evidence:'Progress: 75%',
+    completedParts:[{name:'Travel',line:'[x] Travel'}]};
+  let answers=[{task:1,taskPhrase:'Orion budget',quote:'Orion travel budget estimate'}], second=0;
+  const observer=createScreenObservationService({getTasks:async()=>tasks,getFocusTaskId:async()=>'tax',fetcher:async(_url,init)=>{
+    const request=JSON.parse(init.body);
+    if(request.response_format.json_schema.name==='observation') {
+      assert.doesNotMatch(request.messages[1].content[0].text,/Orion budget/);
+      return completion(observed);
+    }
+    second++;
+    const input=JSON.parse(request.messages[1].content);
+    assert.deepEqual(input.tasks,[{task:1,title:tasks[0].title}]); assert.ok(input.visibleLines.includes(observed.workLine));
+    assert.doesNotMatch(JSON.stringify(input),/data:image|75%/);
+    return answers ? completion({matches:answers}) : new Response('',{status:503});
+  }});
+  const inspect=target=>observer.foreground(image,new AbortController().signal,target);
+  const chosen=await inspect('tax');
+  assert.equal(chosen.taskId,'budget'); assert.match(chosen.summary,/Orion travel budget estimate/);
+  assert.equal(chosen.progress,null); assert.deepEqual(chosen.completedParts,[]);
+  assert.equal(chosen.readingDocument,undefined); assert.equal(chosen.readingSection,undefined);
+  for(const bad of [[{task:1,taskPhrase:'Orion budget',quote:'Finalize all costs'}], [{task:1,taskPhrase:'Other task',quote:'Orion travel budget estimate'}],
+    [{task:999,taskPhrase:'Orion budget',quote:'Orion travel budget estimate'}], [], null]) {
+    answers=bad; assert.equal((await inspect('budget')).taskId,null);
+  }
+  assert.equal(second,6);
+  observed={...observed,taskLabel:'Holiday photos',sectionHeading:'Summer',workLine:'A weekend at the beach',bodyQuote:''};
+  assert.equal((await inspect('budget')).taskId,null); assert.equal(second,6);
+});
+
+test('a checklist mislabeled as a paper body still uses its explicit completion count and separately verified checkmarks', async () => {
+  const checklist = {...output, taskLabel:'Research Paper', surfaceKind:'paper', readingPage:'body', sectionHeading:'Research Paper',
+    bodyQuote:'Progress: 2/5 sections completed', pageCounter:'', evidence:'2/5 sections completed',
+    completedParts:[{name:'Introduction',line:'Introduction'},{name:'Method',line:'Method'}]};
+  const service = createScreenObservationService({getTasks:async()=>[{id:'checklist',title:'Research Paper'}],fetcher:async(_url,init)=>{
+    const name = JSON.parse(init.body).response_format.json_schema.name;
+    return completion(name === 'row_marks' ? {rows:[{name:'Introduction',mark:'[x]'},{name:'Method',mark:'[x]'}]} : checklist);
+  }});
+  const checked = await service.foreground(image,new AbortController().signal);
+  assert.equal(checked.progress.percent,40); assert.deepEqual(checked.completedParts,['Introduction','Method']);
+  assert.equal(checked.readingSection,undefined); assert.equal(checked.readingPosition,undefined);
 });

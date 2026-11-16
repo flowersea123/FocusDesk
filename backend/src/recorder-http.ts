@@ -3,7 +3,7 @@ import { checkPrivateRequest, privateInput, privateJson } from './checkpoint-htt
 import { WriteRequestError } from './write-policy.ts';
 import type { createForegroundRecorder } from './foreground-recorder.ts';
 
-export function createRecorderHttp(recorder: ReturnType<typeof createForegroundRecorder>) {
+export function createRecorderHttp(recorder: ReturnType<typeof createForegroundRecorder>, pendingTask: (id: string) => Promise<boolean>) {
   return async (request: IncomingMessage, response: ServerResponse) => {
     try {
       checkPrivateRequest(request);
@@ -13,15 +13,20 @@ export function createRecorderHttp(recorder: ReturnType<typeof createForegroundR
       }
       if (request.method !== 'POST') {
         response.setHeader('Allow', 'GET, POST');
-        privateJson(response, 405, { error: '请通过本机记录页开始或停止。' });
+        privateJson(response, 405, { error: '请通过本机任务页控制屏幕记录。' });
         return;
       }
       const input = await privateInput(request);
-      if (Object.keys(input).length !== 1 || !['start', 'stop'].includes(input.action)) {
-        privateJson(response, 400, { error: '请选择开始或停止记录。' });
+      const { action, taskId } = input;
+      if (Object.keys(input).some(key => key !== 'action' && key !== 'taskId') || !['start', 'stop', 'target'].includes(action) ||
+          (action === 'stop' && taskId !== undefined) || (action === 'target' && taskId === undefined) ||
+          (taskId != null && (typeof taskId !== 'string' || !/^[\x21-\x7e]{1,64}$/.test(taskId)))) {
+        privateJson(response, 400, { error: '请使用有效的录制操作和任务编号。' });
         return;
       }
-      privateJson(response, 200, input.action === 'start' ? recorder.start() : recorder.stop());
+      if (taskId && !await pendingTask(taskId)) throw new WriteRequestError(409, 'TASK_CHANGED', '此任务已结束或移除，请选择其他待办。');
+      const status = action === 'target' ? recorder.target(taskId) : action === 'start' ? recorder.start(taskId) : recorder.stop();
+      privateJson(response, 200, status);
     } catch (error) {
       response.setHeader('Connection', 'close');
       if (error instanceof WriteRequestError) privateJson(response, error.status, { error: error.message });

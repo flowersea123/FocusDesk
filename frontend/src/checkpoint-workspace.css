@@ -1,9 +1,3 @@
-.workspace-views { display: flex; flex-wrap: wrap; gap: 5px; border-bottom: 1px solid var(--line); margin: -4px 0 23px; }
-.workspace-views button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; padding: 8px 13px 11px;
-  color: var(--muted); font-weight: 550; border-bottom: 2px solid transparent; border-radius: 0; }
-.workspace-views button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
-.workspace-capture-indicator { display: inline-flex; align-items: center; gap: 3px; color: #327155; font-size: 11px; }
-.workspace-capture-indicator::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .dashboard [hidden] { display: none !important; }
 
 .checkpoint-workspace { display: grid; min-width: 0; max-width: 880px; gap: 16px; }
@@ -30,8 +24,16 @@
 .checkpoint-manual > summary { cursor: pointer; padding: 13px clamp(18px, 3vw, 28px); font-size: 14px; font-weight: 550; color: var(--muted); }
 .checkpoint-manual[open] > summary { color: var(--ink); }
 .checkpoint-manual > .screen-observation { padding: 0 clamp(18px, 3vw, 28px) 20px; }
-@media (max-width: 480px) {
-  .workspace-views { gap: 2px; }
-  .workspace-views button { padding-inline: 7px; }
-  .checkpoint-workspace { gap: 12px; }
-}
+#record { scroll-margin-top: 12px; }
+#record:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.checkpoint-older { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 10px; }
+.checkpoint-older summary { cursor: pointer; font-size: 13px; font-weight: 550; color: var(--accent); }
+@media (max-width: 480px) { .checkpoint-workspace { gap: 12px; } }
+
+
+.desk-task-panel > .checkpoint-workspace { display: block; max-width: none; padding-top: 10px; margin-top: 13px; border-top: 1px solid var(--line); }
+.checkpoint-disclosure { cursor: pointer; color: var(--ink); font-size: 14px; padding: 4px 0; }
+.checkpoint-disclosure > span { display: block; margin: 2px 0 0 17px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.desk-task-panel .checkpoint-history { padding: 0 0 5px 4px; border: 0; border-radius: 0; }
+.desk-task-panel .checkpoint-manual { margin-top: 8px; border-radius: 6px; }
+.desk-task-panel .checkpoint-manual > summary { padding: 8px 12px; }

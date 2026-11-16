@@ -1,20 +1,42 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DailyOverview } from '../../contracts/daily-overview';
+import type { DailyOverview, Task } from '../../contracts/daily-overview';
 import { validSections, type ProgressConfig, type ProjectStatus, type ReadingLocation } from '../../contracts/project-progress';
 import { checkpointSourceLabel } from '../../contracts/screen-checkpoint';
 import { checkpointRequest, confirmReadingBookmark } from './CheckpointWorkspace';
+import type { RecorderControls } from './ForegroundRecord';
 import './project-progress.css';
 
 type ProgressResponse = { config:ProgressConfig; statuses:ProjectStatus[] };
 const paper = ['Introduction','Related Work','Method','Results','Discussion'];
-export default function ProjectProgress({overview,refreshKey,onPinned}:{overview:DailyOverview;refreshKey:number;onPinned:(status:ProjectStatus|null)=>void}) {
+type Props = {
+  overview: DailyOverview | null;
+  selected?: Task;
+  manual: boolean;
+  onFollow: () => void;
+  refreshKey: number;
+  recorder: RecorderControls;
+  onPinned: (status: ProjectStatus | null) => void;
+  onChange: () => void;
+};
+
+function ProgressMeter({ name, value, text }: { name: string; value: number; text: string }) {
+  return <div className="project-meter" role="progressbar" aria-label={name} aria-valuemin={0} aria-valuemax={100}
+    aria-valuenow={value} aria-valuetext={text}><span style={{ width: value + '%' }} /></div>;
+}
+
+export default function ProjectProgress({ overview, selected, manual, onFollow, refreshKey, recorder, onPinned, onChange }: Props) {
   const [data,setData]=useState<ProgressResponse|null>(null);
-  const [chosen,choose]=useState('');
   const [draft,setDraft]=useState<{id:string; revision:string; text:string}|null>(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const requests=useRef(0);
-  const current=overview.tasks.some(t=>t.id===chosen)?chosen:overview.focus?.task_id ?? overview.tasks.find(t=>t.status==='todo')?.id ?? overview.tasks[0]?.id ?? '';
+  const tasks = overview?.tasks ?? [];
+  const target = tasks.find(task => task.id === recorder.status?.targetTaskId);
+  const active = recorder.status?.state === 'recording' && !recorder.readError;
+  const current = selected?.id ?? '';
+  const canTarget = active && selected?.status === 'todo' && target?.id !== current &&
+    (manual || !recorder.status?.observedAt || recorder.status.observedTaskId !== current);
+  const timezone = overview?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const status=data?.statuses.find(p=>p.taskId===current);
   const plan=data?.config.plans.find(p=>p.taskId===current)?.sections ?? [];
   const accept=useCallback((value:ProgressResponse)=>{
@@ -27,7 +49,7 @@ export default function ProjectProgress({overview,refreshKey,onPinned}:{overview
       if(request===requests.current){accept(value);setError('');}}
     catch(e){if(request===requests.current)setError((e as Error).message);}
   },[accept]);
-  useEffect(()=>{void load(); window.addEventListener('focus',load); return ()=>{requests.current++;window.removeEventListener('focus',load);};},[load,overview.revision,refreshKey]);
+  useEffect(()=>{void load(); window.addEventListener('focus',load); return ()=>{requests.current++;window.removeEventListener('focus',load);};},[load,overview?.revision,refreshKey]);
 
   async function change(action:'plan'|'pin'|'unpin') {
     if(!data||!current||busy)return;
@@ -42,33 +64,61 @@ export default function ProjectProgress({overview,refreshKey,onPinned}:{overview
   async function confirmRead(position: ReadingLocation) {
     if (busy) return;
     setBusy(true); setError('');
-    try { await confirmReadingBookmark(position.id, position.section); await load(); }
+    try { await confirmReadingBookmark(position.id, position.section); onChange(); }
     catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }
   const bookmark = status?.readingBookmark;
-  const pinned=data?.config.pinned===current && !!current;
+  const position = status?.readingPosition;
+  const readingPercent = position ? Math.round(100 * position.page / position.total) : null;
+  const section = position?.section || bookmark?.current.section;
+  const confirm = bookmark?.previous && !bookmark.previous.confirmed ? bookmark.previous :
+    bookmark?.current && !bookmark.current.confirmed ? bookmark.current : null;
+  const latest = status?.latestObservation;
+  const pinned = data?.config.pinned === current && !!current;
+  const time = (date: string) => new Date(date).toLocaleString('zh-CN', {
+    month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: timezone,
+  });
+
   return <section className="project-progress" id="project-progress" aria-labelledby="project-progress-title">
-    <header><div><h2 id="project-progress-title">大任务进度</h2><p>{status?.total?'按清单中已记录的完成项计算':'从屏幕记录中的明确比例读取进度'}</p></div>
-      {current && <select aria-label="查看大任务进度" value={current} onChange={e=>{choose(e.target.value);setDraft(null);setError('');}}>
-        {overview.tasks.map(t=><option value={t.id} key={t.id}>{t.title}</option>)}</select>}
+    <header><h3 id="project-progress-title">大任务进度{selected && <span> · {selected.title}</span>}</h3>
+      {manual && <button type="button" className="project-follow" onClick={onFollow}>跟随识别结果</button>}
     </header>
-    {!current && <p>先在今日任务中添加一个想跟踪的大任务。</p>}
+    {(canTarget || (active && target)) && <div className="project-selection">
+      {canTarget && <button type="button" disabled={!!recorder.pending}
+        onClick={() => void recorder.change('target', current)}>用当前录制核对这项任务</button>}
+      {active && target && <div className="project-target"><small>正用「{target.title}」核对截图</small>
+        <button type="button" disabled={!!recorder.pending} onClick={() => void recorder.change('target', null)}>恢复自动识别</button></div>}
+    </div>}
+    {!tasks.length && <p>屏幕记录会保存在下方时间线。</p>}
+    {!current && tasks.length > 0 && <p>点击上方任务名称可查看已有进度。</p>}
+    {current && !status && !error && <p role="status">正在读取任务进度…</p>}
     {status && <>
-      <div className="project-meter-label"><strong>{status.percent===null?'进度待确认':status.percent+'%'}</strong>
-        <span>{status.total!==null?`${status.completed.length} / ${status.total} 个步骤已完成`:status.evidence?`${checkpointSourceLabel(status.evidenceSource)} · ${status.evidence}`:'需有明确的进度依据或步骤清单'}</span></div>
-      <div className="project-meter" role="progressbar" aria-label={status.title+'整体进度'} aria-valuemin={0} aria-valuemax={100} aria-valuenow={status.percent??undefined}>
-        {status.percent!==null && <span style={{width:status.percent+'%'}}/>}</div>
-      <h3>已完成的部分</h3>
-      {status.completed.length?<ul>{status.completed.map(part=><li key={part}><span aria-hidden="true">✓</span> {part.split('|')[0].trim()} <small>{checkpointSourceLabel(status.automaticParts?.includes(part) ? 'automatic' : 'manual')}</small></li>)}</ul>:<p>尚无记录表明具体部分已完成。</p>}
-      {bookmark && <aside className="reading-bookmark" aria-label="阅读书签">
-        <h3>阅读书签</h3>
-        {bookmark.current.document && bookmark.current.document !== status.title && <p>{bookmark.current.document}</p>}
-        <p>上次读到 <strong>{bookmark.current.section}</strong> · {checkpointSourceLabel(bookmark.current.source)}</p>
-        {bookmark.previous && !bookmark.previous.confirmed
-          ? <button type="button" disabled={busy} onClick={() => void confirmRead(bookmark.previous!)}>确认已读 {bookmark.previous.section}</button>
-          : !bookmark.current.confirmed && <button type="button" disabled={busy} onClick={() => void confirmRead(bookmark.current)}>确认已读 {bookmark.current.section}</button>}
-      </aside>}
+      {(position || section) && <div className="project-reading">
+        <h3>阅读位置</h3>
+        {position && readingPercent !== null ? <>
+          <div className="project-meter-label"><strong>第 {position.page} / {position.total} 页</strong><b>{readingPercent}%</b></div>
+          <ProgressMeter name={status.title + '阅读位置'} value={readingPercent} text={`第 ${position.page} 页，共 ${position.total} 页，${readingPercent}%`} />
+          {section && <p>{position.section ? '读到 ' : '最近章节书签　'}<strong>{section}</strong></p>}
+        </> : <div className="project-reading-section">读到 <strong>{section}</strong></div>}
+        {(position?.document || bookmark?.current.document) && <p className="project-document">{position?.document || bookmark?.current.document}</p>}
+        {confirm && <button type="button" disabled={busy} onClick={() => void confirmRead(confirm)}>确认已读 {confirm.section}</button>}
+      </div>}
+      {latest && <div className="project-observation"><small>最近截图依据 · <time dateTime={latest.capturedAt}>{time(latest.capturedAt)}</time> · {checkpointSourceLabel(latest.source)}</small>
+        <p>{latest.summary}</p></div>}
+      {status.percent !== null && <div className="project-completion">
+        <h3>{status.total !== null ? '步骤完成度' : '整体完成度'}</h3>
+        <div className="project-meter-label">
+          <strong>{status.total !== null ? `${status.completed.length} / ${status.total} 个步骤已完成` : '截图中的完成比例'}</strong>
+          <b>{status.percent}%</b>
+        </div>
+        <ProgressMeter name={status.title + '整体进度'} value={status.percent} text={status.percent + '% 已完成'} />
+        {status.evidence && <p>{checkpointSourceLabel(status.evidenceSource)} · {status.evidence}</p>}
+      </div>}
+      {!position && !section && status.percent === null && !latest && <p>暂无进度记录。识别到页码、章节或明确的完成标记后会自动更新。</p>}
+      {status.completed.length > 0 && <><h3>已完成的部分</h3>
+        <ul>{status.completed.map(part => <li key={part}><span aria-hidden="true">✓</span> {part.split('|')[0].trim()}
+          <small> {checkpointSourceLabel(status.automaticParts?.includes(part) ? 'automatic' : 'manual')}</small></li>)}</ul></>}
       <div className="project-actions"><button type="button" disabled={busy} onClick={()=>change(pinned?'unpin':'pin')}>{pinned?'恢复电子屏总览':'在电子屏显示此任务'}</button>
         <button type="button" disabled={busy} onClick={()=>setDraft({id:current,revision:data!.config.revision,text:plan.join('\n')})}>{plan.length?'编辑步骤清单':'定义完成步骤'}</button></div>
       {pinned && <small>已选为电子屏内容 · <a href="/simulator" target="_blank" rel="noreferrer">查看模拟屏 ↗</a></small>}

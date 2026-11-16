@@ -75,6 +75,7 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
   const normalizeTitle = (title: string) => title.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
   const screenObservation = createScreenObservationService({
     getTasks: async () => (await loader.load()).tasks,
+    getFocusTaskId: async () => (await loader.load()).focus?.task_id ?? null,
     getKnownDocuments: taskId => checkpoints.reviewedDocuments(taskId),
     getDocumentOwners: async title => {
       const key = normalizeTitle(title);
@@ -92,17 +93,18 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
     ...recorderDriver,
     analyze: screenObservation.foreground,
     save: async (record, signal) => {
-      if (record.taskId && !(await loader.load()).tasks.some(task => task.id === record.taskId)) {
+      if (record.taskId && !(await loader.load()).tasks.some(task => task.id === record.taskId && task.status === 'todo')) {
         record.taskId = null;
         record.progress = null;
         record.completedParts = [];
         delete record.readingSection;
         delete record.readingDocument;
+        delete record.readingPosition;
       }
       await checkpoints.add(record, signal);
     },
   });
-  const recorderHttp = createRecorderHttp(recorder);
+  const recorderHttp = createRecorderHttp(recorder, async id => (await loader.load()).tasks.some(t => t.id === id && t.status === 'todo'));
   const server = createServer(async (request, response) => {
     const head = request.method === 'HEAD';
     try {

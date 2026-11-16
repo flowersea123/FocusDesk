@@ -1,5 +1,12 @@
 export type CheckpointSource = 'manual' | 'automatic';
 
+export interface ReadingPosition { page: number; total: number }
+export function validReadingPosition(value: unknown): value is ReadingPosition {
+  if (!value || typeof value !== 'object') return false;
+  const { page, total } = value as ReadingPosition;
+  return Number.isInteger(page) && Number.isInteger(total) && page >= 1 && page <= total && total <= 100_000;
+}
+
 export function checkpointSourceLabel(source?: CheckpointSource): string {
   return source === 'automatic' ? '自动记录' : '手动确认';
 }
@@ -22,6 +29,7 @@ export interface ScreenCheckpoint {
   /** Visible document section. Only a separate, explicit reader confirmation completes it. */
   readingSection?: string;
   readingDocument?: string;
+  readingPosition?: ReadingPosition;
   readingConfirmed?: true;
   progress: { percent: number; evidence: string } | null;
 }

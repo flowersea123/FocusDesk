@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { validReadingDocument, validReadingSection, type ScreenCheckpoint } from '../../contracts/screen-checkpoint';
+import { validReadingDocument, validReadingPosition, validReadingSection, type ScreenCheckpoint } from '../../contracts/screen-checkpoint';
 import './screen-observation.css';
 
 export type ScreenObservationRecord = Omit<ScreenCheckpoint, 'id' | 'readingConfirmed'>;
@@ -7,7 +7,7 @@ type Props = {
   tasks: { id: string; title: string }[];
   onSave: (record: ScreenObservationRecord, signal?: AbortSignal) => void | Promise<void>;
 };
-type Result = Pick<ScreenObservationRecord, 'summary' | 'nextStep' | 'progress' | 'completedParts' | 'readingSection' | 'readingDocument'>;
+type Result = Pick<ScreenObservationRecord, 'summary' | 'nextStep' | 'progress' | 'completedParts' | 'readingSection' | 'readingDocument' | 'readingPosition'>;
 type Draft = { jpg: string; capturedAt: string; taskId: string | null; result: Result; parts: string; keepPercent: boolean };
 
 function jpeg(source: CanvasImageSource, width: number, height: number): string {
@@ -46,7 +46,8 @@ async function analyze(image: string, taskId: string | null, signal: AbortSignal
   if (!res.ok) throw new Error(data.error?.message || '本机模型未能读取截图。');
   if (typeof data.summary !== 'string' || !data.summary.trim() || typeof data.nextStep !== 'string' ||
       (data.readingSection !== undefined && !validReadingSection(data.readingSection)) ||
-      (data.readingDocument !== undefined && (!data.readingSection || !validReadingDocument(data.readingDocument))) ||
+      (data.readingDocument !== undefined && ((!data.readingSection && !data.readingPosition) || !validReadingDocument(data.readingDocument))) ||
+      (data.readingPosition !== undefined && (!validReadingPosition(data.readingPosition) || !validReadingDocument(data.readingDocument))) ||
       !Array.isArray(data.completedParts) || data.completedParts.length > 8 || data.completedParts.some((part: unknown) => typeof part !== 'string' || !part.trim()) ||
       (data.progress !== null && (!Number.isInteger(data.progress?.percent) || data.progress.percent < 0 || data.progress.percent > 100 ||
         typeof data.progress.evidence !== 'string' || !data.progress.evidence.trim()))) {
@@ -116,9 +117,11 @@ export function ScreenObservation({ tasks, onSave }: Props) {
     if (parts.length > 8 || parts.some(p => p.length > 64)) { setError('最多填写 8 个已完成部分，每项不超过 64 字符。'); return; }
     setSaving(true); setError('');
     try {
+      const section = draft.taskId ? draft.result.readingSection?.trim() : undefined;
+      const document = draft.taskId && (section || draft.result.readingPosition) ? draft.result.readingDocument?.trim() : undefined;
       await onSave({ source: 'manual', capturedAt: draft.capturedAt, taskId: draft.taskId, summary: draft.result.summary.trim(),
-        ...(draft.taskId && draft.result.readingSection?.trim() ? {readingSection: draft.result.readingSection.trim(),
-          ...(draft.result.readingDocument?.trim() ? {readingDocument: draft.result.readingDocument.trim()} : {})} : {}),
+        ...(section ? {readingSection: section} : {}), ...(document ? {readingDocument: document} : {}),
+        ...(document && draft.result.readingPosition ? {readingPosition: draft.result.readingPosition} : {}),
         nextStep: draft.result.nextStep.trim(), progress: draft.keepPercent ? draft.result.progress : null, completedParts: parts });
       if (mounted.current) { dismiss(); setMessage('已保存检查点。'); }
     } catch (cause) {
@@ -154,7 +157,9 @@ export function ScreenObservation({ tasks, onSave }: Props) {
       {draft.taskId && <label className="so-field">阅读书签 <small>当前打开的论文章节，可留空</small>
         <input value={draft.result.readingSection ?? ''} maxLength={64} disabled={saving}
           onChange={event => change({ result: { ...draft.result, readingSection: event.target.value } })} /></label>}
-      {draft.taskId && draft.result.readingSection?.trim() && <label className="so-field">文档标题 <small>用于将同名论文关联到此任务</small>
+      {draft.taskId && draft.result.readingPosition && <p>画面中的阅读位置 · 第 {draft.result.readingPosition.page} / {draft.result.readingPosition.total} 页
+        <button type="button" disabled={saving} onClick={() => change({result:{...draft.result,readingPosition:undefined}})}>忽略页码</button></p>}
+      {draft.taskId && (draft.result.readingSection?.trim() || draft.result.readingPosition) && <label className="so-field">文档标题 <small>用于将同名论文关联到此任务</small>
         <input value={draft.result.readingDocument ?? ''} maxLength={180} disabled={saving}
           onChange={event => change({ result: { ...draft.result, readingDocument: event.target.value } })} /></label>}
       <label className="so-field">已完成的具体部分 <small>每行一项，最多 8 项</small>

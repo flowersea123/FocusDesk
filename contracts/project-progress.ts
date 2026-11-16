@@ -1,5 +1,5 @@
 import type { Task } from './daily-overview.ts';
-import type { CheckpointSource, ScreenCheckpoint } from './screen-checkpoint.ts';
+import { validReadingDocument, validReadingPosition, type CheckpointSource, type ReadingPosition, type ScreenCheckpoint } from './screen-checkpoint.ts';
 
 export interface ProjectPlan {
   taskId: string;
@@ -32,6 +32,9 @@ export interface ProjectStatus {
   evidenceSource?: CheckpointSource;
   automaticParts?: string[];
   readingBookmark?: { current: ReadingLocation; previous?: ReadingLocation };
+  /** The open page in a document, independent of task completion. */
+  readingPosition?: ReadingPosition & { document?: string; section?: string };
+  latestObservation?: { summary: string; capturedAt: string; source?: CheckpointSource };
 }
 
 const translations: Record<string, string> = {
@@ -40,14 +43,21 @@ const translations: Record<string, string> = {
   methods: 'Method', methodology: 'Method', introductions: 'Introduction', conclusions: 'Conclusion',
 };
 
-export function devicePart(value: string): string | null {
+const sectionNumber = /^(?:section\s+)?(\d+(?:\.\d+)*)[\s.):、-]+/iu;
+
+export function devicePart(value: string, planSections: readonly string[] = []): string | null {
   const name = value.split('|').at(-1)!.trim();
   if (/^[\x20-\x7e]+$/.test(name)) return name;
-  return translations[name] ?? null;
+  const number = name.match(sectionNumber);
+  const english = translations[name.replace(sectionNumber, '')];
+  if (english) return number ? number[1] + '. ' + english : english;
+  const alias = planSections.find(entry => entry.split('|').some(label => sectionKey(label) === sectionKey(name)));
+  const shortName = alias?.split('|')[1]?.trim();
+  return shortName && /^[\x20-\x7e]+$/.test(shortName) ? shortName : null;
 }
 
 function sectionKey(value: string): string {
-  const name = value.trim().replace(/^(?:section\s+)?\d+(?:\.\d+)*[\s.):、-]+/iu, '').toLowerCase();
+  const name = value.trim().replace(sectionNumber, '').toLowerCase();
   return (translations[name] ?? name).toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
@@ -66,41 +76,69 @@ export function validSections(value: unknown): value is string[] {
   });
 }
 
+function readingState(rows: ScreenCheckpoint[], sections: string[]): Pick<ProjectStatus, 'readingBookmark' | 'readingPosition'> {
+  const sectionIndex = (key: string) => sections.findIndex(section => section.split('|').some(alias => sectionKey(alias) === key));
+  const documentKey = (name?: string) => name?.normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ') ?? '';
+  const locationKey = (row: ScreenCheckpoint) => JSON.stringify([documentKey(row.readingDocument) || row.id, sectionKey(row.readingSection!)]);
+  const visited = new Set<string>();
+  const confirmed = new Set<string>();
+  let current: ScreenCheckpoint | undefined;
+  let previous: ScreenCheckpoint | undefined;
+  let position: ProjectStatus['readingPosition'];
+
+  for (const row of rows) {
+    if (row.detailSource === 'window-title') continue;
+    const doc = documentKey(row.readingDocument);
+    const section = row.readingSection;
+    const key = section ? sectionKey(section) : '';
+    const page = validReadingDocument(row.readingDocument) && validReadingPosition(row.readingPosition) ? row.readingPosition : undefined;
+
+    if (page) {
+      const samePage = position && doc === documentKey(position.document) && position.page === page.page && position.total === page.total;
+      const knownSection = section ?? (samePage ? position?.section : undefined);
+      position = { page: page.page, total: page.total, document: row.readingDocument, ...(knownSection ? {section:knownSection} : {}) };
+      if (!section && !samePage) { current = undefined; previous = undefined; }
+    } else if (section && position) {
+      // A newer heading can retain an earlier page only when both document and section agree.
+      position = doc && doc === documentKey(position.document) && position.section && key === sectionKey(position.section)
+        ? { ...position, section } : undefined;
+    }
+    if (!section) continue;
+
+    const visit = JSON.stringify([doc, key]);
+    const lastKey = current?.readingSection ? sectionKey(current.readingSection) : '';
+    if (!doc || doc !== documentKey(current?.readingDocument)) previous = undefined;
+    else if (key !== lastKey) {
+      const from = sectionIndex(lastKey), to = sectionIndex(key);
+      const forward = from >= 0 && to >= 0 ? to > from : !visited.has(visit);
+      previous = forward ? current : undefined;
+    }
+    visited.add(visit);
+    current = row;
+    if (row.readingConfirmed) confirmed.add(locationKey(row));
+  }
+
+  function location(row: ScreenCheckpoint): ReadingLocation {
+    return { id: row.id, section: row.readingSection!, ...(row.readingDocument ? {document:row.readingDocument} : {}),
+      source: row.source ?? 'manual', capturedAt: row.capturedAt, confirmed: confirmed.has(locationKey(row)) };
+  }
+  return {
+    ...(position ? {readingPosition:position} : {}),
+    ...(current ? {readingBookmark:{current:location(current), ...(previous ? {previous:location(previous)} : {})}} : {}),
+  };
+}
+
 export function projectStatus(task: Task, plan: ProjectPlan | undefined, records: ScreenCheckpoint[]): ProjectStatus {
   const rows = records.filter(row => row.taskId === task.id)
     .sort((a, b) => a.capturedAt.localeCompare(b.capturedAt));
   const observed = new Map<string, string>();
   const reviewed = new Set<string>();
   const sections = plan?.sections ?? [];
-  const knownSectionIndex = (name: string) => sections.findIndex(section => section.split('|').some(alias => sectionKey(alias) === name));
-  const visited = new Set<string>();
-  const confirmedLocations = new Set<string>();
-  const documentKey = (row: ScreenCheckpoint) => row.readingDocument?.normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ') ?? '';
-  const locationKey = (row: ScreenCheckpoint) => JSON.stringify([documentKey(row) || row.id, sectionKey(row.readingSection!)]);
-  let currentDocument = '';
-  let currentKey = '';
-  let currentReading: ScreenCheckpoint | undefined;
-  let previousReading: ScreenCheckpoint | undefined;
   for (const row of rows) {
-    if (row.readingSection) {
-      const section = sectionKey(row.readingSection);
-      const document = documentKey(row);
-      const visit = JSON.stringify([document, section]);
-      if (!document || document !== currentDocument) previousReading = undefined;
-      else if (currentKey !== section) {
-        const from = knownSectionIndex(currentKey), to = knownSectionIndex(section);
-        const movingForward = from >= 0 && to >= 0 ? to > from : !visited.has(visit);
-        previousReading = movingForward ? currentReading : undefined;
-      }
-      currentDocument = document;
-      currentKey = section;
-      visited.add(visit);
-      currentReading = row;
-      if (row.readingConfirmed) {
-        confirmedLocations.add(locationKey(row));
-        observed.set(section, row.readingSection);
-        reviewed.add(section);
-      }
+    if (row.readingConfirmed && row.readingSection) {
+      const key = sectionKey(row.readingSection);
+      observed.set(key, row.readingSection);
+      reviewed.add(key);
     }
     for (const part of row.completedParts ?? []) {
       const key = sectionKey(part);
@@ -109,13 +147,9 @@ export function projectStatus(task: Task, plan: ProjectPlan | undefined, records
     }
   }
 
-  function readingLocation(row: ScreenCheckpoint): ReadingLocation {
-    const section = row.readingSection!;
-    return { id: row.id, section, ...(row.readingDocument ? {document: row.readingDocument} : {}), source: row.source ?? 'manual', capturedAt: row.capturedAt, confirmed: confirmedLocations.has(locationKey(row)) };
-  }
-  const identity = { taskId: task.id, title: task.title,
-    ...(currentReading ? {readingBookmark: {current: readingLocation(currentReading),
-      ...(previousReading ? {previous: readingLocation(previousReading)} : {})}} : {}) };
+  const observation = rows.filter(row => row.detailSource !== 'window-title' && row.summary?.trim()).at(-1);
+  const identity = { taskId:task.id, title:task.title, ...readingState(rows, sections),
+    ...(observation ? {latestObservation:{summary:observation.summary, capturedAt:observation.capturedAt, source:observation.source ?? 'manual'}} : {}) };
   if (sections.length) {
     const completed: string[] = [];
     const remaining: string[] = [];

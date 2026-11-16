@@ -8,4 +8,7 @@ export interface RecorderStatus {
   savedCount: number;
   lastSavedAt: string | null;
   sessionStartedAt: string | null;
+  targetTaskId?: string | null;
+  observedTaskId?: string | null;
+  observedAt?: string | null;
 }

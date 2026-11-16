@@ -156,24 +156,50 @@ export function buildProjectDisplay(project: ProjectStatus, revision: string): D
     const fitted = lines(label,font,width,1)[0];
     if (fitted) commands.push([1,x - textBounds(fitted,font).left,y,font,0,fitted]);
   };
+  const page = project.readingPosition;
+  const section = page ? page.section : project.readingBookmark?.current.section;
+  const reading = !!(page || section);
   draw('FOCUSDESK  /  TASK PROGRESS',18,25,FONT.bold11,360);
-  draw(project.title,18,61,FONT.bold17,364);
+  draw(project.title,18,reading ? 48 : 61,FONT.bold17,364);
+  if (reading) {
+    draw('READING POSITION',18,71,FONT.bold11,137);
+    if (page) {
+      const ratio = page.page / page.total;
+      draw('Page ' + page.page + '/' + page.total,161,71,FONT.regular13,152);
+      const percentLabel = Math.round(100 * ratio) + '%';
+      draw(percentLabel,382 - textBounds(percentLabel,FONT.bold16).width,71,FONT.bold16,70);
+      rect(18,99,364,5,0); rect(19,100,362,3,1);
+      rect(19,100,Math.max(1,Math.round(362 * ratio)),3,0);
+    }
+    if (section) {
+      const name = devicePart(section,[...project.completed,...project.remaining]);
+      draw(name ? 'Section: ' + name : 'Section name on Hub',18,92,FONT.regular13,364);
+    } else if (page?.document && page.document !== project.title && /^[\x20-\x7e]+$/.test(page.document)) {
+      draw(page.document,18,92,FONT.regular13,364);
+    }
+    draw('TASK COMPLETION',18,127,FONT.bold11,123);
+  }
   const percent = project.percent;
-  draw(percent === null ? 'Progress unknown' : percent+'%',18,96,FONT.bold17,180);
-  if (project.total !== null) draw(project.completed.length+' / '+project.total+' parts',216,95,FONT.regular13,166);
-  rect(18,109,364,12,0); rect(20,111,360,8,1);
-  if(percent!==null && percent>0) rect(20,111,Math.round(360*percent/100),8,2);
-  if (project.total === null && project.evidenceSource === 'automatic') draw('Auto-recorded',216,95,FONT.regular13,166);
-  draw('COMPLETED',18,149,FONT.bold11,364);
+  const progressY = reading ? 128 : 96;
+  const progressLabel = percent === null ? (reading ? 'Unknown' : 'Progress unknown') : percent+'%';
+  draw(progressLabel,reading ? 148 : 18,progressY,FONT.bold17,reading ? 86 : 180);
+  if (project.total !== null) draw(project.completed.length+' / '+project.total+' parts',reading ? 251 : 216,progressY-1,FONT.regular13,reading ? 131 : 166);
+  if (project.total === null && project.evidenceSource === 'automatic') draw('Auto-recorded',reading ? 251 : 216,progressY-1,FONT.regular13,reading ? 131 : 166);
+  const barY = reading ? 139 : 109;
+  rect(18,barY,364,12,0); rect(20,barY+2,360,8,1);
+  if (percent !== null && percent > 0) rect(20,barY+2,Math.round(360*percent/100),8,2);
+  draw('COMPLETED',18,reading ? 172 : 149,FONT.bold11,364);
   const automatic = new Set(project.automaticParts ?? []);
   const named = project.completed.map(part => ({name: devicePart(part), auto: automatic.has(part)}));
   const visible = named.filter(p => p.name !== null).slice(0,5);
+  const firstRow = reading ? 191 : 174;
   visible.forEach(({name,auto},i)=>{
-    rect(19,166+i*23,5,5,0);
-    draw(name!,33,174+i*23,FONT.regular13,auto ? 295 : 347);
-    if (auto) draw('AUTO',329,174+i*23,FONT.regular10,52);
+    const y = firstRow + i*(reading ? 20 : 23);
+    rect(19,y-8,5,5,0);
+    draw(name!,33,y,FONT.regular13,auto ? 295 : 347);
+    if (auto) draw('AUTO',329,y,FONT.regular10,52);
   });
-  if (!named.length) draw('No completed parts recorded',18,176,FONT.regular13,364);
+  if (!named.length) draw('No completed parts recorded',18,firstRow+2,FONT.regular13,364);
   if (named.length>visible.length) draw('+'+(named.length-visible.length)+' more on Hub',18,292,FONT.regular10,364);
   return {schema_version:'display-1',layout_version:'goal-1',revision,width:400,height:300,commands};
 }

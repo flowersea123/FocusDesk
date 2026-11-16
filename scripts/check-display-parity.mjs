@@ -59,6 +59,15 @@ scenes['project-automatic'] = buildProjectDisplay({
   ...project, total: null, percent: 75, evidenceSource: 'automatic',
   completed: ['Introduction', 'Method'], automaticParts: ['Method'],
 }, 'project:automatic');
+const readingPage = {page:6, total:12, document:'Example Paper', section:'Method'};
+scenes['reading-position'] = buildProjectDisplay({...project, percent:null, total:null, completed:[],
+  readingPosition:readingPage},'project:reading-position');
+scenes['reading-and-completion'] = buildProjectDisplay({...project, percent:40, completed:['Introduction','Method'],
+  automaticParts:['Method'], readingPosition:readingPage},'project:reading-and-completion');
+scenes['reading-section-only'] = buildProjectDisplay({...project, percent:0, completed:[],
+  readingBookmark:{current:{section:'2. 方法'}}},'project:reading-section-only');
+scenes['reading-long-page-count'] = buildProjectDisplay({...project, percent:100, completed:['Alpha','Beta','Gamma','Delta','Epsilon','Zeta'],
+  readingPosition:{page:100000,total:100000,document:'W'.repeat(180)}},'project:reading-long-page-count');
 for (const [name, scene] of Object.entries(scenes)) {
   const source = path.join(destination, `${name}.json`);
   const raw = path.join(destination, `${name}.raw`);

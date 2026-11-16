@@ -5,7 +5,7 @@ import type { ScreenCheckpoint } from '../../contracts/screen-checkpoint';
 import { parseDailyOverview } from '../../contracts/daily-overview';
 import today from '../../contracts/fixtures/today.json';
 import App from './App';
-import { ForegroundRecord, useForegroundRecorder } from './ForegroundRecord';
+import { RecorderButton, RecorderStatusLine, RecorderFeedback, useForegroundRecorder } from './ForegroundRecord';
 
 const idle: RecorderStatus = { state: 'idle', supported: true, platform: 'darwin', message: '', savedCount: 0, lastSavedAt: null, sessionStartedAt: null };
 const live: RecorderStatus = { ...idle, state: 'recording', sessionStartedAt: '2026-11-16T04:00:00Z' };
@@ -13,7 +13,9 @@ const flush = () => act(async () => {});
 const click = (name: string) => act(async () => { fireEvent.click(screen.getByRole('button', { name })); });
 const onRecordsChanged = vi.fn();
 function Controls() {
-  return <ForegroundRecord recorder={useForegroundRecorder(true, onRecordsChanged)} timezone="Asia/Shanghai" />;
+  const recorder = useForegroundRecorder(true, onRecordsChanged);
+  return <><RecorderButton recorder={recorder} /><RecorderStatusLine recorder={recorder} timezone="Asia/Shanghai" />
+    <RecorderFeedback recorder={recorder} /></>;
 }
 afterEach(() => {
   vi.useRealTimers(); vi.unstubAllGlobals(); onRecordsChanged.mockClear();
@@ -112,18 +114,20 @@ test('a direct record link restores the running indicator, reloads the timeline 
   });
   window.history.replaceState(null, '', '/#record');
   render(<App source={{ kind: 'http', localWorkspace: true, read: async () => data }} />); await flush();
-  const tab = screen.getByRole('button', { name: '屏幕记录' });
-  expect(tab).toHaveAttribute('aria-pressed', 'true');
-  expect(tab).toHaveAccessibleDescription('记录中');
+  expect(screen.getByText('屏幕记录中')).toBeVisible();
+  expect(screen.getByRole('region', { name: /^大任务进度/ })).toBeVisible();
+  expect(screen.queryByRole('button', { name: '屏幕记录' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '今天任务' })).not.toBeInTheDocument();
   const timeline = screen.getByRole('region', { name: '记录时间线' });
   expect(within(timeline).getByRole('heading', { name: '课程讲义' })).toBeVisible();
   expect(within(timeline).getByText('来自窗口标题')).toBeVisible();
   expect(within(timeline).queryByText('Safari · 课程讲义')).not.toBeInTheDocument();
   expect(document.querySelector('.checkpoint-manual')).not.toHaveAttribute('open');
+  fireEvent.click(screen.getByText('查看更早的记录'));
   await click('显示更早的记录');
   expect(within(timeline).getByText('早期手动记录')).toBeVisible();
   expect(within(timeline).getByText('手动确认')).toBeVisible();
-  await click('每日回顾');
+  await act(async () => { fireEvent.click(screen.getByRole('link', { name: '每日回顾' })); });
   const reviewsBefore = routes.filter(path => path === '/api/v1/focus-review').length;
   const progressBefore = routes.filter(path => path === '/api/v1/project-progress').length;
   records = [analyzed, ...records];
@@ -131,12 +135,11 @@ test('a direct record link restores the running indicator, reloads the timeline 
   await act(async () => { fireEvent(window, new Event('focus')); });
   expect(routes.filter(path => path === '/api/v1/focus-review').length).toBeGreaterThan(reviewsBefore);
   expect(routes.filter(path => path === '/api/v1/project-progress').length).toBeGreaterThan(progressBefore);
-  await click('屏幕记录');
-  expect(window.location.hash).toBe('#record');
+  await act(async () => { fireEvent.click(screen.getByRole('link', { name: '工作台' })); });
   expect(within(timeline).getByRole('heading', { name: '研究笔记' })).toBeVisible();
   expect(within(timeline).getByText('整理第二章的问题。')).toBeVisible();
-  await click('今天任务');
+
   status = { ...status, state: 'idle' };
   await act(async () => { fireEvent(window, new Event('focus')); });
-  expect(tab).not.toHaveAccessibleDescription('记录中');
+  expect(screen.queryByText('屏幕记录中')).not.toBeInTheDocument();
 });

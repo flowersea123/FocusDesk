@@ -68,3 +68,69 @@ test('bookmark movements track the latest section and only explicit reader confi
   assert.equal(separate.percent,20);
   assert.equal(projectStatus(task,plan,[{...intro,readingDocument:undefined},{...method,readingDocument:undefined}]).readingBookmark.previous,undefined);
 });
+
+const pageRow = (at, section, page, document = 'Example Paper') => ({
+  ...row([], '2026-11-16T03:' + at + ':00.000Z'), id:'page-'+at, source:'automatic',
+  readingDocument:document, ...(section ? {readingSection:section} : {}), ...(page ? {readingPosition:page} : {}),
+});
+
+test('the latest visible page can move backwards, and document position is separate from task completion', () => {
+  const open = pageRow('02','Method',{page:6,total:12});
+  const laterTitle = {...pageRow('05','Discussion',{page:12,total:12}),summary:'Window title only',detailSource:'window-title'};
+  const unbound = {...pageRow('06','Results',{page:10,total:12}),taskId:'different'};
+  const observations = [unbound, laterTitle, open, pageRow('01','Method',{page:8,total:12})];
+  const noPlan = projectStatus(task,undefined,observations);
+  assert.deepEqual(noPlan.readingPosition,{page:6,total:12,document:'Example Paper',section:'Method'});
+  assert.equal(noPlan.percent,null);
+  assert.deepEqual(noPlan.completed,[]);
+  assert.deepEqual(noPlan.latestObservation,{summary:open.summary,capturedAt:open.capturedAt,source:'automatic'});
+  const withPlan = projectStatus(task,plan,[...observations, row(['Abstract','Introduction'])]);
+  assert.equal(withPlan.percent,40);
+  const text = buildProjectDisplay(withPlan,'both').commands.filter(c=>c[0]===1).map(c=>c[5]);
+  for (const label of ['READING POSITION','Page 6/12','50%','Section: Method','TASK COMPLETION','40%','2 / 5 parts','Abstract','Introduction']) {
+    assert.ok(text.includes(label),label);
+  }
+  const atEnd = projectStatus(task,plan,[pageRow('01',undefined,{page:12,total:12})]);
+  assert.equal(atEnd.percent,0);
+  assert.deepEqual(atEnd.completed,[]);
+});
+
+test('only the same document and same normalized section can retain the last known page', () => {
+  const numbered = pageRow('00','2. Methods',{page:6,total:12});
+  const position = (...rows) => projectStatus(task,undefined,[numbered,...rows]);
+  const same = position(pageRow('01','方法',undefined,' EXAMPLE  PAPER '));
+  assert.equal(same.readingPosition.page,6);
+  assert.equal(same.readingPosition.section,'方法');
+  for (const latest of [pageRow('01','Results'),pageRow('01','Method',undefined,'Another paper'),
+    {...pageRow('01','Method'),readingDocument:undefined}]) {
+    const result = position(latest);
+    assert.equal(result.readingPosition,undefined);
+    assert.equal(result.readingBookmark.current.section,latest.readingSection);
+  }
+  const onlyPage = position(pageRow('01',undefined,{page:7,total:12}));
+  assert.deepEqual(onlyPage.readingPosition,{page:7,total:12,document:'Example Paper'});
+  assert.equal(onlyPage.readingBookmark,undefined);
+  const otherDoc = position(pageRow('01',undefined,{page:6,total:12},'Another paper'));
+  assert.equal(otherDoc.readingBookmark,undefined);
+  assert.equal(otherDoc.readingPosition.document,'Another paper');
+  assert.equal(position(pageRow('01',undefined,{page:6,total:12})).readingPosition.section,'2. Methods');
+  assert.equal(projectStatus(task,undefined,[pageRow('00',undefined,{page:2,total:12}),pageRow('01','Method')]).readingPosition,undefined);
+  for (const invalid of [{page:0,total:12},{page:4,total:3},{page:1.5,total:2},{page:10,total:100001}]) {
+    assert.equal(projectStatus(task,undefined,[pageRow('00','Introduction',invalid)]).readingPosition,undefined);
+  }
+});
+
+test('section-only reading is visible on the device, while observation summaries alone leave ordinary projects unchanged', () => {
+  const labels = project => buildProjectDisplay(project,'example').commands.filter(c=>c[0]===1).map(c=>c[5]);
+  const chinese = projectStatus(task,plan,[pageRow('00','2. 方法')]);
+  assert.ok(labels(chinese).includes('Section: 2. Method'));
+  assert.equal(labels(chinese).some(label=>label.startsWith('Page ')),false);
+  const aliases = projectStatus(task,{taskId:task.id,sections:['研究设计 | Study design']},[pageRow('01','研究设计')]);
+  assert.ok(labels(aliases).includes('Section: Study design'));
+  const ordinary = projectStatus(task,undefined,[row([])]);
+  assert.ok(ordinary.latestObservation);
+  assert.equal(ordinary.readingPosition,undefined);
+  assert.equal(labels(ordinary).includes('READING POSITION'),false);
+  const onlyTitle = projectStatus(task,undefined,[{...row([]),detailSource:'window-title'}]);
+  assert.equal(onlyTitle.latestObservation,undefined);
+});
