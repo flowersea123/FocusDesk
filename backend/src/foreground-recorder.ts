@@ -24,6 +24,7 @@ export interface RecorderOptions {
   save(record: ScreenCheckpoint, signal: AbortSignal): Promise<void>;
   recordAppSpan?(appName: string, from: number, to: number): Promise<void>;
   flushAppSpans?(): Promise<void>;
+  monitorAi?(signal: AbortSignal): Promise<void>;
   now?: () => number;
   pollMs?: number;
   samePageMs?: number;
@@ -37,7 +38,7 @@ function messageOf(error: unknown) {
   return error instanceof Error ? error.message : '前台页面记录暂时不可用，请重新开始。';
 }
 
-export function createForegroundRecorder({ platform, support, open, analyze, save, recordAppSpan, flushAppSpans, now = Date.now, pollMs = 4_000, samePageMs = 45_000 }: RecorderOptions) {
+export function createForegroundRecorder({ platform, support, open, analyze, save, recordAppSpan, flushAppSpans, monitorAi, now = Date.now, pollMs = 4_000, samePageMs = 45_000 }: RecorderOptions) {
   const status: RecorderStatus = { platform, state: 'idle', supported: true, message: '',
     savedCount: 0, lastSavedAt: null, sessionStartedAt: null, targetTaskId: null, observedTaskId: null, observedAt: null };
   let current: AbortController | undefined;
@@ -70,12 +71,13 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
     return { ...status };
   }
 
-  async function run(controller: AbortController) {
+  async function run(controller: AbortController, mode: 'screen' | 'ai') {
     const { signal } = controller;
     let device: CaptureSession | undefined;
     let failure = '';
     let previousApp: { name: string; at: number } | undefined;
     let draining: Promise<void> | undefined;
+    let monitoring: Promise<void> | undefined;
     // Keep at most three pending samples while the local model reads an earlier page.
     const queue: Sample[] = [];
     let lastSample: { page: string; digest: string; at: number; generation: number } | undefined;
@@ -125,6 +127,12 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
     }
 
     try {
+      if (mode === 'ai') {
+        if (!monitorAi) throw new Error('AI 活动记录暂时不可用。');
+        Object.assign(status, { state: 'recording', supported: true, message: '', sessionStartedAt: new Date(now()).toISOString() });
+        await monitorAi(signal);
+        return;
+      }
       const possible = await getSupport();
       signal.throwIfAborted();
       if (!possible.supported) {
@@ -134,6 +142,11 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
       device = await open({ signal, onStop: reason => stop(reason || '已从桌面停止记录。') });
       signal.throwIfAborted();
       Object.assign(status, { state: 'recording', supported: true, message: '', sessionStartedAt: new Date(now()).toISOString() });
+      if (monitorAi) {
+        monitoring = Promise.resolve().then(() => monitorAi(signal)).catch(() => {
+          if (!signal.aborted) status.message = 'AI 活动记录暂时不可用。';
+        });
+      }
       while (!signal.aborted) {
         const generation = targetGeneration;
         const targetTaskId = status.targetTaskId ?? null;
@@ -178,27 +191,29 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
       controller.abort();
       queue.length = 0;
       try { await device?.close(); } catch (error) { failure ||= messageOf(error); }
-      await draining;
+      await Promise.all([draining, monitoring]);
       try { if (device) await flushAppSpans?.(); } catch (error) { failure ||= messageOf(error); }
       if (failure) Object.assign(status, { state: 'error', message: failure });
       else if (status.state !== 'unavailable') status.state = 'idle';
       status.targetTaskId = null;
+      delete status.mode;
       current = undefined;
     }
   }
 
-  function start(targetTaskId: string | null = null) {
+  function start(targetTaskId: string | null = null, mode: 'screen' | 'ai' = 'screen') {
     if (!current) {
       current = new AbortController();
-      Object.assign(status, { state: 'starting', message: platform === 'darwin' ? '首次使用时，请允许 macOS 的屏幕录制请求。' : '',
+      Object.assign(status, { state: 'starting', mode, message: mode === 'screen' && platform === 'darwin' ? '首次使用时，请允许 macOS 的屏幕录制请求。' : '',
         targetTaskId, observedTaskId: null, observedAt: null, savedCount: 0, sessionStartedAt: null, lastSavedAt: null });
-      finished = run(current);
+      finished = run(current, mode);
     }
     return { ...status };
   }
 
   function target(taskId: string | null) {
     if (status.state !== 'recording' && status.state !== 'starting') throw new WriteRequestError(409, 'NO_SESSION', '请先开始记录。');
+    if (status.mode === 'ai') throw new WriteRequestError(409, 'NO_CAPTURE', '仅记录 AI 状态期间无法选择截图识别的目标任务。');
     if (status.targetTaskId !== taskId) {
       status.targetTaskId = taskId;
       status.observedTaskId = null;

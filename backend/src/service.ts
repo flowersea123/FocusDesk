@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto';
 import { createFocusReview } from './focus-review.ts';
+import { createAiActivitySources } from './ai-activity-sources.ts';
+import { monitorAiActivity } from './ai-activity.ts';
+import type { AiActivitySource } from './ai-activity-types.ts';
 import { createReviewHttp } from './focus-review-http.ts';
 import { createProjectProgress } from './project-progress.ts';
 import { createServer, type ServerResponse } from 'node:http';
@@ -33,7 +36,7 @@ const mime: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png',
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon',
-  '.woff': 'font/woff', '.woff2': 'font/woff2',
+  '.zip': 'application/zip', '.woff': 'font/woff', '.woff2': 'font/woff2',
 };
 
 function send(response: ServerResponse, status: number, body: string | Buffer, type: string, head: boolean) {
@@ -51,15 +54,17 @@ function within(root: string, target: string): boolean {
 }
 
 type RecorderDriver = Pick<RecorderOptions, 'support' | 'open' | 'pollMs' | 'samePageMs'>;
-export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, now, loader: sharedLoader, recorderDriver }: {
+export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, now, loader: sharedLoader, recorderDriver, aiSourceFactory, aiPollMs }: {
   dataPath: string; distPath: string; writeTimeoutMs?: number; now?: () => number;
   loader?: ReturnType<typeof createOverviewLoader>; recorderDriver?: RecorderDriver;
+  aiSourceFactory?: (signal: AbortSignal) => AiActivitySource; aiPollMs?: number;
 }) {
   const loader = sharedLoader ?? createOverviewLoader(dataPath, { now });
   const root = path.resolve(distPath);
   const checkpoints = createCheckpointStore(dataPath);
   const checkpointHttp = createCheckpointHttp(checkpoints, () => loader.load());
   const reviews = createFocusReview(dataPath, { now });
+  const aiSources = createAiActivitySources({ now });
   const reviewHttp = createReviewHttp(reviews, checkpoints, () => loader.load());
   let reviewUnavailable = false;
   async function observe(overview: DailyOverview, cause: 'start' | 'stop' | 'snapshot' = 'snapshot') {
@@ -92,6 +97,7 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
     support: async () => (await driver()).foregroundSupport(),
     open: async options => (await driver()).openForegroundCapture(options),
     ...recorderDriver,
+    monitorAi: signal => monitorAiActivity(aiSourceFactory ? aiSourceFactory(signal) : aiSources.open(signal), reviews.aiActivity, signal, now, aiPollMs),
     now, recordAppSpan: reviews.recordAppSpan, flushAppSpans: reviews.flushAppSpans,
     analyze: screenObservation.foreground,
     save: async (record, signal) => {
@@ -122,6 +128,7 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
         json(response, 403, 'FORBIDDEN_PATH', 'Path is not available.', head);
         return;
       }
+      if (pathname === '/api/v1/ai-browser') { await aiSources.handle(request, response); return; }
       if (pathname === '/api/v1/calendar') {
         try {
           checkPrivateRequest(request);

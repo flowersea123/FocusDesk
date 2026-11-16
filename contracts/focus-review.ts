@@ -36,6 +36,15 @@ export interface AppSession {
   seconds: number;
 }
 
+export interface AiSession {
+  runId: string;
+  appName: string;
+  title: string;
+  from: string;
+  to: string;
+  state: 'running' | 'finished' | 'interrupted';
+}
+
 export interface FocusReview {
   date: string;
   today: string;
@@ -45,6 +54,8 @@ export interface FocusReview {
   totalSeconds: number;
   sessions: ReviewSegment[];
   appSessions?: AppSession[];
+  aiSessions?: AiSession[];
+  aiUnavailable?: boolean;
   observations: ReviewObservation[];
   summary: string;
   suggestion: { action: string; evidence: string } | null;

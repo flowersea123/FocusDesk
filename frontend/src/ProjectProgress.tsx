@@ -32,7 +32,7 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
   const requests=useRef(0);
   const tasks = overview?.tasks ?? [];
   const target = tasks.find(task => task.id === recorder.status?.targetTaskId);
-  const active = recorder.status?.state === 'recording' && !recorder.readError;
+  const active = recorder.status?.state === 'recording' && recorder.status.mode !== 'ai' && !recorder.readError;
   const current = selected?.id ?? '';
   const canTarget = active && selected?.status === 'todo' && target?.id !== current &&
     (manual || !recorder.status?.observedAt || recorder.status.observedTaskId !== current);

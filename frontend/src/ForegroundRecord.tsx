@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RecorderStatus } from '../../contracts/foreground-recorder';
 import './foreground-record.css';
 
-type Action = 'start' | 'stop' | 'target';
+type Action = 'start' | 'start-ai' | 'stop' | 'target';
 const states = ['idle', 'starting', 'recording', 'stopping', 'error', 'unavailable'];
 const validDate = (value: unknown) => value === null || (typeof value === 'string' && Number.isFinite(Date.parse(value)));
 
@@ -126,11 +126,11 @@ export function RecorderButton({ recorder, taskId }: { recorder: RecorderControl
   const state = status?.state;
   const retryRead = !!readError && state !== 'recording' && state !== 'starting';
   const stop = state === 'recording' || state === 'starting' || state === 'stopping';
-  const disabled = !!pending || (!retryRead && (state === 'stopping' || !status?.supported || state === 'unavailable'));
+  const disabled = !!pending || (!retryRead && (state === 'stopping' || (!stop && (!status?.supported || state === 'unavailable'))));
   const button = pending === 'start' ? '正在启动…' : pending === 'stop' ? '正在停止…' :
     retryRead ? '重新读取状态' : state === 'stopping' ? '正在停止…' : stop ? '停止记录' : '开始记录';
   return <button type="button" className={'recorder-toggle' + (stop ? ' is-active' : '')} disabled={disabled}
-        title={stop ? '停止本次前台画面记录' : '记录当前前台画面，自动更新对应任务的进度'}
+        title={stop ? '停止前台画面和 AI 活动记录' : '记录前台画面和已接入的 AI 轮次，自动更新任务进度'}
         onClick={() => retryRead ? void recorder.refresh() : void recorder.change(stop ? 'stop' : 'start', stop ? undefined : taskId)}>
         <span className="recorder-button-mark" aria-hidden="true" />{button}
     </button>;
@@ -150,7 +150,7 @@ export function RecorderStatusLine({ recorder, timezone }: { recorder: RecorderC
   const { status, readError } = recorder;
   const state = status?.state;
   const stop = state === 'recording' || state === 'starting' || state === 'stopping';
-  const label = readError ? '状态待确认' : state ? stateLabel[state] : '正在读取状态…';
+  const label = readError ? '状态待确认' : state === 'recording' && status?.mode === 'ai' ? '仅记录 AI 状态' : state ? stateLabel[state] : '正在读取状态…';
   const time = (value: string) => new Date(value).toLocaleTimeString('zh-CN', {
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: timezone,
   });
@@ -160,7 +160,7 @@ export function RecorderStatusLine({ recorder, timezone }: { recorder: RecorderC
         <i aria-hidden="true" />{label}
       </span>
       {status?.sessionStartedAt && stop && <span>开始于 <time dateTime={status.sessionStartedAt}>{time(status.sessionStartedAt)}</time></span>}
-      {status && (stop || status.savedCount > 0) && <span>本次已记 {status.savedCount} 条</span>}
+      {status && status.mode !== 'ai' && (stop || status.savedCount > 0) && <span>本次已记 {status.savedCount} 条</span>}
       {status?.lastSavedAt && <span>上次保存 <time dateTime={status.lastSavedAt}>{time(status.lastSavedAt)}</time></span>}
     </div>;
 }

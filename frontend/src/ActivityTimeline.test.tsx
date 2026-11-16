@@ -62,7 +62,7 @@ describe('ActivityTimeline', () => {
     const points = Array.from({length:36}, (_,i) => ({id:'p'+i,at:at('10'),summary:'Item ' + (i+1)}));
     const apps = Array.from({length:7}, (_,i) => ({id:'app'+i,at:at('10'),appName:'App '+i,summary:'Sample '+i}));
     render(<ActivityTimeline review={{...empty,observations:[...points,...apps]}}/>);
-    expect(screen.getAllByRole('group')).toHaveLength(5);
+    expect(screen.getAllByRole('group', {name:/时间轨道/})).toHaveLength(5);
     const rowButton = screen.getByRole('button',{name:'查看 屏幕观察 的全部记录'});
     expect(rowButton).toHaveTextContent('36 条观察'); expect(rowButton).not.toHaveTextContent(/小时|秒|前台/);
     await user.click(screen.getByRole('button',{name:'屏幕观察 · 09:10 · 36 条截图观察'}));
@@ -70,7 +70,7 @@ describe('ActivityTimeline', () => {
     await user.click(screen.getByRole('button',{name:'显示更多明细'}));
     expect(screen.getAllByRole('listitem')).toHaveLength(36);
     await user.click(screen.getByRole('button',{name:'显示另外 3 行'}));
-    expect(screen.getAllByRole('group')).toHaveLength(8);
+    expect(screen.getAllByRole('group', {name:/时间轨道/})).toHaveLength(8);
   });
 
   it('adds fractional frontmost intervals before formatting time, while ignoring gaps between samples', async () => {
@@ -126,4 +126,20 @@ describe('ActivityTimeline', () => {
     expect(screen.getByRole('alert')).toBeVisible();
     expect(screen.getByRole('button',{name:/Read paper · 计时 09:00–09:25/})).toBeVisible();
   });
+});
+
+it('shows simultaneous AI runs independently of the person and preserves the end state of each run', async () => {
+  const user = userEvent.setup();
+  render(<ActivityTimeline review={{...empty, sessions:[paper], appSessions:[{appName:'Editor',from:at('05'),to:at('20'),seconds:900}],
+    aiSessions:[{appName:'Codex',title:'轮次 A',runId:'a',from:at('06'),to:at('16'),state:'finished'},
+      {appName:'ChatGPT',title:'网页生成 B',runId:'b',from:at('06'),to:at('16'),state:'running'}]}}/>);
+  const first = within(screen.getByRole('group',{name:'Codex · 轮次 A 时间轨道'})).getByRole('button');
+  const second = within(screen.getByRole('group',{name:'ChatGPT · 网页生成 B 时间轨道'})).getByRole('button');
+  expect(first.style.left).toBe(second.style.left);
+  expect(first.style.width).toBe(second.style.width);
+  expect(first).toHaveAccessibleName(/AI 活动.*10 分/);
+  expect(screen.getByRole('button',{name:'查看 Editor 的全部记录'})).toHaveTextContent('前台 15 分');
+  await user.click(first);
+  const details = screen.getByRole('heading',{name:'Codex · 轮次 A · 1 条记录'}).parentElement!.parentElement!;
+  expect(within(details).getByRole('list')).toHaveTextContent('已结束');
 });

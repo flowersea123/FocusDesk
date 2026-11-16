@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { open, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { FOCUS_DURATION_MS, MAX_OVERVIEW_BYTES, type DailyOverview, type FocusSession } from '../../contracts/daily-overview.ts';
+import { createAiActivityJournal } from './ai-activity.ts';
 import { checkpointSourceLabel } from '../../contracts/screen-checkpoint.ts';
 import type { AppSession, ReviewObservation, FocusReview, ReviewExperiment, ReviewSegment } from '../../contracts/focus-review.ts';
 
@@ -101,7 +102,7 @@ async function load(file: string, activated: number): Promise<Journal> {
   return data;
 }
 
-async function store(file: string, data: Journal) {
+async function store(file: string, data: unknown) {
   // One Hub owns this journal. A crash may leave one uncommitted staging file,
   // which is never used as a published record and is replaced on the next write.
   const temp = path.join(path.dirname(file), '.' + path.basename(file) + '.tmp');
@@ -164,6 +165,10 @@ function summarize(sessions: ReviewSegment[], total: number, observations: Revie
 /** The Hub's existing data lock gives this sidecar one writer. Call observe only with a successful, authoritative Hub snapshot. */
 export function createFocusReview(dataPath: string, { now = Date.now }: { now?: () => number } = {}) {
   const file = path.resolve(dataPath) + '.focus-review.json';
+  const aiFile = path.resolve(dataPath) + '.ai-activity.json';
+  const aiActivity = createAiActivityJournal({
+    read: () => readSmallFile(aiFile, MAX_BYTES), write: value => store(aiFile, value),
+  });
   const activated = now();
   let journal: Journal | undefined;
   let reconciled = false;
@@ -202,6 +207,7 @@ export function createFocusReview(dataPath: string, { now = Date.now }: { now?: 
   }
 
   return {
+    aiActivity,
     recordAppSpan(appName: string, from: number, to: number) {
       return run(async data => {
         const spans = data.appSpans ?? [];
@@ -294,11 +300,14 @@ export function createFocusReview(dataPath: string, { now = Date.now }: { now?: 
           const to = Math.min(s.to, end, at);
           return to > from ? [{ appName: s.appName, from: iso(from), to: iso(to), seconds: (to - from) / 1000 }] : [];
         });
+        let ai: Pick<FocusReview, 'aiSessions' | 'aiUnavailable'>;
+        try { ai = { aiSessions: await aiActivity.read(begin, end, at) }; }
+        catch { ai = { aiUnavailable: true }; }
         const totalSeconds = Math.floor(elapsed / 1000);
         const keptExperiments = data.experiments.filter(e => e.date >= iso(at - RETENTION).slice(0, 10));
         return {
           date: selected, today, timezone: zone, trackingSince: iso(floor), partial: begin < floor,
-          totalSeconds, sessions, appSessions, observations: dailyObservations, ...summarize(sessions, totalSeconds, dailyObservations, appSessions),
+          totalSeconds, sessions, appSessions, ...ai, observations: dailyObservations, ...summarize(sessions, totalSeconds, dailyObservations, appSessions),
           experiment: keptExperiments.find(e => e.date === selected) ?? null,
           previousExperimentDate: keptExperiments.filter(e => e.date < selected && !e.outcome)
             .map(e => e.date).sort().at(-1) ?? null,

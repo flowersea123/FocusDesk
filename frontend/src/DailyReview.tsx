@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { checkpointSourceLabel } from '../../contracts/screen-checkpoint';
 import type { FocusReview } from '../../contracts/focus-review';
+import ActivityTimeline from './ActivityTimeline';
 import DailySynthesis, { synthesisKey } from './DailySynthesis';
 import { useFocusReview } from './data/use-focus-review';
 import './daily-review.css';
@@ -124,6 +125,7 @@ export default function DailyReview({ active = true, refreshKey }: { active?: bo
         <div><span>计时段数</span><strong>{current.sessions.length}</strong></div>
         <div><span>屏幕观察</span><strong>{current.observations.length}</strong></div>
       </div>
+      {(!!current.aiSessions?.length || current.aiUnavailable) && <ActivityTimeline review={current} historical/>}
       <DailySynthesis active={active} review={current} onSuggestion={onSuggestion}/>
       {current.partial && <p className="review-note">专注计时可追溯至 {new Intl.DateTimeFormat('zh-CN', {
         month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: current.timezone,

@@ -208,7 +208,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
             <DeskIcon name="screen" />模拟屏 <span className="desk-external" aria-hidden="true">↗</span></a>
           <a href="/connect"><DeskIcon name="connect" />连接设备</a>
         </nav>
-        <span className="desk-source" data-recording={recording}><i aria-hidden="true" />{recording ? '屏幕记录中' : mock ? '本地演示' : local ? '本机 Hub' : '只读 Hub'}</span>
+        <span className="desk-source" data-recording={recording}><i aria-hidden="true" />{recording ? (session?.mode === 'ai' ? 'AI 状态记录中' : '屏幕记录中') : mock ? '本地演示' : local ? '本机 Hub' : '只读 Hub'}</span>
       </div>
     </header>
 
@@ -235,7 +235,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
       </div>
       <div hidden={view !== 'today'}>
       {source.localWorkspace && overview && <div className="today-insights">
-        <ActivityTimeline review={activity.review} tasks={tasks} revealApp={revealApp?.date === activity.review?.date ? revealApp : null} error={activity.error} onRetry={activity.refresh}/>
+        <ActivityTimeline recorder={recorder} review={activity.review} tasks={tasks} revealApp={revealApp?.date === activity.review?.date ? revealApp : null} error={activity.error} onRetry={activity.refresh}/>
         <div className="today-brief">
           <NextTask overview={overview} next={next} saving={saving} onStart={source.updateFocus ? startRecommended : undefined} onInspect={inspectTask} onApp={inspectApp} onHistory={inspectHistory}/>
           {activity.review && (activity.review.observations.length > 0 || activity.review.sessions.length > 0 || !!activity.review.appSessions?.length) &&
@@ -262,7 +262,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
             {source.localWorkspace && showRecorderDetails && <div className="task-recorder-state">
               <RecorderStatusLine recorder={recorder} timezone={overview?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone} />
               <RecorderFeedback recorder={recorder} />
-              {(session?.observedAt || recording) && <p className="project-recognition" aria-live="polite">{session?.observedAt ?
+              {(session?.observedAt || (recording && session?.mode !== 'ai')) && <p className="project-recognition" aria-live="polite">{session?.observedAt ?
                 observed ? <>最近识别的任务　<strong>{observed.title}</strong></> : <strong>最近画面未匹配任务</strong> :
                 '等待识别当前画面…'}</p>}
             </div>}

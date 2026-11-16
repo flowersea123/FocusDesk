@@ -101,7 +101,7 @@ export function CheckpointWorkspace({ overview, recorder, active, refreshKey, on
   return <details className="checkpoint-workspace" id="record">
     <summary className="checkpoint-disclosure"><strong>记录时间线</strong>
       <span>{recent ? [recent.appName, recent.pageTitle || recent.summary, !recent.taskId && '未关联任务'].filter(Boolean).join(' · ') :
-        readError ? '时间线读取失败' : recorder.status?.state === 'recording' ? '正在等待记录' : '查看与补记'}</span>
+        readError ? '时间线读取失败' : recorder.status?.state === 'recording' && recorder.status.mode !== 'ai' ? '正在等待记录' : '查看与补记'}</span>
     </summary>
     <section className="checkpoint-history" aria-labelledby="timeline-title">
       <h3 id="timeline-title" className="sr-only">记录时间线</h3>
@@ -109,7 +109,7 @@ export function CheckpointWorkspace({ overview, recorder, active, refreshKey, on
       {actionError && <p className="checkpoint-error" role="alert">{actionError}</p>}
       {!history && !readError && <p role="status">正在读取记录…</p>}
       {history?.records.length === 0 && !readError && <p className="checkpoint-empty">
-        {recorder.status?.state === 'recording' ? '正在等待第一条记录。' : '还没有记录。开始后，使用过的应用和页面会出现在这里。'}
+        {recorder.status?.state === 'recording' && recorder.status.mode !== 'ai' ? '正在等待第一条记录。' : '还没有记录。开始后，使用过的应用和页面会出现在这里。'}
       </p>}
       {!!history?.records.length && <ol className="checkpoint-timeline">{renderRow(history.records[0])}</ol>}
       {history && (history.records.length > 1 || history.hasMore) && <details className="checkpoint-older">

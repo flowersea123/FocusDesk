@@ -18,14 +18,15 @@ export function createRecorderHttp(recorder: ReturnType<typeof createForegroundR
       }
       const input = await privateInput(request);
       const { action, taskId } = input;
-      if (Object.keys(input).some(key => key !== 'action' && key !== 'taskId') || !['start', 'stop', 'target'].includes(action) ||
-          (action === 'stop' && taskId !== undefined) || (action === 'target' && taskId === undefined) ||
+      if (Object.keys(input).some(key => key !== 'action' && key !== 'taskId') || !['start', 'start-ai', 'stop', 'target'].includes(action) ||
+          ((action === 'stop' || action === 'start-ai') && taskId !== undefined) || (action === 'target' && taskId === undefined) ||
           (taskId != null && (typeof taskId !== 'string' || !/^[\x21-\x7e]{1,64}$/.test(taskId)))) {
         privateJson(response, 400, { error: '请使用有效的录制操作和任务编号。' });
         return;
       }
       if (taskId && !await pendingTask(taskId)) throw new WriteRequestError(409, 'TASK_CHANGED', '此任务已结束或移除，请选择其他待办。');
-      const status = action === 'target' ? recorder.target(taskId) : action === 'start' ? recorder.start(taskId) : recorder.stop();
+      const status = action === 'target' ? recorder.target(taskId) : action === 'stop' ? recorder.stop() :
+        recorder.start(taskId, action === 'start-ai' ? 'ai' : 'screen');
       privateJson(response, 200, status);
     } catch (error) {
       response.setHeader('Connection', 'close');

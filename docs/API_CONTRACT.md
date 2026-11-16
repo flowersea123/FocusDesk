@@ -258,3 +258,9 @@ Display schema display-1, layout goal-1, 4096-byte transport, 64 commands and dr
 设备仍读取 `/api/v1/display-snapshot`。Hub 根据任务时区和实际时钟，将计划日已到的事项加入未完成清单；状态从 scheduled 变为 published。达到现有任务条数或大小上限时状态为 waiting。今日任务中的勾选和删除也会反映为 done 或 removed。运行中的专注优先展示，固定项目保留原进度，并在底栏显示其他已发布且尚未完成的第一项日历任务和其余数量。网页预览和设备共用同一布局。
 
 今日清单执行「撤销删除」时，任务更新请求可携带可选的 `restoreTaskId`，标明用户明确要放回原清单的事项。普通后台重试沿用原请求。
+
+### 并行 AI 活动
+
+本机每日回顾可含 `aiSessions`，每段含 `runId,appName,title,from,to,state`。同一时刻可以有多个轮次；停止、失联和重启后的断档可使同一轮次分段。状态有 running、finished 和 interrupted，日期按任务文件时区裁剪。专注累计和前台时长保持各自的计算方法。独立的 AI 日志不可读时返回 `aiUnavailable:true`，其余回顾仍可打开。
+
+`POST /api/v1/recorder` 接受 `{"action":"start-ai"}`，返回状态可带 `mode:"ai"`。普通 start 同时采集前台和 AI 状态，mode 为 screen。stop 结束当前模式。私有的 `POST /api/v1/ai-browser` 只接受本机捆绑扩展的来源。扩展先获取当前录制会话，再传随机运行 ID 和 running/finished/interrupted；服务端记录本机收到信号的时间。传输不含 URL、对话标题、正文或像素。扩展源在 `extensions/chatgpt-activity`，用 `python3 extensions/package-chatgpt.py` 更新随页面提供的离线下载包。

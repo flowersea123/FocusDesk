@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import type { RecorderControls } from './ForegroundRecord';
 import type { Task } from '../../contracts/daily-overview';
 import type { FocusReview } from '../../contracts/focus-review';
 import { checkpointSourceLabel } from '../../contracts/screen-checkpoint';
@@ -6,14 +7,18 @@ import './activity-timeline.css';
 
 interface Props {
   review: FocusReview | null;
+  historical?: boolean;
+  recorder?: RecorderControls;
   tasks?: readonly Pick<Task, 'id' | 'title'>[];
   revealApp?: { name: string; request: number } | null;
   error?: string;
   onRetry?: () => void;
 }
 
-type Entry = { id: string; kind: 'focus' | 'app' | 'observation'; start: number; end: number; seconds: number; detail: string; source?: string; taskId?: string | null };
-type Track = { id: string; name: string; kind: 'focus' | 'app'; entries: Entry[]; seconds: number };
+type Entry = { id: string; kind: 'focus' | 'app' | 'ai' | 'observation'; start: number; end: number; seconds: number; detail: string; source?: string; taskId?: string | null };
+type Track = { id: string; name: string; kind: 'focus' | 'app' | 'ai'; entries: Entry[]; seconds: number };
+const aiLabels = {running:'进行中', finished:'已结束', interrupted:'观测中断'};
+const measureLabels = {focus:'计时', app:'前台', ai:'AI 活动'} as const;
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const shownTracks = 5;
@@ -64,6 +69,11 @@ function buildTracks(review: FocusReview, day: ReturnType<typeof dayBounds>) {
     const name = segment.appName.trim();
     add('app:' + name, name || '未识别应用', 'app', {id:'a' + segment.from + ':' + i, kind:'app',
       start:Date.parse(segment.from), end:Date.parse(segment.to), seconds:segment.seconds, detail:'前台时段'});
+  }
+  for (const run of review.aiSessions ?? []) {
+    const from = Date.parse(run.from), to = Date.parse(run.to);
+    add('ai:' + run.runId, run.appName + ' · ' + run.title, 'ai', {id:'ai:' + run.runId + ':' + run.from, kind:'ai',
+      start:from, end:to, seconds:(to - from) / 1000, detail:aiLabels[run.state]});
   }
   for (const observation of review.observations) {
     const name = observation.appName?.trim();
@@ -128,7 +138,7 @@ function Chart({review, tasks, revealApp, handled}: {
     if (index < 0) return;
     handled.current = revealApp;
     opener.current = document.activeElement instanceof HTMLButtonElement ? document.activeElement : null;
-    if (index >= shownTracks) setAll(true);
+    setAll(true);
     setLimit(12);
     setSelection({rowId:rows[index].id});
   }, [revealApp, rows, handled]);
@@ -157,12 +167,20 @@ function Chart({review, tasks, revealApp, handled}: {
     earliest = Math.min(earliest, entry.start);
     latest = Math.max(latest, entry.end);
   }
-  const start = day.begin + Math.floor((earliest - day.begin) / HOUR) * HOUR;
-  const end = Math.min(day.end, Math.max(start + HOUR, day.begin + Math.ceil((latest - day.begin) / HOUR) * HOUR));
+  const ai = rows.filter(row => row.kind === 'ai');
+  const range = latest - earliest;
+  const unit = !ai.length || range > 15 * 60_000 ? HOUR : range > 5 * 60_000 ? 5 * 60_000 : range > 90_000 ? 60_000 : 15_000;
+  const minimum = unit === 15_000 ? 60_000 : unit;
+  const start = Math.min(day.end - minimum, day.begin + Math.floor((earliest - day.begin) / unit) * unit);
+  const end = Math.min(day.end, Math.max(start + minimum, day.begin + Math.ceil((latest - day.begin) / unit) * unit));
   const span = end - start;
   const percent = (at: number) => 100 * (at - start) / span;
-  const time = (at: number, seconds = false) => at === day.end ? (seconds ? '24:00:00' : '24:00') : (seconds ? exact : clock).format(at);
-  const visibleRows = all ? rows : rows.slice(0, shownTracks);
+  const time = (at: number, seconds = span <= 5 * 60_000) => at === day.end ? (seconds ? '24:00:00' : '24:00') : (seconds ? exact : clock).format(at);
+  const newest = [...ai].sort((a,b) => b.entries.at(-1)!.end - a.entries.at(-1)!.end);
+  const lead = [rows.find(row => row.kind === 'focus'), rows.find(row => row.kind === 'app'),
+    newest.find(row => row.entries.at(-1)?.detail === aiLabels.running) ?? newest[0]].filter((row): row is Track => !!row);
+  const ordered = ai.length ? [...new Set([...lead, ...rows])] : rows;
+  const visibleRows = all ? ordered : ordered.slice(0, shownTracks);
   const current = visibleRows.find(row => row.id === selection?.rowId);
   const selectedIds = selection?.ids && new Set(selection.ids);
   const details = current?.entries.filter(entry => !selectedIds || selectedIds.has(entry.id)) ?? [];
@@ -178,6 +196,7 @@ function Chart({review, tasks, revealApp, handled}: {
   return <>
     <div className="activity-legend">
       <span><i className="activity-key-focus" />任务计时</span><span><i className="activity-key-app" />应用前台</span>
+      {ai.length > 0 && <span><i className="activity-key-ai" />AI 并行活动</span>}
       <span><i className="activity-key-shot" />截图观察点</span>
       <span className="activity-latest-label"><i/>最近记录 <time dateTime={new Date(latest).toISOString()}>{time(latest)}</time></span>
     </div>
@@ -189,8 +208,8 @@ function Chart({review, tasks, revealApp, handled}: {
       {visibleRows.map(row => {
         const spanEntries = row.entries.filter(e => e.kind !== 'observation');
         const points = row.entries.filter(e => e.kind === 'observation');
-        const measure = row.kind === 'focus' ? '计时' : '前台';
-        const color = row.kind === 'focus' ? '#7962a7' : palette.get(row.id);
+        const measure = measureLabels[row.kind];
+        const color = row.kind === 'ai' ? '#307c70' : row.kind === 'focus' ? '#7962a7' : palette.get(row.id);
         const trackStyle = {'--activity-color':color} as CSSProperties;
         return <div className="activity-row" key={row.id} style={trackStyle}>
           <button type="button" className="activity-name" aria-label={'查看 ' + row.name + ' 的全部记录'} aria-controls={detailsId}
@@ -198,6 +217,7 @@ function Chart({review, tasks, revealApp, handled}: {
             <strong title={row.name}>{row.name}</strong>
             <small className="activity-row-metrics">
               {spanEntries.length > 0 && <span>{measure} {formatActivityDuration(row.seconds)}</span>}
+              {row.kind === 'ai' && <span> · {row.entries.at(-1)?.detail}</span>}
               {spanEntries.length > 0 && points.length > 0 && <span className="activity-metric-divider"> · </span>}
               {points.length > 0 && <span>{points.length} 条观察</span>}
             </small>
@@ -238,7 +258,7 @@ function Chart({review, tasks, revealApp, handled}: {
           const task = entry.taskId && tasks?.find(t => t.id === entry.taskId);
           return <li key={entry.id}><time dateTime={new Date(entry.start).toISOString()}>{time(entry.start,true)}
             {entry.kind !== 'observation' && '–' + time(entry.end,true)}</time>
-            <div>{entry.kind !== 'observation' && <strong>{entry.kind === 'focus' ? '计时 ' : '前台 '}{formatActivityDuration(entry.seconds)} · </strong>}
+            <div>{entry.kind !== 'observation' && <strong>{measureLabels[entry.kind] + ' '}{formatActivityDuration(entry.seconds)} · </strong>}
               {entry.detail}{entry.kind === 'observation' && <small>{entry.source}{task ? ' · ' + task.title : ''}</small>}</div>
           </li>;
         })}</ol>
@@ -248,16 +268,28 @@ function Chart({review, tasks, revealApp, handled}: {
   </>;
 }
 
-export default function ActivityTimeline({review, tasks, revealApp, error, onRetry}: Props) {
+export default function ActivityTimeline({review, tasks, revealApp, error, onRetry, historical, recorder}: Props) {
   const heading = useId();
   const handled = useRef<Props['revealApp']>(null);
+  const state = recorder?.status?.state;
+  const recording = state === 'recording' || state === 'starting' || state === 'stopping';
+  const aiOnly = recording && recorder?.status?.mode === 'ai';
   return <section className="activity-timeline" aria-labelledby={heading}>
-    <header className="activity-header"><h2 id={heading}>今日活动时间轴</h2>
+    <header className="activity-header"><h2 id={heading}>{historical ? '当日活动时间轴' : '今日活动时间轴'}</h2>
       {review && <span><time dateTime={review.date}>{review.date}</time> · {review.timezone}</span>}
     </header>
     {error && <p role="alert" className="activity-error">活动记录读取失败。{error} {onRetry &&
       <button type="button" className="activity-more" onClick={onRetry}>重试</button>}</p>}
+    {review?.aiUnavailable && <p className="activity-error" role="status">AI 活动记录暂时无法读取。</p>}
     {review ? <Chart key={review.date + review.timezone} review={review} tasks={tasks} revealApp={revealApp} handled={handled}/> :
       !error && <p className="activity-empty" role="status">正在读取今日活动…</p>}
+    {recorder?.status && (!recording || aiOnly) && <button type="button" className="activity-more ai-only-button"
+      disabled={!!recorder.pending || !!recorder.readError || state === 'stopping'}
+      onClick={() => void recorder.change(aiOnly ? 'stop' : 'start-ai')}>{aiOnly ? '停止 AI 状态记录' : '仅记录 AI 状态'}</button>}
+    {!historical && <details className="activity-setup"><summary>如何记录并行的 AI 活动</summary>
+      <p>「开始记录」会记录前台画面和 AI 状态。「仅记录 AI 状态」只读取轮次和生成信号，整个过程不截图。每个轮次单独占一行，可与前台活动重叠。</p>
+      <p>ChatGPT 网页可通过 Chrome 或 Edge 扩展接入。<a href="/focusdesk-chatgpt.zip" download>下载扩展</a>，解压后在浏览器的扩展管理页打开开发者模式，选择「加载已解压的扩展程序」，再刷新 ChatGPT 标签页。Hub 使用自定义端口时，可在扩展选项中填写。</p>
+      <p>扩展只观察生成按钮。标签休眠、断连后，时段停在最后一次确认处。</p>
+    </details>}
   </section>;
 }

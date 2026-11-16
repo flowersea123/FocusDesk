@@ -82,3 +82,8 @@
   .activity-track { background-size: 50% 100%; }
   .activity-details { padding-inline: 10px; }
 }
+
+.activity-key-ai { background:#307c70; }
+.activity-setup { margin:10px 0 0; font-size:12px; color:var(--muted); }
+.activity-setup summary { cursor:pointer; }
+.activity-setup p { margin:6px 0 0; }
