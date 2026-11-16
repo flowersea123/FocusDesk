@@ -1,13 +1,15 @@
 import { open, readFile, rename, rm } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { CalendarSnapshot } from '../../contracts/calendar.ts';
 import type { DailyOverview } from '../../contracts/daily-overview.ts';
-import { validSections, projectStatus, type ProjectPlan, type ProgressConfig } from '../../contracts/project-progress.ts';
+import { validSections, projectStatus, type ProjectPlan, type ProgressConfig, type ProjectStatus } from '../../contracts/project-progress.ts';
 import { CheckpointError, createCheckpointStore } from './checkpoint-store.ts';
 import { privateJson, privateInput, checkPrivateRequest } from './checkpoint-http.ts';
 import { WriteRequestError } from './write-policy.ts';
 
-export function createProjectProgress(dataPath: string, checkpoints: ReturnType<typeof createCheckpointStore>, load: () => Promise<DailyOverview>) {
+export function createProjectProgress(dataPath: string, checkpoints: ReturnType<typeof createCheckpointStore>, load: () => Promise<DailyOverview>,
+  loadCalendar?: () => Promise<CalendarSnapshot>) {
   const filePath = dataPath + '.progress.json';
   let writes: Promise<unknown> = Promise.resolve();
   async function read(): Promise<ProgressConfig> {
@@ -41,12 +43,21 @@ export function createProjectProgress(dataPath: string, checkpoints: ReturnType<
       await rename(temp,filePath);
     } finally { await rm(temp,{force:true}).catch(()=>{}); }
   }
+  async function withCalendarReminder(project: ProjectStatus, overview: DailyOverview): Promise<ProjectStatus> {
+    if (!loadCalendar) return project;
+    const otherTasks = overview.tasks.filter(task => task.status === 'todo' && task.id !== project.taskId);
+    if (!otherTasks.length) return project;
+    const calendar = await loadCalendar();
+    const published = new Set(calendar.entries.filter(entry => entry.status === 'published').map(entry => entry.id));
+    const planned = otherTasks.filter(task => published.has(task.id));
+    return planned.length ? { ...project, calendarReminder: { title: planned[0].title, count: planned.length } } : project;
+  }
   return {
     async pinned(overview:DailyOverview) {
       const config = await read();
       const task = overview.tasks.find(t => t.id === config.pinned);
       if (!task) return null;
-      return projectStatus(task,config.plans.find(p=>p.taskId===task.id),(await checkpoints.read()).records);
+      return withCalendarReminder(projectStatus(task,config.plans.find(p=>p.taskId===task.id),(await checkpoints.read()).records), overview);
     },
     async handle(request:IncomingMessage,response:ServerResponse) {
       try {
@@ -62,6 +73,8 @@ export function createProjectProgress(dataPath: string, checkpoints: ReturnType<
         const config = await read();
         const { records } = await checkpoints.read();
         const statuses = overview.tasks.map(task => projectStatus(task,config.plans.find(p=>p.taskId===task.id),records));
+        const pinned = statuses.findIndex(status => status.taskId === config.pinned);
+        if (pinned >= 0) statuses[pinned] = await withCalendarReminder(statuses[pinned], overview);
         privateJson(response,200,{ config, statuses });
       } catch(error) {
         if (error instanceof CheckpointError || error instanceof WriteRequestError) privateJson(response,error.status,{error:error.message});

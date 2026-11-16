@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { analyzeMail } from './analyze.mjs';
+import { analyzeMail, beijingMinute } from './analyze.mjs';
 import { assessMail } from './assess.mjs';
-import { importTask } from './task-import.mjs';
+import { calendarDeadline, planChoices, planRevision, readCalendar, saveMailPlan, selectedPlan } from './mail-calendar.mjs';
 import * as graph from './outlook-delta.mjs';
 
 const hash = text => createHash('sha256').update(text).digest('hex');
@@ -32,9 +32,9 @@ async function loadState(file, since) {
   }
 }
 
-function publicRow(row) {
+function publicRow(row, entries, timezone) {
   const { id, receivedAt, subject, summary, status, reason } = row;
-  const actions = row.actions.map(({ title, dueAt, status, reason }) => ({ title, dueAt, status, reason }));
+  const actions = planChoices(row).map(({ sourceKey, ...choice }) => ({ ...choice, dueDate: calendarDeadline(choice, timezone), planRevision: planRevision(entries.get(choice.id)), entry: entries.get(choice.id) ?? null }));
   return { id, receivedAt, subject, summary, status, reason, actions };
 }
 
@@ -42,17 +42,20 @@ function publicRow(row) {
 export function createOutlookWorker({
   stateDir, getSession, hub = 'http://127.0.0.1:8787', endpoint, model, canvasOrigin, intervalMs = 60_000, now = Date.now,
   readPage = graph.readOutlookDeltaPage, readMail = graph.readOutlookDeltaMail,
-  analyze = analyzeMail, assess = assessMail, save = importTask,
+  analyze = analyzeMail, assess = assessMail, save = saveMailPlan, calendar = readCalendar,
 } = {}) {
   if (!stateDir || typeof getSession !== 'function' || !Number.isSafeInteger(intervalMs) || intervalMs < 1) throw new Error('Outlook 同步配置无效。');
   let running = false, timer, flight, generation = 0, stopped = false;
   let view = null, account = null, lastError = null, lastPollAt = null, nextSyncAt = null;
-  const status = () => {
+  let calendarView = null;
+  const status = (limit = 60) => {
+    const entries = new Map(calendarView?.entries.map(entry => [entry.id, entry]));
     const rows = view?.messages ?? [];
     const phase = lastError ? 'error' : !account ? 'disconnected' : view?.cursor?.phase === 'incremental' ? 'incremental' : 'baseline';
     return { running, syncing: Boolean(flight), connected: Boolean(account), phase, lastPollAt, lastSyncAt: view?.lastSyncAt ?? null,
       lastError, nextSyncAt, pendingCount: rows.filter(pending).length,
-      history: [...rows].sort((a,b) => (b.receivedAt ?? '').localeCompare(a.receivedAt ?? '')).slice(0,60).map(publicRow),
+      history: [...rows].sort((a,b) => (b.receivedAt ?? '').localeCompare(a.receivedAt ?? '')).slice(0, limit).map(row => publicRow(row, entries, calendarView?.timezone)),
+      historyCount: rows.length, today: calendarView?.today ?? beijingMinute(iso(now())).slice(0, 10),
       counts: { messages: rows.length, processed: rows.filter(r => r.summary !== null).length,
         review: rows.filter(r => r.status === 'review').length, added: (view ? Object.values(view.receipts) : []).filter(r => r.status === 'added').length } };
   };
@@ -66,7 +69,7 @@ export function createOutlookWorker({
     if (!active()) return;
     if (!session?.accountId || !session.accessToken) { view = null; account = null; return; }
     const identity = session.accountId;
-    if (account !== identity) view = null;
+    if (account !== identity) { view = null; calendarView = null; }
     account = identity;
     const file = path.join(stateDir, 'outlook-' + hash(identity) + '.json');
     await mkdir(stateDir, { recursive: true, mode: 0o700 });
@@ -156,8 +159,8 @@ export function createOutlookWorker({
           const report = await analyze(mail, { endpoint, model });
           if (!active()) return;
           row.actions = assess(mail, report, { canvasOrigin }).map(candidate => ({
-            sourceKey: candidate.sourceKey, title: candidate.title, dueAt: candidate.dueAt,
-            status: candidate.reason || !candidate.dueAt ? 'review' : 'pending', reason: candidate.reason ?? null,
+            sourceKey: candidate.sourceKey, title: candidate.title, dueAt: candidate.dueAt, dueDate: candidate.dueDate, verified: !candidate.reason,
+            status: candidate.reason || !(candidate.dueDate || candidate.dueAt) ? 'review' : 'pending', reason: candidate.reason ?? null,
           }));
           row.summary = report.summary.slice(0,8000);
           delete row.message;
@@ -172,20 +175,22 @@ export function createOutlookWorker({
       }
       for (const action of row.actions.filter(pendingAction)) {
         if (!active()) return;
-        const key = hash(action.sourceKey);
+        const choice = planChoices(row)[row.actions.indexOf(action)];
+        const key = hash(choice.sourceKey);
         const receipt = data.receipts[key];
         if (receipt) {
-          action.status = Date.parse(receipt.dueAt) === Date.parse(action.dueAt) ? 'existing' : 'review';
+          const sameDeadline = action.dueAt ? Date.parse(receipt.dueAt) === Date.parse(action.dueAt) : !receipt.dueAt && receipt.dueDate === choice.dueDate;
+          action.status = sameDeadline ? 'existing' : 'review';
           action.reason = action.status === 'review' ? '同一来源的截止时间发生变化，请核对。' : null;
-        } else if (!Number.isFinite(Date.parse(action.dueAt)) || Date.parse(action.dueAt) <= now()) {
+        } else if (!choice.dueDate || (action.dueAt && Date.parse(action.dueAt) <= now())) {
           action.status = 'expired'; action.reason = '截止时间已过。';
         } else {
           let result;
-          try { result = await save({ hub, sourceKey: action.sourceKey, title: action.title, dueAt: action.dueAt }); }
+          try { result = await save({ hub, ...choice, plannedDate: choice.dueDate, automatic: true }); }
           catch { result = { status: 'retry', reason: '本机 Hub 暂时无法保存，将重试。' }; }
           action.status = result.status; action.reason = result.reason ?? null;
           if (result.status === 'added' || result.status === 'existing') {
-            data.receipts[key] = { dueAt: action.dueAt, status: result.status };
+            data.receipts[key] = { dueAt: action.dueAt, dueDate: choice.dueDate, status: result.status };
           }
         }
         await flush(); // Record success even if stop() was requested during the external write.
@@ -219,8 +224,25 @@ export function createOutlookWorker({
     sync: () => sync(true),
     async stop() {
       running = false; stopped = true; generation++;
-      clearTimeout(timer); nextSyncAt = null; lastError = null; lastPollAt = null; view = null; account = null;
+      clearTimeout(timer); nextSyncAt = null; lastError = null; lastPollAt = null; view = null; account = null; calendarView = null;
       if (flight) await flight;
+    },
+    async history(limit = 60) {
+      const gen = generation, identity = account;
+      let calendarError = null;
+      if (view && identity) {
+        try {
+          const current = await calendar(hub);
+          if (generation === gen && account === identity) calendarView = current;
+        } catch { calendarError = '日历暂时无法读取。'; }
+      }
+      return { ...status(limit), calendarError };
+    },
+    async plan(input) {
+      const row = view?.messages.find(message => message.id === input.messageId);
+      const choice = row && planChoices(row).find(item => item.id === input.actionId);
+      if (!account || !choice) throw Error('这封邮件或所选事项已不可用，请刷新。');
+      return save({ hub, ...selectedPlan(choice, input) });
     },
     status,
   };

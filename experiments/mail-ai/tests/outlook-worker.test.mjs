@@ -65,3 +65,33 @@ test('a single flight handles forced refresh, throttle, and an expired cursor fr
   assert.equal(calls.length,5);assert.equal(calls[4].cursor,null);assert.equal(calls[4].since,calls[0].since);
   await worker.stop();assert.equal(worker.status().connected,false);
 });
+
+test('old history, including messages beyond the first 60 and reading-only mail, can be planned without rereading Graph or the model', async t => {
+  const setup = await config(t);
+  const { createHash } = await import('node:crypto');
+  const { writeFile } = await import('node:fs/promises');
+  const messages = Array.from({ length: 65 }, (_, i) => ({
+    id: 'history-' + i, receivedAt: new Date(Date.UTC(2026, 9, 1, 0, i)).toISOString(),
+    subject: '课程通知 ' + i, summary: '已有的同步历史', status: 'processed', actions: i ? [] :
+      [{ sourceKey: 'mail:old:confirmed', dueAt: '2026-11-27T10:00:00Z', title: 'Submit lab', status: 'added' }],
+  }));
+  await writeFile(path.join(setup.stateDir, 'outlook-' + createHash('sha256').update('one').digest('hex') + '.json'),
+    JSON.stringify({ version: 1, since: '2026-10-01T00:00:00Z', cursor: { phase: 'incremental' }, graphAfter: 0, receipts: {}, messages }));
+  const writes = [];
+  const worker = createOutlookWorker({ ...setup, readPage: async () => ({ messages: [], hasMore: false, cursor: { phase: 'incremental' } }),
+    readMail: () => assert.fail('should not fetch old MIME'), analyze: () => assert.fail('should not re-analyze history'),
+    calendar: async () => ({ entries: [], timezone: 'Asia/Shanghai' }), save: async data => { writes.push(data); return { status: 'added' }; } });
+  await worker.sync();
+  assert.equal((await worker.history()).history.length, 60);
+  const full = await worker.history(120);
+  assert.equal(full.historyCount, 65); assert.equal(full.history.length, 65);
+  for (const messageId of ['history-0', 'history-1']) {
+    const action = full.history.find(row => row.id === messageId).actions[0];
+    await worker.plan({ messageId, actionId: action.id, plannedDate: '2026-11-17' });
+  }
+  assert.equal(writes[0].sourceKey, 'mail:old:confirmed');
+  assert.equal(writes[0].dueDate, '2026-11-27');
+  assert.equal(writes[1].dueAt, null); assert.equal(writes[1].dueDate, null);
+  assert.equal(writes[1].plannedDate, '2026-11-17');
+  await worker.stop();
+});

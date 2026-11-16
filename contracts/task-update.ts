@@ -8,6 +8,7 @@ import {
 export interface TaskUpdateRequest {
   revision: string;
   tasks: Task[];
+  restoreTaskId?: string;
 }
 
 export function isDeviceTaskTitle(value: string): boolean {
@@ -20,8 +21,8 @@ export function parseTaskUpdateRequest(input: unknown): TaskUpdateRequest {
     throw new OverviewValidationError('Task update must be an object');
   }
   const source = input as Record<string, unknown>;
-  if (Object.keys(source).some(key => key !== 'revision' && key !== 'tasks')) {
-    throw new OverviewValidationError('Only revision and tasks can be updated');
+  if (Object.keys(source).some(key => key !== 'revision' && key !== 'tasks' && key !== 'restoreTaskId')) {
+    throw new OverviewValidationError('Task updates accept revision, tasks and an optional restoreTaskId');
   }
   const normalized = parseDailyOverview({
     schema_version: '1.0', revision: source.revision,
@@ -31,7 +32,11 @@ export function parseTaskUpdateRequest(input: unknown): TaskUpdateRequest {
   if (normalized.tasks.some(task => !isDeviceTaskTitle(task.title))) {
     throw new OverviewValidationError('Task titles must be 1-40 printable ASCII characters, not blank');
   }
-  return { revision: normalized.revision, tasks: normalized.tasks };
+  const { restoreTaskId } = source;
+  if (restoreTaskId !== undefined && (typeof restoreTaskId !== 'string' || !normalized.tasks.some(task => task.id === restoreTaskId))) {
+    throw new OverviewValidationError('restoreTaskId must identify the restored row in the task list');
+  }
+  return { revision: normalized.revision, tasks: normalized.tasks, ...(restoreTaskId === undefined ? {} : { restoreTaskId }) };
 }
 
 export function parseTaskUpdateText(body: string): TaskUpdateRequest {

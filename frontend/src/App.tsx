@@ -5,6 +5,7 @@ import { useOverview } from './data/use-overview';
 import { CheckpointWorkspace } from './CheckpointWorkspace';
 import { RecorderButton, RecorderFeedback, RecorderStatusLine, useForegroundRecorder } from './ForegroundRecord';
 import DailyReview from './DailyReview';
+import TaskCalendar, { validDay } from './TaskCalendar';
 import DailySynthesis from './DailySynthesis';
 import ActivityTimeline, { formatActivityDuration } from './ActivityTimeline';
 import NextTask, { nextAction } from './NextTask';
@@ -29,6 +30,7 @@ const dateFormat = new Intl.DateTimeFormat('zh-CN', {
 
 const symbols = {
   today: <><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M7 3v4m10-4v4M3 10h18m-14 5 2 2 4-4" /></>,
+  calendar: <><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M7 3v4m10-4v4M7 14h2m3 0h2m-7 3h2"/></>,
   review: <><path d="M4 19V5m0 14h16M8 15v-3m5 3V7m5 8v-5" /></>,
   mail: <><rect x="3" y="5" width="18" height="14" rx="3" /><path d="m4 7 8 6 8-6" /></>,
   screen: <><rect x="3" y="4" width="18" height="13" rx="2.5" /><path d="M12 17v3m-4 0h8" /></>,
@@ -42,9 +44,15 @@ function DeskIcon({ name }: { name: keyof typeof symbols }) {
     strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">{symbols[name]}</svg>;
 }
 
-type View = 'today' | 'review';
+type View = 'today' | 'calendar' | 'review';
+
+function linkedCalendarDate() {
+  const day = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('date');
+  return day && validDay(day) ? day : '';
+}
 
 function linkedView(): View {
+  if (window.location.hash.split('?')[0] === '#calendar') return 'calendar';
   return window.location.hash === '#review' ? 'review' : 'today';
 }
 
@@ -53,6 +61,8 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
   const [navOpen, setNavOpen] = useState(false);
   const navButton = useRef<HTMLButtonElement>(null);
   const header = useRef<HTMLElement>(null);
+  const [calendarDate, setCalendarDate] = useState(linkedCalendarDate);
+  const [calendarOpened, setCalendarOpened] = useState(view === 'calendar');
   const [reviewOpened, setReviewOpened] = useState(view === 'review');
   const [checkpointVersion, setCheckpointVersion] = useState(0);
   const checkpointsChanged = useCallback(() => setCheckpointVersion(value => value + 1), []);
@@ -104,13 +114,15 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
   const showView = useCallback((next: View) => {
     setNavOpen(false);
     if (next === 'review') setReviewOpened(true);
+    if (next === 'calendar') setCalendarOpened(true);
     setView(next);
   }, []);
   useEffect(() => {
     if (!source.localWorkspace) return;
     const followLink = () => {
       const hash = window.location.hash;
-      if (!hash || hash === '#workspace' || hash === '#record' || hash === '#review') showView(linkedView());
+      if (hash.split('?')[0] === '#calendar') { setCalendarDate(linkedCalendarDate()); showView('calendar'); }
+      else if (!hash || hash === '#workspace' || hash === '#record' || hash === '#review') showView(linkedView());
       if (hash === '#record') {
         const details = document.getElementById('record') as HTMLDetailsElement | null;
         if (details) {
@@ -149,10 +161,17 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
   }, [navOpen]);
   function navigate(next: View) {
     showView(next);
-    const hash = next === 'review' ? '#review' : '';
+    const hash = next === 'today' ? '' : next === 'calendar' && calendarDate ? '#calendar?date=' + calendarDate : '#' + next;
     if (window.location.hash !== hash) window.history.pushState(window.history.state, '', window.location.pathname + window.location.search + hash);
     document.getElementById('workspace')?.focus({ preventScroll: true });
     if (window.scrollY > 0) window.scrollTo(0, 0);
+  }
+
+  function chooseCalendarDay(day: string) {
+    setCalendarDate(day);
+    if (window.location.hash.split('?')[0] !== '#calendar') return;
+    const hash = '#calendar' + (day ? '?date=' + day : '');
+    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search + hash);
   }
 
   const previewOverview = useMemo(() => {
@@ -178,6 +197,8 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
         <nav id="desk-navigation" className="desk-nav" aria-label="主导航">
           <a href="#workspace" aria-current={view === 'today' ? 'page' : undefined}
             onClick={event => { event.preventDefault(); navigate('today'); }}><DeskIcon name="today" />工作台</a>
+          {source.localWorkspace && <a href="#calendar" aria-current={view === 'calendar' ? 'page' : undefined}
+            onClick={event => { event.preventDefault(); navigate('calendar'); }}><DeskIcon name="calendar" />任务日历</a>}
           {source.localWorkspace && <a href="#review" aria-current={view === 'review' ? 'page' : undefined}
             onClick={event => { event.preventDefault(); navigate('review'); }}><DeskIcon name="review" />每日回顾</a>}
           {local && <a href={import.meta.env.VITE_MAIL_PAGE_URL} target="_blank" rel="noreferrer" onClick={() => setNavOpen(false)}>
@@ -271,6 +292,9 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
           <button type="button" key={item.value} onClick={() => setScenario(item.value)} aria-pressed={scenario === item.value}>{item.label}</button>)}</div>}
       </details>
       </div>
+      {source.localWorkspace && calendarOpened && <div hidden={view !== 'calendar'}>
+        <TaskCalendar active={view === 'calendar'} date={calendarDate} onDate={chooseCalendarDay} onChange={reload}/>
+      </div>}
       {source.localWorkspace && overview && reviewOpened && <div hidden={view !== 'review'}>
         <DailyReview refreshKey={reviewKey} active={view === 'review'} />
       </div>}

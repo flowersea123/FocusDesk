@@ -16,7 +16,8 @@ import { checkWritePolicy, readUpdateBody, WriteRequestError } from './write-pol
 import { getServerInfo } from './network-info.ts';
 import { fileURLToPath } from 'node:url';
 import { createCheckpointStore } from './checkpoint-store.ts';
-import { createCheckpointHttp } from './checkpoint-http.ts';
+import { checkPrivateRequest, createCheckpointHttp, privateInput, privateJson } from './checkpoint-http.ts';
+import { CalendarError } from '../../contracts/calendar.ts';
 import { createScreenObservationService } from './screen-observation.ts';
 import { createForegroundRecorder, type RecorderOptions } from './foreground-recorder.ts';
 import { createRecorderHttp } from './recorder-http.ts';
@@ -71,7 +72,7 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
       reviewUnavailable = true;
     }
   }
-  const projects = createProjectProgress(dataPath, checkpoints, () => loader.load());
+  const projects = createProjectProgress(dataPath, checkpoints, () => loader.load(), () => loader.readCalendar());
   const normalizeTitle = (title: string) => title.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
   const screenObservation = createScreenObservationService({
     getTasks: async () => (await loader.load()).tasks,
@@ -121,6 +122,21 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
         json(response, 403, 'FORBIDDEN_PATH', 'Path is not available.', head);
         return;
       }
+      if (pathname === '/api/v1/calendar') {
+        try {
+          checkPrivateRequest(request);
+          if (request.method === 'GET') privateJson(response,200,await loader.readCalendar());
+          else if (request.method === 'PUT' || request.method === 'DELETE')
+            privateJson(response,200,await loader.updateCalendar(request.method,await privateInput(request)));
+          else { response.setHeader('Allow','GET, PUT, DELETE'); privateJson(response,405,{error:'不支持此日历操作。'}); }
+        } catch (error) {
+          response.setHeader('Connection','close');
+          if (error instanceof CalendarError || error instanceof WriteRequestError) privateJson(response,error.status,{error:error.message});
+          else if (error instanceof RevisionConflictError) privateJson(response,409,{error:'任务清单已更新，请重试。'});
+          else privateJson(response,503,{error:'本机日历暂时不可用。'});
+        }
+        return;
+      }
       if (['/api/v1/focus-review', '/api/v1/focus-review/experiment', '/api/v1/focus-review/synthesis'].includes(pathname)) {
         await reviewHttp(request, response);
         return;
@@ -158,6 +174,7 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
           // unfinished/oversized request cannot hold a keep-alive connection.
           response.setHeader('Connection', 'close');
           if (error instanceof WriteRequestError) json(response, error.status, error.code, error.message, false);
+          else if (error instanceof CalendarError) json(response, error.status, 'CALENDAR_CONFLICT', error.message, false);
           else if (error instanceof OverviewValidationError) json(response, 400, aiSuggestion ? 'INVALID_AI_SUGGESTION' : workState ? 'INVALID_WORK_STATE_UPDATE' : focus ? 'INVALID_FOCUS_UPDATE' : 'INVALID_TASK_UPDATE', error.message, false);
           else if (error instanceof FocusActiveError) json(response, 409, 'FOCUS_ALREADY_ACTIVE', error.message, false);
           else if (error instanceof RevisionConflictError) json(response, 409, 'REVISION_CONFLICT', error.message, false);
@@ -200,7 +217,8 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
           if (Buffer.byteLength(body) > MAX_OVERVIEW_BYTES) throw new SourceError('DISPLAY_SNAPSHOT_TOO_LARGE', 'Display snapshot exceeds the response limit.');
           send(response, 200, body, 'application/json; charset=utf-8', head);
         } catch (error) {
-          if (error instanceof SourceError) json(response, 503, error.code, error.message, head);
+          if (error instanceof CalendarError) json(response, error.status, 'CALENDAR_UNAVAILABLE', error.message, head);
+          else if (error instanceof SourceError) json(response, 503, error.code, error.message, head);
           else json(response, 500, 'INTERNAL_ERROR', 'Overview could not be produced.', head);
         }
         return;

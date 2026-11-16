@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { MAX_TASKS, type DailyOverview, type Task } from '../../contracts/daily-overview';
+import { validCalendarId } from '../../contracts/calendar';
 import { isDeviceTaskTitle, type TaskUpdateRequest } from '../../contracts/task-update';
 import { OverviewRequestError } from './data/overview-source';
 import './task-list.css';
@@ -133,11 +134,11 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
     return () => document.removeEventListener('keydown', quickAdd);
   });
 
-  async function persist(next: Task[], onUncertain?: () => void): Promise<boolean> {
+  async function persist(next: Task[], options: { onUncertain?: () => void; restoreTaskId?: string } = {}): Promise<boolean> {
     if (!active || !onSave || busy || writing.current) return false;
     writing.current = true; setPending(true); setFailure(''); setMessage('');
     try {
-      const result = await onSave({ revision: current.revision, tasks: next });
+      const result = await onSave({ revision: current.revision, tasks: next, ...(options.restoreTaskId ? { restoreTaskId: options.restoreTaskId } : {}) });
       if (!alive.current) return false;
       setAck({ parent: overview, value: result });
       return true;
@@ -147,7 +148,7 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
         if (draft) setFailedRevision(current.revision);
         else setFailure('任务已在别处修改，请核对最新列表后重试。');
       } else {
-        if (!(error instanceof OverviewRequestError) || error.status >= 500) onUncertain?.();
+        if (!(error instanceof OverviewRequestError) || error.status >= 500) options.onUncertain?.();
         setFailure(error instanceof Error ? error.message : '保存失败，请重试。');
       }
       return false;
@@ -191,7 +192,7 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
     const endedFocus = current.focus?.task_id === task.id;
     const deletion = { task, endedFocus, previous: tasks[index - 1]?.id, next: tasks[index + 1]?.id, index, date: current.date };
     setUnconfirmedRemoval(null);
-    if (await persist(tasks.filter(item => item.id !== task.id), () => setUnconfirmedRemoval(deletion))) {
+    if (await persist(tasks.filter(item => item.id !== task.id), { onUncertain: () => setUnconfirmedRemoval(deletion) })) {
       setRemoved(items => [...items, deletion]);
       setFocusKey('undo'); setMessage('已删除「' + task.title + '」。' + (endedFocus ? '当前专注计时已结束。' : ''));
     }
@@ -201,7 +202,8 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
     const before = tasks.findIndex(item => item.id === undo.previous);
     const after = tasks.findIndex(item => item.id === undo.next);
     const index = before >= 0 ? before + 1 : after >= 0 ? after : Math.min(undo.index, tasks.length);
-    if (await persist([...tasks.slice(0, index), undo.task, ...tasks.slice(index)])) {
+    const restored = [...tasks.slice(0, index), undo.task, ...tasks.slice(index)];
+    if (await persist(restored, validCalendarId(undo.task.id) ? { restoreTaskId: undo.task.id } : {})) {
       setRemoved(items => items.filter(item => item !== undo)); setFocusKey('edit:' + undo.task.id); setMessage('已恢复「' + undo.task.title + '」。' + (undo.endedFocus ? '原专注计时已结束。' : ''));
     }
   }

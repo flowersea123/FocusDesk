@@ -191,7 +191,8 @@ export function buildProjectDisplay(project: ProjectStatus, revision: string): D
   draw('COMPLETED',18,reading ? 172 : 149,FONT.bold11,364);
   const automatic = new Set(project.automaticParts ?? []);
   const named = project.completed.map(part => ({name: devicePart(part), auto: automatic.has(part)}));
-  const visible = named.filter(p => p.name !== null).slice(0,5);
+  const reminder = project.calendarReminder;
+  const visible = named.filter(p => p.name !== null).slice(0,reminder ? 4 : 5);
   const firstRow = reading ? 191 : 174;
   visible.forEach(({name,auto},i)=>{
     const y = firstRow + i*(reading ? 20 : 23);
@@ -200,6 +201,12 @@ export function buildProjectDisplay(project: ProjectStatus, revision: string): D
     if (auto) draw('AUTO',329,y,FONT.regular10,52);
   });
   if (!named.length) draw('No completed parts recorded',18,firstRow+2,FONT.regular13,364);
-  if (named.length>visible.length) draw('+'+(named.length-visible.length)+' more on Hub',18,292,FONT.regular10,364);
+  if (named.length>visible.length) draw('+'+(named.length-visible.length)+' more on Hub',18,reminder ? 266 : 292,FONT.regular10,364);
+  if (reminder) {
+    rect(0,272,400,28,2);
+    draw('TO DO',18,290,FONT.bold11,44);
+    draw(reminder.title,71,290,FONT.regular13,reminder.count > 1 ? 265 : 311);
+    if (reminder.count > 1) draw('+' + (reminder.count - 1),352,290,FONT.bold11,31);
+  }
   return {schema_version:'display-1',layout_version:'goal-1',revision,width:400,height:300,commands};
 }

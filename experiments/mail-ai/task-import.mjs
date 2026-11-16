@@ -3,7 +3,7 @@ import { MAX_TASKS, parseDailyOverviewText } from '../../contracts/daily-overvie
 import { isDeviceTaskTitle, parseTaskUpdateRequest } from '../../contracts/task-update.ts';
 import { localOrigin } from './analyze.mjs';
 
-const action = /提交|上交|交回|交齐|递交|缴交|递送|上传|交付|填写|填完|填报|完成|报名|注册|回复|交费|缴费|交作业|\b(?:submit|send|upload|deliver|complete|finish|file|register|apply|pay|return|reply|respond|hand in|turn in)\b/i;
+const action = /阅读|读完|提交|上交|交回|交齐|递交|缴交|递送|上传|交付|填写|填完|填报|完成|报名|注册|回复|交费|缴费|交作业|\b(?:read|submit|send|upload|deliver|complete|finish|file|register|apply|pay|return|reply|respond|hand in|turn in)\b/i;
 const deadline = /截止|截至|最迟|最晚|到期|不晚于|\b(?:due|deadline|by|before|no later than)\b/i;
 const uncertain = /取消|撤销|作废|过去|原定|原先|原截止|旧日期|已于|已提交|已完成|延期|延长|变更|更改|改为|改至|改期|暂定|可能|如果|若|无需|无须|不用|不必|不再|不要|不需要|不适用|可选|会议|开会|讲座|研讨会|开始时间|并非|是否|或(?:者|是|在|于|可)?|大后天|大约|\b(?:cancel(?:led|ed|lation)?|original(?:ly)?|previous(?:ly)?|instead|extended?|rescheduled?|postponed?|superseded|already|obsolete|tentative|optional|or|if|might|could|may|around|approximately|no longer|not|never|don't|meeting|webinar|seminar)\b/i;
 const dateToken = /(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)|(?<!\d)(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日|今天|明天|后天|\b(?:day after tomorrow|today|tomorrow)\b/gi;
@@ -86,11 +86,47 @@ export function deriveDeadline(evidence, receivedAt) {
   return new Date(instant).toISOString();
 }
 
+/** A clear calendar-day deadline can be kept without assigning a clock time. */
+export function deriveDeadlineDate(evidence, receivedAt) {
+  if (typeof evidence !== 'string' || evidence.length > 750) return null;
+  const sentence = evidence.trim().normalize('NFKC').replace(/[.。!！]$/, '');
+  if (!action.test(sentence) || uncertain.test(sentence) || /[\r\n。;!?]|\.\s|^>/.test(sentence)) return null;
+  const dates = [...sentence.matchAll(dateToken)];
+  const received = typeof receivedAt === 'string' && /(?:Z|[+-]\d\d:?\d\d)$/i.test(receivedAt) ? Date.parse(receivedAt) : NaN;
+  let match, value;
+  if (dates.length === 1) {
+    match = dates[0];
+    const midnight = calendarDate(match, received);
+    if (midnight !== null) value = new Date(midnight).toISOString().slice(0, 10);
+  } else if (!dates.length && Number.isFinite(received)) {
+    // Anchor only a stated month, or the explicit phrase "this month", to the message date.
+    match = /(?:(\d{1,2})\s*月|本月)\s*(\d{1,2})\s*[日号]/.exec(sentence);
+    if (match) {
+      const base = new Date(received + beijing).toISOString().slice(0, 10);
+      value = base.slice(0, 5) + (match[1]?.padStart(2, '0') ?? base.slice(5, 7)) + '-' + match[2].padStart(2, '0');
+      if (!validPlanDate(value) || value < base) return null;
+    }
+  }
+  if (!match || !value) return null;
+  const rest = sentence.slice(0, match.index) + ' ' + sentence.slice(match.index + match[0].length);
+  if (otherDate.test(rest) || otherClock.test(rest) || !deadline.test(sentence) &&
+      !/^\s*(?:之|以)?前/.test(sentence.slice(match.index + match[0].length))) return null;
+  return value;
+}
+
+export function validPlanDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const time = Date.parse(value + 'T00:00:00Z');
+  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value;
+}
+
+export const sourceTaskId = sourceKey => 'src-' + createHash('sha256').update(sourceKey).digest('base64url');
+
 /** Append through the same serialized, revision-checked write as the Dashboard. */
 export async function importTask({ hub, sourceKey, title, dueAt, fetcher = fetch }) {
   const origin = localOrigin(hub);
   if (typeof sourceKey !== 'string' || !sourceKey.trim()) return { status: 'review', reason: '缺少可供去重的来源标识' };
-  const id = `src-${createHash('sha256').update(sourceKey).digest('base64url')}`;
+  const id = sourceTaskId(sourceKey);
   if (typeof title !== 'string' || !isDeviceTaskTitle(title)) return { status: 'review', id, reason: '设备标题需为 1–40 个可打印英文字符' };
   if (typeof dueAt !== 'string') return { status: 'review', id, reason: '缺少明确截止时间' };
   const task = { id, title, due_at: dueAt, status: 'todo' };

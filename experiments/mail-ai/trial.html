@@ -4,9 +4,10 @@
 :root{color-scheme:light;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#171817;background:#fbfbf8}*{box-sizing:border-box}body{margin:0}header{height:72px;border-bottom:2px solid #151515;background:white;display:flex;align-items:center;justify-content:space-between;padding:0 max(5vw,16px)}header strong{font-size:24px;letter-spacing:-1.3px}a{color:inherit;text-underline-offset:3px}main{max-width:760px;margin:clamp(30px,7vh,70px) auto;padding:0 20px 60px}h1{font-size:clamp(32px,5vw,46px);letter-spacing:-.04em;margin:0 0 8px}h2{font-size:21px;margin:0 0 12px}h3{font-size:16px;margin:0 0 8px;overflow-wrap:anywhere}.intro{color:#494b47;margin:0 0 28px;line-height:1.75}.card{border:1px solid #242424;border-radius:12px;padding:clamp(18px,4vw,28px);background:white;margin-bottom:18px}.upload{display:block;border:1px solid #a3a39e;border-radius:5px;padding:12px;width:100%;font:inherit;font-size:14px;margin:14px 0}.actions{display:flex;gap:10px;flex-wrap:wrap}button{font:inherit;font-weight:600;font-size:14px;border:1px solid black;background:white;color:black;padding:9px 15px;border-radius:4px;cursor:pointer}button.primary{background:#151515;color:white}button:disabled{opacity:.47;cursor:default}button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #d39b00;outline-offset:2px}#status,#error{margin:12px 0 0;font-size:14px}#error:not(:empty){color:#9d1717}#status:empty,#error:empty{display:none}.summary,blockquote{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.75}.item{padding:14px 0;border-top:1px solid #d0d1cc}.time{font-variant-numeric:tabular-nums}blockquote{margin:8px 0;padding:6px 12px;background:#f6f6f1;border-left:3px solid #e2b700}.hint{color:#595b55;font-size:14px}details img{max-width:100%;height:auto;display:block;margin:12px auto}summary{cursor:pointer}label{font-weight:600}.subject{overflow-wrap:anywhere}.action-state{font-size:14px;color:#333}
 .account-heading{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}.account-heading h2{margin:0}.card details{margin:14px 0}#app-registration ol{padding-left:22px;line-height:1.65}#app-registration li+li{margin-top:7px}.field{display:block;margin:12px 0}.field input{display:block;margin-top:5px;border:1px solid #979a93;border-radius:5px;width:100%;padding:9px;font:inherit;font-weight:400}.hint,.item,code{overflow-wrap:anywhere}.card[hidden],form[hidden]{display:none}#outlook-notice{color:#774213}#outlook-notice:empty{display:none}#outlook-inbox>h3{margin-top:22px}
 .account-types{border:0;margin:16px 0;padding:0;min-width:0}.account-types legend{font-weight:600;margin-bottom:8px;padding:0}.account-options{display:flex;gap:8px;flex-wrap:wrap}.account-options label{display:flex;align-items:center;gap:7px;min-height:40px;padding:8px 12px;border:1px solid #b2b4ac;border-radius:5px;font-size:14px;font-weight:500;cursor:pointer}.account-options label:has(:checked){border-color:#242424;background:#f2f3ed;font-weight:600}.account-options input{accent-color:#171817;margin:0}.field[hidden]{display:none}
+.mail-plan{margin:10px 0 16px}.plan-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}.plan-fields label{font-size:13px;display:grid;gap:4px}.plan-fields input{min-width:0;width:100%;border:1px solid #b6b8b1;border-radius:5px;padding:8px;font:inherit;background:white;color:inherit}.plan-fields input[readonly]{background:#f5f5f0}.plan-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}.plan-actions a{font-size:13px}.mail-action+.mail-action{border-top:1px solid #ddd;padding-top:8px}.mail-action h4{margin:12px 0 4px}.mail-action .hint:empty{display:none}@media(max-width:460px){.plan-fields{grid-template-columns:1fr}}
 </style></head>
-<body><header><strong>FocusDesk</strong><a href="{{HUB}}" target="_blank" rel="noreferrer">任务面板 ↗</a></header><main>
-<h1>邮件与待办</h1><p class="intro">新邮件由本机模型总结，原文能核实的截止事项自动加入任务面板。</p>
+<body><header><strong>FocusDesk</strong><a id="hub-link" href="{{HUB}}" target="_blank" rel="noreferrer">任务面板 ↗</a></header><main>
+<h1>邮件与待办</h1><p class="intro">新邮件由本机模型总结。有明确截止日的事项自动加入日历，也可以提前选择计划日。</p>
 <section class="card" id="outlook" aria-labelledby="outlook-title">
 <div class="account-heading"><h2 id="outlook-title">连接 Outlook 邮箱</h2><span class="hint" id="outlook-state" role="status">正在读取连接状态…</span></div>
 <form id="connect-form">
@@ -24,7 +25,7 @@
 <li>在「API 权限」添加 Microsoft Graph 的委托权限 <code>Mail.Read</code>。<span id="registration-ids">从应用「概述」复制应用程序（客户端）ID，填入上方。</span></li></ol></details>
 <button class="primary" id="outlook-login" type="submit">登录个人 Outlook</button></form>
 <div id="outlook-inbox" hidden><div class="actions"><button id="outlook-sync">立即同步</button><button id="outlook-reconnect" hidden>重新登录</button><button id="outlook-disconnect">断开连接</button></div>
-<h3>最近邮件</h3><div id="outlook-history"></div></div><p id="outlook-notice" role="status"></p></section>
+<h3>最近邮件</h3><div id="outlook-history"></div><button type="button" id="outlook-more" hidden>显示更多邮件</button></div><p id="outlook-notice" role="status"></p></section>
 
 <section class="card"><h2>邮件试读</h2><label for="file">选择一封邮件</label>
 <input class="upload" id="file" type="file" accept=".eml,message/rfc822" aria-describedby="size"><p id="size" class="hint">支持 8 MiB 以内的 EML 文件。</p>
@@ -32,7 +33,7 @@
 <p id="status" role="status"></p><p id="error" role="alert"></p></section>
 <section class="card" id="result" hidden aria-label="试读结果"><h2 class="subject" id="subject"></h2><p class="summary" id="summary"></p>
 <h2>截止事项</h2><div id="items"></div><details id="original" hidden><summary>查看邮件正文</summary><p class="summary" id="body"></p></details><details id="attachments" hidden><summary>查看随信图片</summary><div id="images"></div></details></section>
-</main><script nonce="{{NONCE}}">
+</main><script nonce="{{NONCE}}" src="/mail-plan-ui.js"></script><script nonce="{{NONCE}}">
 const get = id => document.getElementById(id);
 const el = (tag, text, cls) => { const node = document.createElement(tag); node.textContent = text; if (cls) node.className = cls; return node; };
 let busy = false;
@@ -44,36 +45,33 @@ function controls() {
 async function post(path, contentType, body) {
   const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': contentType }, body });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || '读取失败，请重试。');
+  if (!response.ok) throw Object.assign(Error(data.error || '读取失败，请重试。'), {current: data.current, planRevision: data.planRevision});
   return data;
 }
 function show(data) {
   get('subject').textContent = data.subject || '无标题邮件';
-  get('summary').textContent = data.summary;
+  get('summary').textContent = data.analysisError || data.summary;
   get('body').textContent = data.body;
   get('original').hidden = !data.body;
   get('original').open = false;
   const list = get('items'); list.replaceChildren();
-  if (!data.candidates.length) list.append(el('p', '未提取到截止事项。'));
+  function planning(item) {
+    return mailPlanForm(item, values => post('/api/import','application/json',JSON.stringify({ticket:item.planTicket, ...values})), get('hub-link').href);
+  }
+  if (!data.candidates.length) {
+    list.append(el('p', '未提取到截止事项，可安排阅读这封邮件。'));
+    if (data.mailPlan) list.append(planning(data.mailPlan));
+  }
   for (const item of data.candidates) {
     const row = el('article', '', 'item');
     let deadline = '截止时间待核对';
     if (item.time) deadline = (item.reason ? '待核对时间　' : '截止时间　') + item.time + '（北京时间）';
-    row.append(el('h3', item.title), el('p', deadline, 'time'));
+    row.append(el('h3', item.actionTitle || item.title));
+    if (item.time || item.dueDate) row.append(el('p', item.time ? deadline : '截止日　' + item.dueDate, 'time'));
     const label = item.quoteInBody ? '正文原文' : item.source === 'image' && data.images.length ? '模型识别的图片文字' : '模型提取文字（来源待核对）';
     row.append(el('div', label, 'hint'), el('blockquote', item.quote));
-    if (item.ticket) {
-      const button = el('button', '加入待办');
-      const state = el('p', '', 'action-state'); state.setAttribute('role','status');
-      button.addEventListener('click', async () => {
-        button.disabled = true; state.textContent = '正在写入任务面板…';
-        try { const saved = await post('/api/import','application/json',JSON.stringify({ticket:item.ticket}));
-          if (saved.status === 'added' || saved.status === 'existing') { state.textContent = saved.status === 'added' ? '已加入待办' : '已有相同事项'; }
-          else { state.textContent = saved.reason || '需要核对'; button.disabled = false; }
-        } catch (error) { state.textContent = error.message; button.disabled = false; }
-      });
-      row.append(button,state);
-    } else row.append(el('p', item.reason, 'hint'));
+    if (item.reason) row.append(el('p', item.reason, 'hint'));
+    row.append(planning(item));
     list.append(row);
   }
   const images = get('images'); images.replaceChildren(); get('attachments').hidden = !data.images.length;

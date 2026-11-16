@@ -134,3 +134,14 @@ test('section-only reading is visible on the device, while observation summaries
   const onlyTitle = projectStatus(task,undefined,[{...row([]),detailSource:'window-title'}]);
   assert.equal(onlyTitle.latestObservation,undefined);
 });
+
+test('a scheduled mail stays visible alongside a pinned project with completed steps', () => {
+  const pinned = { ...projectStatus(task, plan, []), completed: ['Part A','Part B','Part C','Part D','Part E','Part F'],
+    calendarReminder: { title: 'Read student week brief', count: 3 } };
+  const snapshot = buildProjectDisplay(pinned,'test');
+  const text = snapshot.commands.filter(command => command[0] === 1).map(command => command[5]);
+  for (const label of [task.title, 'Part D', '+2 more on Hub', 'TO DO', 'Read student week brief', '+2']) assert.ok(text.includes(label), label);
+  assert.ok(!text.includes('Part E'));
+  assert.ok(snapshot.commands.length <= 64);
+  assert.ok(Buffer.byteLength(JSON.stringify(snapshot)) <= 4096);
+});

@@ -59,6 +59,10 @@ scenes['project-automatic'] = buildProjectDisplay({
   ...project, total: null, percent: 75, evidenceSource: 'automatic',
   completed: ['Introduction', 'Method'], automaticParts: ['Method'],
 }, 'project:automatic');
+scenes['project-calendar-reminder'] = buildProjectDisplay({
+  ...project, percent:100, completed:['Alpha','Beta','Gamma','Delta','Epsilon'],
+  calendarReminder:{title:'Read student week brief',count:2},
+}, 'project:calendar-reminder');
 const readingPage = {page:6, total:12, document:'Example Paper', section:'Method'};
 scenes['reading-position'] = buildProjectDisplay({...project, percent:null, total:null, completed:[],
   readingPosition:readingPage},'project:reading-position');

@@ -7,6 +7,8 @@ let initial = true;
 let statusSerial = 0;
 let lastConnected = false;
 let connectedType;
+let historyLimit = 60;
+let renderedHistory = '';
 
 const accountOptions = {
   personal: {
@@ -43,7 +45,7 @@ for (const radio of outlookForm.elements.accountType) {
 }
 
 const phaseLabels = { baseline: '正在建立收件箱起点', incremental: '正在监听新邮件', error: '同步需要处理', disconnected: '等待连接' };
-const actionLabels = { added: '已加入待办', existing: '待办已存在', full: '待办已满，等待重试', review: '待核对', retry: '等待重试', pending: '等待写入', expired: '已过期' };
+const actionLabels = { added: '已导入', existing: '已有同源事项', full: '待办已满，等待重试', review: '待核对', retry: '等待重试', pending: '等待写入', expired: '已过期' };
 const mailLabels = { queued: '等待分析', retry: '等待重试', unavailable: '无法读取', review: '待核对', processed: '已分析' };
 
 function time(value) {
@@ -58,6 +60,9 @@ function line(parent, tag, text, cls) {
 }
 function showHistory(messages) {
   const list = byId('outlook-history');
+  const signature = JSON.stringify(messages);
+  if (signature === renderedHistory || (messages.length && (savingMailPlans.size || list.contains(document.activeElement) && document.activeElement.matches('input')))) return;
+  renderedHistory = signature;
   list.replaceChildren();
   for (const mail of messages) {
     const row = document.createElement('article');
@@ -68,7 +73,12 @@ function showHistory(messages) {
     if (mail.reason) line(row, 'p', mail.reason, 'hint');
     for (const action of mail.actions || []) {
       const date = time(action.dueAt);
-      line(row, 'p', [action.title, date && date + '（北京）', actionLabels[action.status], action.reason].filter(Boolean).join(' · '));
+      const section = document.createElement('section'); section.className = 'mail-action';
+      if (mail.actions.length > 1) line(section, 'h4', action.deviceTitle);
+      line(section, 'p', [date && '截止时间 ' + date + '（北京）', action.reason || (!action.entry && actionLabels[action.status])].filter(Boolean).join(' · '), 'hint');
+      section.append(mailPlanForm(action, values => outlookAction('plan', { messageId: mail.id, actionId: action.id, ...values }),
+        document.getElementById('hub-link').href));
+      row.append(section);
     }
     list.append(row);
   }
@@ -77,7 +87,7 @@ function showHistory(messages) {
 async function refreshOutlook() {
   const ticket = ++statusSerial;
   try {
-    const res = await fetch('/api/outlook/status', { cache: 'no-store' });
+    const res = await fetch('/api/outlook/status' + (historyLimit === 60 ? '' : '?limit=' + historyLimit), { cache: 'no-store' });
     if (res.status === 404) { byId('outlook').hidden = true; return; }
     const state = await res.json();
     if (!res.ok) throw new Error(state.error || '邮箱状态读取失败。');
@@ -101,7 +111,9 @@ async function refreshOutlook() {
       setup.open = !state.configured;
       initial = false;
     }
+    if (lastConnected && !state.connected) { mailPlanDrafts.clear(); historyLimit = 60; renderedHistory = ''; }
     lastConnected = state.connected;
+    byId('outlook-more').hidden = !(sync.historyCount > (sync.history?.length || 0));
     showHistory(state.connected ? sync.history || [] : []);
   } catch (err) {
     byId('outlook-state').textContent = '状态读取失败 · ' + err.message;
@@ -110,7 +122,7 @@ async function refreshOutlook() {
 async function outlookAction(path, data = {}) {
   const response = await fetch('/api/outlook/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || '操作失败，请重试。');
+  if (!response.ok) throw Object.assign(Error(result.error || '操作失败，请重试。'), {current: result.current, planRevision: result.planRevision});
   return result;
 }
 async function act(operation) {
@@ -139,6 +151,7 @@ byId('outlook-reconnect').addEventListener('click', () => act(async () => {
   const { authorizationUrl } = await outlookAction('connect', { accountType: connectedType });
   location.assign(authorizationUrl);
 }));
+byId('outlook-more').addEventListener('click', () => { historyLimit += 60; refreshOutlook(); });
 byId('outlook-sync').addEventListener('click', () => act(() => outlookAction('sync')));
 byId('outlook-disconnect').addEventListener('click', () => act(() => outlookAction('disconnect')));
 if (location.hash.startsWith('#outlook-error=')) {

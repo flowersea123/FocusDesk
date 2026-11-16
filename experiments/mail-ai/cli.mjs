@@ -3,6 +3,7 @@ import { readEml, readOutlook } from './mail-source.mjs';
 import { analyzeMail, beijingMinute } from './analyze.mjs';
 import { assessMail } from './assess.mjs';
 import { importTask } from './task-import.mjs';
+import { planChoices, saveMailPlan } from './mail-calendar.mjs';
 import { readCanvasAssignments } from './canvas.mjs';
 
 const usage = `FocusDesk 邮件与 Canvas 试用（Node 24+）
@@ -28,15 +29,16 @@ async function processMail(mail, apply) {
   console.log(`\n${visible(mail.subject) || '（无标题邮件）'}\n${visible(result.summary)}`);
   const candidates = assessMail(mail, result, { canvasOrigin });
   if (!candidates.length) console.log('未提取到截止事项。');
-  for (const candidate of candidates) {
-    const when = candidate.dueAt ? beijingMinute(candidate.dueAt) : (candidate.due_local ?? '时分待核对');
+  const choices = planChoices({ ...mail, actions: candidates.map(candidate => ({ ...candidate, verified: !candidate.reason })) });
+  for (const [index, candidate] of candidates.entries()) {
+    const when = candidate.dueAt ? beijingMinute(candidate.dueAt) : (candidate.dueDate ?? candidate.due_local ?? '日期待核对');
     const timeLabel = candidate.reason ? '待核对时间 ' : '';
     const sourceLabel = candidate.source === 'body' && mail.body.includes(candidate.quote) ? '邮件原句' : '模型提取文字';
     console.log(`  ${visible(candidate.title)} · ${timeLabel}${when}（北京）\n  ${sourceLabel}　${visible(candidate.quote)}`);
     if (candidate.reason) console.log(`  待核对：${candidate.reason}`);
-    else if (Date.parse(candidate.dueAt) <= Date.now()) console.log('  截止时间已过。');
+    else if (candidate.dueAt ? Date.parse(candidate.dueAt) <= Date.now() : candidate.dueDate < beijingMinute(new Date().toISOString()).slice(0, 10)) console.log('  截止时间已过。');
     else if (!apply) console.log('  可加入待办。');
-    else printImport(await importTask({ hub, ...candidate }));
+    else printImport(await saveMailPlan({ hub, ...choices[index], plannedDate: candidate.dueDate, automatic: true }));
   }
 }
 

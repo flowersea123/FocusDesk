@@ -248,3 +248,13 @@ Display schema display-1, layout goal-1, 4096-byte transport, 64 commands and dr
 ### 论文阅读书签
 
 屏幕观察和检查点可携带 readingSection 和 readingDocument，分别表示正文位置与画面中识别出的文档标题。只有章节位置时保留阅读进度候选。GET /api/v1/project-progress 的 statuses[].readingBookmark 提供当前书签以及可确认的上一个章节。PATCH /api/v1/checkpoints 以 id 和 readingSection 幂等确认对应记录，保留最初的手动或自动来源并记录 readingConfirmed。已确认的章节作为当前大任务的完成依据。自动采样核对画面标题、同任务手动审阅过的文档以及画面内容与待办的关系。自动归属只会对有画面依据的任务生效。多个任务都符合时，可结合用户指定的对象或专注任务消除歧义。删除最后一条对应的手动记录后，该文档关联失效。
+
+### 邮件计划日与设备待办
+
+本机 `GET /api/v1/calendar` 返回 `revision`、`today`、`timezone`、`entries`。每项包含稳定 `id`、网页标题 `title`、1–40 个可打印 ASCII 字符的 `deviceTitle`、`plannedDate`、原定的 `dueDate` 与 `dueAt`、`source`、可选的 `sourceTitle` 和 `status`。两个日期字段采用 YYYY-MM-DD。原文只有日期时 `dueAt` 为空，精确时间使用 UTC 字符串。邮件正文和网页标题不进入电子纸绘制指令。
+
+本机 `PUT /api/v1/calendar` 接收 `{ revision, entry }`，entry 不含 status。改期沿用原 `id`。本机 `DELETE /api/v1/calendar` 接收 `{ revision, id }` 并保留移除记录。显式恢复使用 PUT 的顶层 `restore: true`。更新成功返回完整日历；冲突返回 HTTP 409。来源复用邮件导入的稳定标识，重复同步沿用用户选好的日期。日历存储在任务文件旁的 `.calendar.json` 中。
+
+设备仍读取 `/api/v1/display-snapshot`。Hub 根据任务时区和实际时钟，将计划日已到的事项加入未完成清单；状态从 scheduled 变为 published。达到现有任务条数或大小上限时状态为 waiting。今日任务中的勾选和删除也会反映为 done 或 removed。运行中的专注优先展示，固定项目保留原进度，并在底栏显示其他已发布且尚未完成的第一项日历任务和其余数量。网页预览和设备共用同一布局。
+
+今日清单执行「撤销删除」时，任务更新请求可携带可选的 `restoreTaskId`，标明用户明确要放回原清单的事项。普通后台重试沿用原请求。

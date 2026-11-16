@@ -5,10 +5,11 @@ import { pathToFileURL } from 'node:url';
 import { MAX_EML_BYTES, readEmlBytes } from './mail-source.mjs';
 import { analyzeMail, beijingMinute, localOrigin } from './analyze.mjs';
 import { assessMail } from './assess.mjs';
-import { importTask } from './task-import.mjs';
+import { calendarDeadline, planChoices, planRevision, readCalendar, saveMailPlan, selectedPlan } from './mail-calendar.mjs';
 
 const pageTemplate = await readFile(new URL('./trial.html', import.meta.url), 'utf8');
 const outlookScript = await readFile(new URL('./outlook-ui.js', import.meta.url), 'utf8');
+const planScript = await readFile(new URL('./mail-plan-ui.js', import.meta.url), 'utf8');
 const tenMinutes = 10 * 60 * 1000;
 
 class RequestError extends Error {
@@ -39,7 +40,7 @@ function sampleEml(now) {
   ].join('\r\n'));
 }
 
-export function createTrialServer({ outlook, analyze = analyzeMail, save = importTask, now = Date.now,
+export function createTrialServer({ outlook, analyze = analyzeMail, save = saveMailPlan, calendar = readCalendar, now = Date.now,
   hub = process.env.FOCUSDESK_HUB_URL ?? 'http://127.0.0.1:8787',
   endpoint = process.env.FOCUSDESK_MODEL_URL, model = process.env.FOCUSDESK_MODEL_NAME,
   canvasOrigin = process.env.FOCUSDESK_CANVAS_ORIGIN } = {}) {
@@ -50,28 +51,31 @@ export function createTrialServer({ outlook, analyze = analyzeMail, save = impor
   function discardExpired() {
     for (const [id, entry] of tickets) if (entry.expires <= now()) tickets.delete(id);
   }
-  function preview(candidates, body) {
+  async function preview(candidates, mail) {
     discardExpired();
+    const choices = planChoices({ ...mail, actions: candidates.map(candidate => ({ ...candidate,
+      verified: !candidate.reason, status: candidate.reason ? 'review' : 'pending' })) });
+    let calendarData;
+    try { calendarData = await calendar(hubOrigin); } catch { /* The preview also works with the Hub offline. */ }
     const compact = text => text.trim().replace(/\s+/g, ' ');
-    const normalizedBody = compact(body);
-    return candidates.map(candidate => {
-      const time = Date.parse(candidate.dueAt);
-      const reason = candidate.reason || (!Number.isFinite(time) ? '截止时间需核对' : time <= now() ? '截止时间已过' : null);
-      let ticket = null;
-      if (reason === null) {
-        if (tickets.size >= 64) tickets.delete(tickets.keys().next().value);
-        ticket = randomUUID();
-        // Retain only the validated fields the Hub needs. The optional evidence
-        // and preview images go directly to the requesting browser.
-        const { sourceKey, title, dueAt } = candidate;
-        tickets.set(ticket, { sourceKey, title, dueAt, expires: now() + tenMinutes });
-      }
-      // Weak models can call a caption a body quote. Only a successful
-      // comparison with the parsed mail body can substantiate that label.
-      const quoteInBody = normalizedBody.includes(compact(candidate.quote));
-      return { title: candidate.title, quote: candidate.quote, source: candidate.source, quoteInBody,
-        time: Number.isFinite(time) ? beijingMinute(candidate.dueAt) : candidate.due_local, reason, ticket };
+    const body = compact(mail.body);
+    const today = beijingMinute(new Date(now()).toISOString()).slice(0, 10);
+    const items = choices.map((choice, index) => {
+      const candidate = candidates[index];
+      const expired = choice.dueAt ? Date.parse(choice.dueAt) <= now() : choice.dueDate && choice.dueDate < today;
+      const eligible = Boolean(choice.dueDate && !expired && !candidate?.reason);
+      const ticket = randomUUID();
+      if (tickets.size >= 64) tickets.delete(tickets.keys().next().value);
+      tickets.set(ticket, { choice, eligible, expires: now() + tenMinutes });
+      const { sourceKey, ...publicChoice } = choice;
+      const entry = calendarData?.entries.find(entry => entry.id === choice.id) ?? null;
+      return { ...publicChoice, dueDate: calendarDeadline(choice, calendarData?.timezone), entry, planRevision: planRevision(entry), planTicket: ticket,
+        ticket: eligible ? ticket : null, actionTitle: candidate?.title, quote: candidate?.quote, source: candidate?.source,
+        quoteInBody: Boolean(candidate && body.includes(compact(candidate.quote))),
+        time: choice.dueAt ? beijingMinute(choice.dueAt) : choice.dueDate ? null : candidate?.due_local || null,
+        reason: candidate?.reason || (expired ? '截止时间已过' : null) };
     });
+    return { candidates: candidates.length ? items : [], mailPlan: candidates.length ? null : items[0] };
   }
 
   const server = createServer({ requestTimeout: 25_000, headersTimeout: 12_000, connectionsCheckingInterval: 5_000 }, async (request, response) => {
@@ -86,9 +90,9 @@ export function createTrialServer({ outlook, analyze = analyzeMail, save = impor
     response.setHeader('Content-Type', 'application/json; charset=utf-8');
     try {
       if (socket.remoteAddress !== '127.0.0.1' || !localHosts.includes(headers.host)) throw new RequestError(403, '请从本机试读页打开。');
-      if (method === 'GET' && url === '/outlook-ui.js') {
+      if (method === 'GET' && (url === '/outlook-ui.js' || url === '/mail-plan-ui.js')) {
         response.setHeader('Content-Type', 'text/javascript; charset=utf-8');
-        response.end(outlookScript);
+        response.end(url === '/outlook-ui.js' ? outlookScript : planScript);
         return;
       }
       if (method === 'GET' && url === '/') {
@@ -108,17 +112,21 @@ export function createTrialServer({ outlook, analyze = analyzeMail, save = impor
         response.end();
         return;
       }
-      if (outlook && method === 'GET' && url === '/api/outlook/status') {
-        response.end(JSON.stringify(await outlook.status()));
+      if (outlook && method === 'GET' && parsed.pathname === '/api/outlook/status') {
+        const limit = Number(parsed.searchParams.get('limit') || 60);
+        if (!Number.isSafeInteger(limit) || limit < 1) throw new RequestError(400, '历史条数无效。');
+        response.end(JSON.stringify(await outlook.status(limit)));
         return;
       }
-      if (outlook && method === 'POST' && ['/api/outlook/connect', '/api/outlook/disconnect', '/api/outlook/sync'].includes(url)) {
+      if (outlook && method === 'POST' && ['/api/outlook/connect', '/api/outlook/disconnect', '/api/outlook/sync', '/api/outlook/plan'].includes(url)) {
         if (headers.origin !== origin) throw new RequestError(403, '请从本机同一试读页操作。');
         let input;
-        try { input = JSON.parse((await readBody(request, 'application/json', 1024)).toString('utf8')); }
+        try { input = JSON.parse((await readBody(request, 'application/json', 4096)).toString('utf8')); }
         catch (error) { if (error instanceof RequestError) throw error; throw new RequestError(400, '请检查邮箱配置。'); }
         if (!input || typeof input !== 'object' || Array.isArray(input)) throw new RequestError(400, '请检查邮箱配置。');
-        if (url.endsWith('/connect')) {
+        if (url.endsWith('/plan')) {
+          response.end(JSON.stringify(await outlook.plan(input)));
+        } else if (url.endsWith('/connect')) {
           const settings = {};
           for (const key of ['clientId', 'tenantId', 'accountType']) {
             if (input[key] !== undefined) {
@@ -139,16 +147,18 @@ export function createTrialServer({ outlook, analyze = analyzeMail, save = impor
       if (headers.origin !== origin) throw new RequestError(403, '请从本机同一试读页操作。');
       if (url === '/api/import') {
         let data;
-        const text = (await readBody(request, 'application/json', 256)).toString('utf8');
+        const text = (await readBody(request, 'application/json', 4096)).toString('utf8');
         try { data = JSON.parse(text); } catch { throw new RequestError(400, '待办选择格式有误。'); }
-        if (!data || typeof data.ticket !== 'string' || Object.keys(data).length !== 1) throw new RequestError(400, '请选择预览中的待办。');
+        const allowed = ['ticket', 'plannedDate', 'dueDate', 'title', 'deviceTitle', 'expectedRevision', 'restore'];
+        if (!data || typeof data.ticket !== 'string' || Object.keys(data).some(key => !allowed.includes(key)) ||
+            (!data.plannedDate && Object.keys(data).length !== 1)) throw new RequestError(400, '请选择预览中的待办和计划日。');
         discardExpired();
-        const entry = tickets.get(data.ticket);
-        if (!entry) throw new RequestError(410, '这次预览已失效，请重新读取邮件。');
-        if (Date.parse(entry.dueAt) <= now()) throw new RequestError(409, '截止时间已过。');
-        const { sourceKey, title, dueAt } = entry;
-        const result = await save({ hub: hubOrigin, sourceKey, title, dueAt });
-        response.end(JSON.stringify({ status: result.status, reason: result.reason }));
+        const ticket = tickets.get(data.ticket);
+        if (!ticket) throw new RequestError(410, '这次预览已失效，请重新读取邮件。');
+        if (!data.plannedDate && (!ticket.eligible || ticket.choice.dueAt && Date.parse(ticket.choice.dueAt) <= now())) throw new RequestError(409, '请明确选择计划日。');
+        const entry = selectedPlan(ticket.choice, { ...data, plannedDate: data.plannedDate || ticket.choice.dueDate });
+        const result = await save({ ...entry, hub: hubOrigin });
+        response.end(JSON.stringify(result));
         return;
       }
       if (analyzing) throw new RequestError(429, '正在读取另一封邮件，请稍后再试。');
@@ -157,15 +167,17 @@ export function createTrialServer({ outlook, analyze = analyzeMail, save = impor
         // Both buttons submit MIME; the sample button sends an empty body.
         const bytes = await readBody(request, 'message/rfc822', url === '/api/eml' ? MAX_EML_BYTES : 0);
         const mail = await readEmlBytes(url === '/api/sample' ? sampleEml(now()) : bytes);
-        const result = await analyze(mail, { endpoint, model });
-        const candidates = preview(assessMail(mail, result, { canvasOrigin }), mail.body);
+        let result, analysisError;
+        try { result = await analyze(mail, { endpoint, model }); }
+        catch { result = { summary: '', deadlines: [] }; analysisError = '本机模型暂时无法分析，可直接安排这封邮件。'; }
+        const planning = await preview(assessMail(mail, result, { canvasOrigin }), mail);
         const images = mail.images.map(img => 'data:' + img.mime + ';base64,' + img.data.toString('base64'));
-        response.end(JSON.stringify({ subject: mail.subject, body: mail.body, summary: result.summary, candidates, images }));
+        response.end(JSON.stringify({ subject: mail.subject, body: mail.body, summary: result.summary, analysisError, ...planning, images }));
       } finally { analyzing = false; }
     } catch (error) {
-      response.statusCode = error instanceof RequestError ? error.status : 422;
+      response.statusCode = error instanceof RequestError || error.status === 409 ? error.status : 422;
       response.setHeader('Connection', 'close');
-      response.end(JSON.stringify({ error: error instanceof SyntaxError ? '无法读取模型或邮件的内容，请重试。' : error.message }));
+      response.end(JSON.stringify({ error: error instanceof SyntaxError ? '无法读取模型或邮件的内容，请重试。' : error.message, ...(error.planRevision ? { current: error.current, planRevision: error.planRevision } : {}) }));
     }
   });
   const sweep = setInterval(discardExpired, 60_000).unref();

@@ -32,18 +32,26 @@ export async function openOutlookService({ port, stateDir = applicationDirectory
 
 export function outlookController(auth, worker) {
   let changing = false;
+  const writes = new Set();
   async function change(operation) {
     if (changing) throw new Error('正在更新邮箱连接，请稍后再试。');
     changing = true;
     try {
+      await Promise.allSettled(writes);
       await worker.stop();
       return await operation();
     } finally { changing = false; worker.start(); }
   }
   return {
-    async status() {
+    async status(limit) {
       const { connected, configured, clientId, tenantId, accountType, redirectUri } = await auth.status();
-      return { connected, configured, clientId, tenantId, accountType, redirectUri, sync: connected && !changing ? worker.status() : null };
+      return { connected, configured, clientId, tenantId, accountType, redirectUri, sync: connected && !changing ? await worker.history(limit) : null };
+    },
+    async plan(input) {
+      if (changing || !(await auth.status()).connected || changing) throw Error('请先连接 Outlook。');
+      const write = worker.plan(input);
+      writes.add(write);
+      try { return await write; } finally { writes.delete(write); }
     },
     begin(settings) {
       if (changing) throw new Error('正在更新邮箱连接，请稍后再试。');

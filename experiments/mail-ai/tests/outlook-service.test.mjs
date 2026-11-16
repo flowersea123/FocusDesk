@@ -20,11 +20,11 @@ function close(server) {
   return new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
 }
 
-test('a local login callback starts a durable Inbox subscription and writes an actual Hub task exactly once', async t => {
+test('Inbox delivery creates one future calendar entry, preserves its deadline on reschedule, and publishes it on the chosen day', async t => {
   const dir = await mkdtemp(path.join(tmpdir(), 'focusdesk-outlook-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const file = path.join(dir, 'tasks.json');
-  const now = Date.parse('2026-11-14T01:00:00Z');
+  let now = Date.parse('2026-11-14T01:00:00Z');
   await writeFile(file, JSON.stringify({ date: '2026-11-14', timezone: 'Asia/Shanghai', tasks: [] }));
   const hub = createDemoServer({ dataPath: file, distPath: dir, now: () => now });
   const hubOrigin = await listen(hub);
@@ -81,8 +81,25 @@ test('a local login callback starts a durable Inbox subscription and writes an a
   assert.equal(state.sync.history[0].actions[0].status, 'added');
   assert.equal(requestedMime, 1); assert.equal(inference, 1);
   const { tasks } = JSON.parse(await readFile(file, 'utf8'));
-  assert.equal(tasks.length, 1);
-  assert.equal(tasks[0].due_at, '2026-11-16T09:00:00.000Z');
+  assert.deepEqual(tasks, []);
+  const row = state.sync.history[0];
+  const action = row.actions[0];
+  assert.equal(action.entry.plannedDate, '2026-11-16');
+  assert.equal(action.entry.dueAt, '2026-11-16T09:00:00.000Z');
+  const plan = (change = {}) => fetch(origin + '/api/outlook/plan', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messageId: row.id, actionId: action.id, plannedDate: '2026-11-15', ...change }) });
+  assert.equal((await plan({ actionId: 'unknown' })).status, 422);
+  const rescheduled = await plan({ expectedRevision: action.planRevision });
+  assert.equal(rescheduled.status, 200);
+  assert.equal((await rescheduled.json()).entry.plannedDate, '2026-11-15');
+  await worker.sync();
+  const calendar = await (await fetch(hubOrigin + '/api/v1/calendar')).json();
+  assert.equal(calendar.entries.length, 1);
+  assert.equal(calendar.entries[0].plannedDate, '2026-11-15');
+  assert.deepEqual((await (await fetch(hubOrigin + '/api/v1/daily-overview')).json()).tasks, []);
+  now = Date.parse('2026-11-14T16:05:00Z');  // November 15 in Shanghai.
+  const overview = await (await fetch(hubOrigin + '/api/v1/daily-overview')).json();
+  assert.deepEqual(overview.tasks, [{ id: action.id, title: action.deviceTitle, due_at: action.entry.dueAt, status: 'todo' }]);
   await post('disconnect');
   assert.equal((await (await fetch(origin + '/api/outlook/status')).json()).sync, null);
 });

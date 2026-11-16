@@ -81,6 +81,17 @@ describe('task rows', () => {
     expect(screen.getByRole('status')).toHaveTextContent('原专注计时已结束'); expect(screen.queryByRole('button', { name: '撤销删除' })).toBeNull();
   });
 
+  it('marks an explicit undo of a mail task so the calendar can restore the original item', async () => {
+    const data = initial();
+    data.tasks[0] = { ...data.tasks[0], id: 'src-' + 'a'.repeat(43) };
+    const task = data.tasks[0], save = saving(data);
+    render(<TaskEditor overview={data} saving={false} onSave={save}/>);
+    await click(button('删除 ' + task.title));
+    await click(button('撤销删除'));
+    expect(save.mock.calls[0][0]).not.toHaveProperty('restoreTaskId');
+    expect(save.mock.calls[1][0]).toMatchObject({ restoreTaskId: task.id, tasks: data.tasks });
+  });
+
   it('merges unrelated online edits, preserves conflicting text until explicit review, and can recover a removed anchor', async () => {
     const data = initial(); const save = saving(data);
     const view = render(<TaskEditor overview={data} saving={false} onSave={save} />);

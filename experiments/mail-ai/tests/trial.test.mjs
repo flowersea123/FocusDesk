@@ -10,6 +10,7 @@ async function setup(t, options = {}) {
   const clock = { now: Date.parse('2027-02-01T04:00:00Z') };
   const writes = [];
   const server = createTrialServer({
+    calendar: async () => ({ timezone: 'Asia/Shanghai', entries: [] }),
     now: () => clock.now, save: async task => { writes.push(task); return {status:'added'}; },
     analyze: async mail => ({summary:mail.subject,deadlines:[{title:'Submit report',quote:mail.body,source:'body',due_local:'2027-02-03 17:00'}]}),
     ...options,
@@ -33,7 +34,7 @@ test('trial renders a local editor, previews MIME and imports only a server-vali
   assert.equal((await post('/api/import',JSON.stringify({ticket,title:'Forged title'}))).status,400);
   assert.equal((await post('/api/import',JSON.stringify({ticket:'unknown'}))).status,410);
   assert.equal((await post('/api/import',JSON.stringify({ticket}))).status,200);
-  assert.equal(writes.length,1);assert.equal(writes[0].title,'Submit report');assert.equal(writes[0].dueAt,'2027-02-03T09:00:00.000Z');
+  assert.equal(writes.length,1);assert.equal(writes[0].title,'<b>Report</b>');assert.equal(writes[0].deviceTitle,'Submit report');assert.equal(writes[0].dueAt,'2027-02-03T09:00:00.000Z');
   clock.now += 10*60*1000;
   assert.equal((await post('/api/import',JSON.stringify({ticket}))).status,410);
 });
@@ -63,4 +64,41 @@ test('trial rejects other hosts, origins and oversized uploads before inference'
     req.on('error',reject);req.end();
   });
   assert.equal(oversized,413);
+});
+
+test('an EML with a reading notice or failed model can be planned or rescheduled without inventing a deadline', async t => {
+  const { post, writes } = await setup(t, { analyze: async () => { throw Error('model offline'); } });
+  const data = await (await post('/api/eml', eml, 'message/rfc822')).json();
+  assert.ok(data.analysisError);
+  assert.equal(data.mailPlan.dueDate, null);
+  assert.equal(data.mailPlan.dueAt, null);
+  const ticket = data.mailPlan.planTicket;
+  assert.equal((await post('/api/import', JSON.stringify({ ticket }))).status, 409);
+  for (const plannedDate of ['2027-02-17', '2027-02-18']) {
+    assert.equal((await post('/api/import', JSON.stringify({ ticket, plannedDate, dueDate: null, deviceTitle: 'Read course notice' }))).status, 200);
+  }
+  assert.deepEqual(writes.map(s => s.plannedDate), ['2027-02-17', '2027-02-18']);
+  assert.equal(writes[0].sourceKey, writes[1].sourceKey);
+  assert.equal(writes[0].dueAt, null); assert.equal(writes[0].dueDate, null);
+});
+
+test('same-sentence action choices stay independently addressable in the EML planner', async t => {
+  const { post, writes } = await setup(t, { analyze: async () => ({ summary: '两份材料', deadlines:
+    ['Send first file', 'Send second file'].map(title => ({ title, quote, source: 'body', due_local: '2027-02-03 17:00' })) }) });
+  const data = await (await post('/api/eml', eml, 'message/rfc822')).json();
+  for (const item of data.candidates) {
+    assert.equal((await post('/api/import', JSON.stringify({ ticket: item.planTicket, plannedDate: '2027-02-02', dueDate: '2027-02-03' }))).status, 200);
+  }
+  assert.notEqual(writes[0].sourceKey, writes[1].sourceKey);
+});
+
+test('EML presents and saves the date in the source when the model supplied the received clock time as a deadline', async t => {
+  const line = 'Please submit the gallery draft by 2027-02-27.';
+  const { post, writes } = await setup(t, { analyze: async () => ({ summary: '提交草稿。', deadlines: [
+    { title: 'Submit draft', source: 'body', quote: line, due_local: '2027-02-27 09:12' }] }) });
+  const read = await post('/api/eml', 'Subject: Draft\r\n\r\n' + line, 'message/rfc822');
+  const [item] = (await read.json()).candidates;
+  assert.equal(item.dueDate, '2027-02-27'); assert.equal(item.dueAt, null); assert.equal(item.time, null);
+  assert.equal((await post('/api/import', JSON.stringify({ ticket: item.planTicket, plannedDate: '2027-02-17' }))).status, 200);
+  assert.equal(writes[0].dueDate, '2027-02-27'); assert.equal(writes[0].dueAt, null);
 });

@@ -22,6 +22,8 @@ export interface ReadingLocation {
 }
 
 export interface ProjectStatus {
+  /** First unfinished scheduled task to show alongside the pinned project. */
+  calendarReminder?: { title: string; count: number };
   taskId: string;
   title: string;
   percent: number | null;

@@ -47,3 +47,52 @@ test('accepts a precise grounded sentence, shares a verified course link and ret
   const cancelled = { ...mail, body: mail.body + '\nThis request was cancelled.' };
   assert.match(assessMail(cancelled, extraction())[0].reason, /撤销/);
 });
+
+test('keeps a verified date-only deadline while a reading notice or a floating day gets a manual date choice', () => {
+  const analyze = (quote, modelTime = null) => assessMail({ id: 'notice', subject: '课程通知', body: quote, receivedAt: '2026-11-16T04:00:00Z', images: [] }, {
+    summary: quote, deadlines: [{ title: 'Read materials', source: 'body', quote, due_local: modelTime }],
+  })[0];
+  for (const quote of ['请于2026年11月27日前提交报告。', '请于本月27日前提交报告。', 'Submit the report by 2026-11-27.', '请于本月27日前阅读学生周材料。', 'Please read the course materials by 2026-11-27.']) {
+    const candidate = analyze(quote);
+    assert.equal(candidate.reason, null, quote);
+    assert.equal(candidate.dueDate, '2026-11-27', quote);
+    assert.equal(candidate.dueAt, null);
+  }
+  const inventedClock = analyze('Please submit the gallery draft by 2026-11-27.', '2026-11-27 09:12');
+  assert.equal(inventedClock.reason, null); assert.equal(inventedClock.dueDate, '2026-11-27'); assert.equal(inventedClock.dueAt, null);
+  for (const quote of ['27号有活动，请阅读通知。', '请在27号前提交报告。', '2026年11月27日讲座开始。', 'Submit by 2026-11-27 or 2026-12-01.']) {
+    const candidate = analyze(quote);
+    assert.ok(candidate.reason);
+    assert.equal(candidate.dueDate, null);
+  }
+});
+
+test('Han/digit typesetting spaces resolve to a unique complete original with its own deadline and source ID', () => {
+  const read = '请于本月27日前阅读学生周材料。';
+  const submit = '请于本月28日前提交课程报告。';
+  const spaced = '请于本月 27 日前阅读学生周材料。';
+  const assess = (body, ...quotes) => assessMail({ id: 'zh-spot', subject: '学生周', body, receivedAt: '2026-11-16T01:12:00Z', images: [] }, {
+    summary: '学生周任务', deadlines: quotes.map(quote => ({ title: 'Course materials', source: 'body', quote, due_local: '2026-11-27 09:12' })),
+  });
+  const body = read + '\n' + submit;
+  const [exact] = assess(body, read);
+  const [second, first] = assess(body, '请于本月 28 日前提交课程报告。', spaced);
+  assert.equal(first.reason, null);
+  assert.equal(first.quote, read);
+  assert.equal(first.sourceKey, exact.sourceKey);
+  assert.equal(first.dueDate, '2026-11-27'); assert.equal(first.dueAt, null);
+  assert.equal(second.quote, submit); assert.equal(second.dueDate, '2026-11-28');
+  assert.notEqual(first.sourceKey, second.sourceKey);
+  const [spacedOriginal] = assess(spaced, read);
+  assert.equal(spacedOriginal.quote, spaced);
+  assert.equal(spacedOriginal.sourceKey, assess(spaced, spaced)[0].sourceKey);
+  assert.equal(spacedOriginal.dueDate, '2026-11-27');
+  for (const changed of ['请于本月 28 日前阅读学生周材料。', '请于本月 2 7 日前阅读学生周材料。',
+    '请于本月27日前阅读学生周 材料。', '请阅读学生周材料于本月27日前。', '请于本月27日前阅读学生周材料!',
+    '请于本月27日前阅读学生周材料。请于本月28日前提交课程报告。', '请于本月\n27日前阅读学生周材料。']) {
+    const [proposal] = assess(body, changed);
+    assert.match(proposal.reason, /原句/, changed); assert.equal(proposal.dueDate, null);
+  }
+  assert.match(assess(read + '\n' + spaced, spaced)[0].reason, /原句/);
+  assert.ok(assess(body, spaced, read).every(p => /多个待办/.test(p.reason)));
+});
