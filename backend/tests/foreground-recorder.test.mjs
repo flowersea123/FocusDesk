@@ -152,3 +152,22 @@ test('unsupported desktops and permission errors stay stopped; cancelling startu
   await recorder.close();
   assert.equal(closes, 1); assert.equal((await recorder.readStatus()).state, 'idle');
 });
+
+test('same-app samples measure foreground intervals through deduplication, but never bridge sleep or lock', async t => {
+  const frames = [[0,'A'],[4000,'A'],[8000,'B'],[12000,'B'],[16000,null],[20000,'B'],[24000,'B'],[120000,'B'],[124000,'B']];
+  const spans = [];
+  let at = 0;
+  const recorder = createForegroundRecorder({ platform:'darwin', support:supported, pollMs:2, now:() => at,
+    open:async () => ({ capture:async () => {
+      const pair = frames.shift();
+      if (!pair) return null;
+      at = pair[0];
+      return pair[1] ? frame(pair[1], 'same-pixels', pair[1]) : null;
+    }, close() {} }),
+    analyze:async () => result('Stable content'), save:async () => {},
+    recordAppSpan:async (app, from, to) => { spans.push([app, from, to]); },
+  });
+  t.after(() => recorder.close()); recorder.start();
+  await until(() => spans.length === 4);
+  assert.deepEqual(spans, [['A',0,4000],['B',8000,12000],['B',20000,24000],['B',120000,124000]]);
+});

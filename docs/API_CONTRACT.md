@@ -241,6 +241,10 @@ Display schema display-1, layout goal-1, 4096-byte transport, 64 commands and dr
 
 本机 GET /api/v1/focus-review?date=YYYY-MM-DD 提供对应日的计时时段、总秒数、观察文字及改进实验。PUT /api/v1/focus-review/experiment 以日期和 revision 保存计划、复查结果。POST /api/v1/focus-review/synthesis 接收日期，调用本机模型总结当日检查点并返回参与生成的数量和引用原文。超过 12 条时沿时间轴取样。原始图像不写入日记，计时仅依据 Hub 记录的专注会话。
 
+每日回顾可返回 `appSessions: [{ appName, from, to, seconds }]`。录制期间，对相邻两次有效采样中同一前台应用累计间隔，以 ISO 时间返回指定日期内的起止时间，秒数保留毫秒精度。切换应用、空帧、停止或重启录制，以及超过 12 秒的采样间隔打断连续性。该数组与 `sessions` 的专注计时独立。旧数据仍可读取，旧截图显示为时间点。返回的观察可包含 `appName` 和 `taskId`，沿用当时的任务关联。私有回顾端点沿用本机访问限制。
+
+工作台与每日回顾在有当日观察时自动请求小结。成功响应中的 `observationRevision` 标识生成时的观察集合，以 SHA-256 校验，避免把旧小结显示为新证据的结论。
+
 ### 论文阅读书签
 
 屏幕观察和检查点可携带 readingSection 和 readingDocument，分别表示正文位置与画面中识别出的文档标题。只有章节位置时保留阅读进度候选。GET /api/v1/project-progress 的 statuses[].readingBookmark 提供当前书签以及可确认的上一个章节。PATCH /api/v1/checkpoints 以 id 和 readingSection 幂等确认对应记录，保留最初的手动或自动来源并记录 readingConfirmed。已确认的章节作为当前大任务的完成依据。自动采样核对画面标题、同任务手动审阅过的文档以及画面内容与待办的关系。自动归属只会对有画面依据的任务生效。多个任务都符合时，可结合用户指定的对象或专注任务消除歧义。删除最后一条对应的手动记录后，该文档关联失效。

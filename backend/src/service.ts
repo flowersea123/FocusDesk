@@ -91,6 +91,7 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
     support: async () => (await driver()).foregroundSupport(),
     open: async options => (await driver()).openForegroundCapture(options),
     ...recorderDriver,
+    now, recordAppSpan: reviews.recordAppSpan, flushAppSpans: reviews.flushAppSpans,
     analyze: screenObservation.foreground,
     save: async (record, signal) => {
       if (record.taskId && !(await loader.load()).tasks.some(task => task.id === record.taskId && task.status === 'todo')) {

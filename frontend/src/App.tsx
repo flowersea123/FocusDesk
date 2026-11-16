@@ -5,6 +5,10 @@ import { useOverview } from './data/use-overview';
 import { CheckpointWorkspace } from './CheckpointWorkspace';
 import { RecorderButton, RecorderFeedback, RecorderStatusLine, useForegroundRecorder } from './ForegroundRecord';
 import DailyReview from './DailyReview';
+import DailySynthesis from './DailySynthesis';
+import ActivityTimeline, { formatActivityDuration } from './ActivityTimeline';
+import NextTask, { nextAction } from './NextTask';
+import { useFocusReview } from './data/use-focus-review';
 import ProjectProgress from './ProjectProgress';
 import type { ProjectStatus } from '../../contracts/project-progress';
 import TaskEditor from './TaskEditor';
@@ -67,12 +71,36 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
   const showRecorderDetails = session?.state !== 'idle' || !!session.observedAt || !!session.savedCount ||
     !!session.message || !!recorder.readError || !!recorder.actionError;
   const target = recording ? tasks.find(task => task.id === session?.targetTaskId) : undefined;
-  const suggested = !session?.observedAt ? tasks.find(task => task.id === overview?.focus?.task_id) ?? tasks.find(task => task.status === 'todo') ?? tasks[0] : undefined;
-  const selected = manual ?? observed ?? target ?? suggested;
   const completed = overview?.tasks.filter(task => task.status === 'done').length ?? 0;
   const count = overview?.tasks.length ?? 0;
   const mock = source.kind === 'mock';
   const local = !mock && Boolean(source.updateTasks);
+  const reviewKey = (overview?.revision ?? '') + ':' + checkpointVersion;
+  const activity = useFocusReview({ active: !!overview && !!source.localWorkspace && view === 'today', refreshKey: reviewKey });
+  const activityDate = activity.review?.date ?? overview?.date;
+  const next = useMemo(() => overview && source.localWorkspace ? nextAction(overview, activity.review) : null,
+    [overview, source.localWorkspace, activity.review]);
+  const [revealApp, setRevealApp] = useState<{ name: string; request: number; date: string } | null>(null);
+  const suggested = !session?.observedAt ? tasks.find(task => task.id === overview?.focus?.task_id) ??
+    next?.task ?? tasks.find(task => task.status === 'todo') ?? tasks[0] : undefined;
+  const selected = manual ?? observed ?? target ?? suggested;
+  function inspectApp(name: string) {
+    const date = activity.review?.date;
+    if (date) setRevealApp(previous => ({ name, date, request: (previous?.request ?? 0) + 1 }));
+  }
+  function inspectHistory() {
+    const history = document.querySelector<HTMLDetailsElement>('details#record');
+    if (history) { history.open = true; history.querySelector('summary')?.focus(); }
+  }
+  function inspectTask(task: Task) {
+    chooseTask(task.id);
+    requestAnimationFrame(() => document.getElementById('project-progress')?.focus());
+  }
+  async function startRecommended(task: Task) {
+    if (!overview) return;
+    await saveFocus({ action: 'start', revision: overview.revision, task_id: task.id });
+    chooseTask(task.id);
+  }
   const showView = useCallback((next: View) => {
     setNavOpen(false);
     if (next === 'review') setReviewOpened(true);
@@ -134,7 +162,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
     return { ...overview, tasks, focus, ...(suggestionDraft === null ? {} : { ai_suggestion: suggestionDraft }) };
   }, [overview, taskDraft, suggestionDraft]);
 
-  const focusPanel = overview && <FocusPanel overview={overview} saving={saving} preferredTaskId={selected?.id} onTaskSelect={chooseTask} onSave={source.updateFocus ? saveFocus : undefined} />;
+  const focusPanel = overview && <FocusPanel overview={overview} saving={saving} preferredTaskId={selected?.status === 'todo' ? selected.id : next?.task?.id} onTaskSelect={chooseTask} onSave={source.updateFocus ? saveFocus : undefined} />;
   return <div className="dashboard">
     <a className="desk-skip" href="#workspace">跳至工作台</a>
     <header className="desk-header" ref={header} data-open={navOpen}>
@@ -167,9 +195,13 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
       {view === 'today' && <div className="desk-masthead">
         <div>
           <h1>今日工作台</h1>
-          {overview && <p className="desk-date"><time dateTime={overview.date}>{dateFormat.format(new Date(overview.date + 'T12:00:00Z'))}</time></p>}
+          {activityDate && <p className="desk-date"><time dateTime={activityDate}>{dateFormat.format(new Date(activityDate + 'T12:00:00Z'))}</time></p>}
         </div>
-        <button type="button" className="desk-reload" disabled={loading || saving} onClick={reload} title="重新读取" aria-label="重新读取">
+        {activity.review && <dl className="today-totals">
+          <div><dt>专注计时</dt><dd>{formatActivityDuration(activity.review.totalSeconds)}</dd></div>
+          <div><dt>已记录前台</dt><dd>{formatActivityDuration((activity.review.appSessions ?? []).reduce((sum, item) => sum + item.seconds, 0))}</dd></div>
+        </dl>}
+        <button type="button" className="desk-reload" disabled={loading || saving} onClick={() => { reload(); activity.refresh(); }} title="重新读取" aria-label="重新读取">
           <DeskIcon name="refresh" />
         </button>
       </div>}
@@ -181,6 +213,14 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
         {loading && <p className={overview ? 'sr-only' : 'loading-line'} role="status">{overview ? '正在读取，暂时保留上次内容…' : '正在读取今日概览…'}</p>}
       </div>
       <div hidden={view !== 'today'}>
+      {source.localWorkspace && overview && <div className="today-insights">
+        <ActivityTimeline review={activity.review} tasks={tasks} revealApp={revealApp?.date === activity.review?.date ? revealApp : null} error={activity.error} onRetry={activity.refresh}/>
+        <div className="today-brief">
+          <NextTask overview={overview} next={next} saving={saving} onStart={source.updateFocus ? startRecommended : undefined} onInspect={inspectTask} onApp={inspectApp} onHistory={inspectHistory}/>
+          {activity.review && (activity.review.observations.length > 0 || activity.review.sessions.length > 0 || !!activity.review.appSessions?.length) &&
+            <DailySynthesis active={view === 'today'} review={activity.review}/>}
+        </div>
+      </div>}
       <div className="desk-grid">
         <div className="desk-work">
           <section className="desk-task-panel" aria-labelledby="overview-title" aria-busy={loading}>
@@ -232,7 +272,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
       </details>
       </div>
       {source.localWorkspace && overview && reviewOpened && <div hidden={view !== 'review'}>
-        <DailyReview refreshKey={overview.revision + ':' + checkpointVersion} />
+        <DailyReview refreshKey={reviewKey} active={view === 'review'} />
       </div>}
     </main>
   </div>;

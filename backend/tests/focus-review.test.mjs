@@ -165,3 +165,22 @@ test('a corrupt record is preserved; an interrupted staging write can be safely 
   assert.equal((await make().read()).experiment.plan, '重新尝试');
   assert.deepEqual((await readdir(dir)).sort(), ['tasks.json', 'tasks.json.focus-review.json']);
 });
+
+test('foreground samples persist separately from timers, clip to the requested day and survive a restart', async t => {
+  const { review, make } = await setup(t, localMidnight + min);
+  await review.recordAppSpan('Editor', localMidnight - 3000, localMidnight + 1000);
+  await review.recordAppSpan('Editor', localMidnight + 1000, localMidnight + 5000);
+  await review.recordAppSpan('Browser', localMidnight + 10000, localMidnight + 16000);
+  await review.recordAppSpan('Browser', localMidnight + 16000, localMidnight + 18000);
+  await review.flushAppSpans();
+  const next = make();
+  const result = await next.read(undefined, 'Asia/Shanghai', [{ id: 'old', at: new Date(localMidnight + 20000).toISOString(),
+    taskId: 'lab', appName: 'Reader', summary: 'A single screen observation.' }]);
+  assert.deepEqual(result.appSessions.map(s => [s.appName, s.seconds]), [['Editor', 5], ['Browser', 8]]);
+  assert.match(result.summary, /Browser.*8 秒/);
+  assert.equal(result.observations[0].appName, 'Reader');
+  assert.equal(result.observations[0].taskId, 'lab');
+  assert.equal(result.totalSeconds, 0);
+  const previous = await next.read('2026-11-16');
+  assert.deepEqual(previous.appSessions.map(s => [s.appName, s.seconds]), [['Editor', 3]]);
+});

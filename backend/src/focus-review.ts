@@ -3,7 +3,7 @@ import { open, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { FOCUS_DURATION_MS, MAX_OVERVIEW_BYTES, type DailyOverview, type FocusSession } from '../../contracts/daily-overview.ts';
 import { checkpointSourceLabel } from '../../contracts/screen-checkpoint.ts';
-import type { ReviewObservation, FocusReview, ReviewExperiment, ReviewSegment } from '../../contracts/focus-review.ts';
+import type { AppSession, ReviewObservation, FocusReview, ReviewExperiment, ReviewSegment } from '../../contracts/focus-review.ts';
 
 const DAY = 86_400_000;
 const RETENTION = 90 * DAY;
@@ -26,7 +26,10 @@ interface Segment {
   end: Exclude<ReviewSegment['end'], 'continued'>;
 }
 
+interface AppSpan { appName: string; from: number; to: number }
+
 interface Journal {
+  appSpans?: AppSpan[];
   version: 1;
   since: number;
   sessions: Segment[];
@@ -87,6 +90,10 @@ async function load(file: string, activated: number): Promise<Journal> {
     throw new ReviewInputError('每日回顾记录无法读取，原文件已保留。', 503);
   }
   if (data?.version !== 1 || !validTime(data.since) || !Array.isArray(data.sessions) || data.sessions.length > MAX_SESSIONS ||
+      (data.appSpans !== undefined && (!Array.isArray(data.appSpans) || data.appSpans.length > MAX_SESSIONS ||
+        !data.appSpans.every((s: AppSpan, i: number) => s && typeof s.appName === 'string' && s.appName.length > 0 &&
+          s.appName.length <= 120 && validTime(s.from) && validTime(s.to) && s.to > s.from &&
+          (i === 0 || s.from >= data.appSpans[i - 1].to)))) ||
       !data.sessions.every((s: Segment, i: number) => validSegment(s) && (s.end !== 'running' || i === data.sessions.length - 1)) ||
       !Array.isArray(data.experiments) || data.experiments.length > 92 || !data.experiments.every(validExperiment)) {
     throw new ReviewInputError('每日回顾记录格式无效，原文件已保留。', 503);
@@ -120,6 +127,7 @@ function trim(data: Journal, now: number) {
     data.since = Math.max(data.since, data.sessions[data.sessions.length - MAX_SESSIONS - 1].seen);
     data.sessions = data.sessions.slice(-MAX_SESSIONS);
   }
+  if (data.appSpans) data.appSpans = data.appSpans.filter(s => s.to >= limit).slice(-MAX_SESSIONS);
   data.experiments = data.experiments.filter(e => e.date >= iso(floor).slice(0, 10));
 }
 
@@ -128,12 +136,17 @@ function shortDuration(seconds: number) {
   return Math.floor(seconds / 60) + ' 分钟';
 }
 
-function summarize(sessions: ReviewSegment[], total: number, observations: ReviewObservation[]) {
+function summarize(sessions: ReviewSegment[], total: number, observations: ReviewObservation[], appSessions: AppSession[]) {
   const last = observations.at(-1);
   const most = sessions.reduce((best, s) => !best || s.seconds > best.seconds ? s : best, null as ReviewSegment | null);
   const timer = most ? '共 ' + sessions.length + ' 段计时，合计 ' + shortDuration(total) + '。' +
     '最长一段用于「' + most.title + '」。' : '这一天没有留下专注计时记录。';
-  const summary = timer + (last ? '最近一次' + checkpointSourceLabel(last.source) + '的屏幕观察写道：“' + last.summary + '”' : '');
+  const appTotals = new Map<string, number>();
+  for (const session of appSessions) appTotals.set(session.appName, (appTotals.get(session.appName) ?? 0) + session.seconds);
+  const longestApp = [...appTotals].sort((a, b) => b[1] - a[1])[0];
+  const appSummary = longestApp ? '记录到的前台应用中，' + longestApp[0] + ' 的时长最多，合计 ' +
+    shortDuration(Math.floor(longestApp[1])) + '。' : '';
+  const summary = (most || !appSummary ? timer : '') + appSummary + (last ? '最近一次' + checkpointSourceLabel(last.source) + '的屏幕观察写道：“' + last.summary + '”' : '');
   const next = observations.findLast(o => Boolean(o.nextStep?.trim()));
   let suggestion: FocusReview['suggestion'] = null;
   if (next) suggestion = { action: next.nextStep!, evidence: '来自' + checkpointSourceLabel(next.source) + '的屏幕观察：“' + next.summary + '”' };
@@ -156,6 +169,8 @@ export function createFocusReview(dataPath: string, { now = Date.now }: { now?: 
   let reconciled = false;
   let latestZone = 'Asia/Shanghai';
   let lastObservation = -Infinity;
+  let appDirty = false;
+  let appSavedAt = -Infinity;
   let queue = Promise.resolve();
 
   function run<T>(job: (data: Journal) => Promise<T>): Promise<T> {
@@ -171,6 +186,8 @@ export function createFocusReview(dataPath: string, { now = Date.now }: { now?: 
     trim(data, at);
     await store(file, data);
     journal = data;
+    appDirty = false;
+    appSavedAt = at;
   }
 
   async function remainsInSource(active: Segment) {
@@ -185,6 +202,22 @@ export function createFocusReview(dataPath: string, { now = Date.now }: { now?: 
   }
 
   return {
+    recordAppSpan(appName: string, from: number, to: number) {
+      return run(async data => {
+        const spans = data.appSpans ?? [];
+        const last = spans.at(-1);
+        const start = Math.max(from, last?.to ?? from);
+        if (to <= start) return;
+        const extend = last?.appName === appName && last.to === start && from === start;
+        const next = extend ? [...spans.slice(0, -1), { ...last, to }] : [...spans, { appName, from: start, to }];
+        const updated = { ...data, appSpans: next };
+        if (!extend || to - appSavedAt >= CHECKPOINT_MS) await persist(updated, to);
+        else { journal = updated; appDirty = true; }
+      });
+    },
+    flushAppSpans() {
+      return run(async data => { if (appDirty) await persist(data, now()); });
+    },
     observe(overview: Pick<DailyOverview, 'focus' | 'tasks' | 'timezone'>, cause: 'snapshot' | 'start' | 'stop' = 'snapshot') {
       const at = now();
       return run(async data => {
@@ -251,13 +284,21 @@ export function createFocusReview(dataPath: string, { now = Date.now }: { now?: 
         }
         const dailyObservations = observations.filter(o => typeof o.summary === 'string' && o.summary.trim() &&
           Date.parse(o.at) >= begin && Date.parse(o.at) < end && Date.parse(o.at) <= at)
-          .map(({ id, at, summary, nextStep, source = 'manual' }) => ({ id, at, summary, source, ...(nextStep ? { nextStep } : {}) }))
+          .map(({ id, at, summary, nextStep, source = 'manual', appName, taskId }) => ({
+            id, at, summary, source, ...(nextStep ? { nextStep } : {}), ...(appName ? { appName } : {}),
+            ...(taskId !== undefined ? { taskId } : {}),
+          }))
           .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+        const appSessions = (data.appSpans ?? []).flatMap(s => {
+          const from = Math.max(s.from, begin);
+          const to = Math.min(s.to, end, at);
+          return to > from ? [{ appName: s.appName, from: iso(from), to: iso(to), seconds: (to - from) / 1000 }] : [];
+        });
         const totalSeconds = Math.floor(elapsed / 1000);
         const keptExperiments = data.experiments.filter(e => e.date >= iso(at - RETENTION).slice(0, 10));
         return {
           date: selected, today, timezone: zone, trackingSince: iso(floor), partial: begin < floor,
-          totalSeconds, sessions, observations: dailyObservations, ...summarize(sessions, totalSeconds, dailyObservations),
+          totalSeconds, sessions, appSessions, observations: dailyObservations, ...summarize(sessions, totalSeconds, dailyObservations, appSessions),
           experiment: keptExperiments.find(e => e.date === selected) ?? null,
           previousExperimentDate: keptExperiments.filter(e => e.date < selected && !e.outcome)
             .map(e => e.date).sort().at(-1) ?? null,

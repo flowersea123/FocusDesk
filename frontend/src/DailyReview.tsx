@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { checkpointSourceLabel } from '../../contracts/screen-checkpoint';
 import type { FocusReview } from '../../contracts/focus-review';
-import DailySynthesis from './DailySynthesis';
+import DailySynthesis, { synthesisKey } from './DailySynthesis';
+import { useFocusReview } from './data/use-focus-review';
 import './daily-review.css';
 
 const endpoint = '/api/v1/focus-review';
@@ -98,53 +99,20 @@ function Experiment({ review, refresh, changeDate }: { review: FocusReview; refr
   </section>;
 }
 
-export default function DailyReview({ refreshKey }: { refreshKey?: string | number }) {
+export default function DailyReview({ active = true, refreshKey }: { active?: boolean; refreshKey?: string | number }) {
   const [date, setDate] = useState('');
-  const [aiSuggestion, setAISuggestion] = useState<FocusReview['suggestion']>(null);
-  const [version, setVersion] = useState(0);
-  const [review, setReview] = useState<FocusReview | null>(null);
-  const [error, setError] = useState('');
-  const latest = useRef(0);
-  const refresh = () => setVersion(v => v + 1);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const ticket = ++latest.current;
-    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]);
-    async function read() {
-      try {
-        const response = await fetch(endpoint + (date ? '?date=' + encodeURIComponent(date) : ''),
-          { credentials: 'same-origin', cache: 'no-store', signal });
-        if (!response.ok) throw new Error(await responseMessage(response));
-        const result = await response.json() as FocusReview;
-        if (controller.signal.aborted || latest.current !== ticket) return;
-        setReview(result); setError('');
-      } catch (issue) {
-        if (controller.signal.aborted || latest.current !== ticket) return;
-        setError(issue instanceof Error ? issue.message : '无法读取回顾。');
-      }
-    }
-    void read();
-    return () => controller.abort();
-  }, [date, version, refreshKey]);
-
-  useEffect(() => {
-    const onVisible = () => { if (!document.hidden) refresh(); };
-    const timer = window.setInterval(onVisible, 30_000);
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('focus', onVisible);
-    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('focus', onVisible); };
-  }, []);
-
-  const current = review && (!date || review.date === date) ? review : null;
-  const suggestion = aiSuggestion ?? current?.suggestion ?? null;
+  const { review, error, refresh } = useFocusReview({ date, active, refreshKey });
+  const [ai, setAI] = useState<{ key: string; value: FocusReview['suggestion'] } | null>(null);
+  const onSuggestion = useCallback((value: FocusReview['suggestion'], key: string) => setAI(value ? { key, value } : null), []);
+  const current = review && review.date === (date || review.today) ? review : null;
+  const suggestion = (ai?.key === synthesisKey(current) ? ai.value : null) ?? current?.suggestion ?? null;
   const clock = current && new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: current.timezone });
   return <section className="daily-review" aria-labelledby="daily-review-title">
     <header className="review-heading">
       <h1 id="daily-review-title">每日回顾</h1>
       <div className="review-date">
         <label>回顾日期 <input aria-label="回顾日期" type="date" value={date || review?.date || ''}
-          max={review?.today} onChange={e => { setError(''); setDate(e.target.value); }} /></label>
+          max={review?.today} onChange={e => setDate(e.target.value)} /></label>
         {date && date !== review?.today && <button type="button" className="review-link" onClick={() => setDate('')}>今天</button>}
       </div>
     </header>
@@ -156,7 +124,7 @@ export default function DailyReview({ refreshKey }: { refreshKey?: string | numb
         <div><span>计时段数</span><strong>{current.sessions.length}</strong></div>
         <div><span>屏幕观察</span><strong>{current.observations.length}</strong></div>
       </div>
-      <p className="review-summary">{current.summary}</p>
+      <DailySynthesis active={active} review={current} onSuggestion={onSuggestion}/>
       {current.partial && <p className="review-note">专注计时可追溯至 {new Intl.DateTimeFormat('zh-CN', {
         month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: current.timezone,
       }).format(new Date(current.trackingSince))}（{current.timezone}）。</p>}
@@ -168,7 +136,6 @@ export default function DailyReview({ refreshKey }: { refreshKey?: string | numb
       {current.observations.length > 0 && <details className="review-evidence"><summary>查看屏幕观察</summary>
         <ul>{current.observations.map(o => <li key={o.id}><span className="review-time">{clock!.format(new Date(o.at))}</span>
           <span>{o.summary}<small>{checkpointSourceLabel(o.source)}</small></span></li>)}</ul></details>}
-      <DailySynthesis date={current.date} revisionKey={current.observations.map(o => o.id).join(',')} onSuggestion={setAISuggestion}/>
       {suggestion && <aside className="review-suggestion"><h3>下次可以试试</h3><p>{suggestion.action}</p>
         <small>{suggestion.evidence}</small></aside>}
       <Experiment key={current.date} review={{ ...current, suggestion }} refresh={refresh} changeDate={setDate}/>

@@ -62,7 +62,7 @@ export default function FocusPanel({ overview, saving, preferredTaskId, onTaskSe
 
   return <section className="focus-panel" aria-labelledby="focus-title">
     <div className="focus-grid">
-      <h2 className="focus-label" id="focus-title"><i aria-hidden="true" />{focus ? '正在专注' : '下一件事'}</h2>
+      <h2 className="focus-label" id="focus-title"><i aria-hidden="true" />{focus ? '正在专注' : '专注计时'}</h2>
       {!focus && onSave && tasks.length > 1 ? <select className="focus-choice" aria-label="选择专注任务"
         title={selectedTask?.title} value={taskId} disabled={saving || pending} onChange={event => {
           const id = event.target.value;

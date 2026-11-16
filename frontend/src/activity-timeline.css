@@ -1,0 +1,84 @@
+.activity-timeline {
+  container: activity / inline-size;
+  min-width: 0;
+  padding: clamp(16px, 2vw, 24px);
+  border: 1px solid var(--line, #e1e0e6);
+  border-radius: 13px;
+  background: #fff;
+  color: var(--ink, #25242b);
+}
+.activity-header, .activity-legend, .activity-legend span, .activity-details header {
+  display: flex; align-items: center; flex-wrap: wrap;
+}
+.activity-header, .activity-details header { justify-content: space-between; gap: 5px 12px; }
+.activity-header h2 { margin: 0; font-size: 18px; line-height: 1.4; font-weight: 650; letter-spacing: -.025em; }
+.activity-header > span, .activity-empty, .activity-legend, .activity-axis, .activity-axis-heading, .activity-details time, .activity-name small {
+  color: var(--muted, #62616a);
+}
+.activity-header > span, .activity-axis, .activity-details time { font-variant-numeric: tabular-nums; }
+.activity-header > span { font-size: 12px; }
+.activity-legend { gap: 5px 15px; margin: 12px 0 16px; font-size: 12px; }
+.activity-legend span { gap: 5px; }
+.activity-legend i { display: inline-block; width: 13px; height: 7px; border-radius: 2px; }
+.activity-key-focus { background: #7962a7; }
+.activity-key-app { background: #467eb1; }
+.activity-legend .activity-key-shot { width: 8px; height: 8px; border: 2px solid #5c6474; border-radius: 50%; }
+.activity-legend .activity-latest-label { margin-left: auto; font-variant-numeric: tabular-nums; }
+.activity-legend .activity-latest-label i { width: 2px; height: 10px; background: #ad4c69; }
+.activity-grid { display: grid; grid-template-columns: minmax(100px, 22%) minmax(0, 1fr); align-items: stretch; padding-right: 13px; }
+.activity-axis-heading, .activity-axis { font-size: 11px; }
+.activity-axis-heading { padding: 0 8px 7px 0; }
+.activity-axis { position: relative; height: 23px; }
+.activity-axis span { position: absolute; white-space: nowrap; transform: translateX(-50%); }
+.activity-axis span:first-child { transform: none; }
+.activity-axis span:last-child { transform: translateX(-100%); }
+.activity-row { display: contents; }
+.activity-timeline .activity-name {
+  min-width: 0; display: grid; align-content: center; gap: 1px; padding: 6px 13px 6px 0;
+  border: 0; border-top: 1px solid #eae9ee; border-radius: 0; background: transparent;
+  color: inherit; text-align: left; font: inherit; line-height: 1.35;
+}
+.activity-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 570; }
+.activity-name strong::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 2px; background: var(--activity-color); vertical-align: 1px; }
+.activity-name small { font-size: 11px; }
+.activity-row-metrics { display: flex; flex-wrap: wrap; gap: 0 3px; }
+.activity-row-metrics > span { white-space: nowrap; }
+.activity-timeline .activity-name:hover strong { color: var(--accent, #6650a5); text-decoration: underline; }
+.activity-track {
+  position: relative; min-height: 43px; border-top: 1px solid #eae9ee; border-right: 1px solid #eae9ee;
+  background: linear-gradient(to right, #e8e7ed 1px, transparent 1px) 0 0 / 25% 100%;
+}
+.activity-latest-line { pointer-events: none; position: absolute; top: -1px; bottom: 0; width: 1px; transform: translateX(-.5px); background: #b95270; }
+.activity-timeline .activity-span, .activity-timeline .activity-point {
+  appearance: none; position: absolute; min-height: 0; padding: 0; border: 0; border-radius: 3px; background: transparent;
+}
+.activity-timeline .activity-span { min-width: 2px; height: 24px; top: 1px; }
+.activity-span > i { position: absolute; top: 8px; height: 9px; min-width: 2px; border-radius: 2px; background: var(--activity-color); }
+.activity-timeline .activity-point { display: grid; place-items: center; width: 26px; height: 24px; bottom: 0; transform: translateX(-50%); }
+.activity-point i { width: 9px; height: 9px; border: 2px solid var(--activity-color); border-radius: 50%; background: #fff; }
+.activity-point .is-cluster { display: grid; place-items:center; width: auto; min-width: 19px; height: 17px; padding: 0 3px; border: 1px solid var(--activity-color); border-radius: 6px; color: #302d36; font: 600 10px/1 system-ui, sans-serif; }
+.activity-timeline .activity-point:hover i, .activity-timeline .activity-span:hover i { outline: 2px solid #c7bed3; outline-offset: 2px; }
+.activity-track:not(:has(.activity-point)) .activity-span { top: calc(50% - 12px); }
+.activity-track:not(:has(.activity-span)) .activity-point { bottom: calc(50% - 12px); }
+.activity-timeline button:focus-visible { z-index: 1; outline: 2px solid var(--accent, #6650a5); outline-offset: 2px; }
+.activity-timeline .activity-more { border: 0; background: transparent; padding: 4px 0; color: var(--accent, #6650a5); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.activity-grid + .activity-more { margin-top: 7px; }
+.activity-details { margin-top: 14px; padding: 12px 14px; border: 1px solid #e6e2ed; border-radius: 7px; background: #faf9fb; }
+.activity-details h3 { margin: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 620; }
+.activity-details ol { margin: 6px 0 0; padding: 0; list-style: none; }
+.activity-details li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 12px; padding: 5px 0; border-top: 1px solid #e9e6ee; font-size: 13px; line-height: 1.5; }
+.activity-details li > div { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.activity-details time, .activity-details small { font-size: 11px; }
+.activity-details small { display: block; color: var(--muted, #62616a); }
+.activity-empty, .activity-error { margin: 12px 0 0; font-size: 13px; line-height: 1.6; }
+.activity-error { color: #8f3747; }
+@container activity (max-width: 450px) {
+  .activity-grid { grid-template-columns: minmax(78px, 32%) minmax(0,1fr); }
+  .activity-header > span, .activity-name small { font-size: 10px; }
+  .activity-legend { column-gap: 10px; font-size: 11px; }
+  .activity-legend .activity-latest-label { margin-left: 0; }
+  .activity-metric-divider { display: none; }
+  .activity-axis span:nth-child(2), .activity-axis span:nth-child(4) { display: none; }
+  .activity-track { background-size: 50% 100%; }
+  .activity-details { padding-inline: 10px; }
+}

@@ -70,9 +70,27 @@
   .review-metrics strong { font-size: 18px; }
 }
 .daily-review { max-width: 880px; }
-.daily-synthesis { margin: 18px 0; }
-.daily-synthesis > div { padding: 16px 18px; margin-top: 12px; border: 1px solid var(--review-rule); border-radius: 9px; }
-.daily-synthesis h4 { font-size: 16px; margin: 0 0 8px; }
-.daily-synthesis details { color: var(--review-muted); font-size: 13px; }
-.daily-synthesis summary { cursor: pointer; }
-.daily-synthesis p, .daily-synthesis ul { margin: 8px 0; line-height: 1.7; }
+.daily-synthesis {
+  min-width: 0;
+  padding: 20px 22px;
+  color: var(--ink, #25242b);
+  background: white;
+  border: 1px solid var(--line, #e1e0e6);
+  border-radius: 13px;
+  overflow-wrap: anywhere;
+}
+.daily-review .daily-synthesis { margin: 14px 0 18px; padding: 15px 17px; }
+.daily-synthesis header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
+.daily-synthesis h2 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -.035em; }
+.daily-review .daily-synthesis h2 { font-size: 17px; }
+.daily-synthesis p { margin: 8px 0; font-size: 15px; line-height: 1.7; }
+.daily-synthesis small, .daily-synthesis details { color: var(--muted, #686771); font-size: 12px; }
+.daily-synthesis summary { width: fit-content; cursor: pointer; }
+.daily-synthesis ul { display: grid; gap: 7px; list-style: none; margin: 8px 0 0; padding: 0; }
+.daily-synthesis li { display: grid; gap: 1px; padding-left: 9px; border-left: 2px solid var(--line, #e1e0e6); }
+.daily-synthesis li span { color: var(--ink, #25242b); font-size: 13px; line-height: 1.6; }
+.daily-synthesis time { font-variant-numeric: tabular-nums; }
+.synthesis-state { display: block; margin-top: 7px; }
+@media (max-width: 520px) {
+  .daily-synthesis, .daily-review .daily-synthesis { padding: 14px 16px; }
+}

@@ -159,3 +159,33 @@
   .desk-completion { gap: 4px; font-size: 11px; }
   .desk-section-head .desk-progress { display: none; }
 }
+
+.today-insights { min-width: 0; margin-bottom: 20px; }
+.today-brief { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 15px; align-items: stretch; }
+.today-brief > :only-child { grid-column: 1 / -1; }
+.next-task-card, .today-brief > .daily-synthesis { min-width: 0; padding: 17px 20px; border: 1px solid var(--line); border-radius: 13px; background: white; }
+.next-task-card { display: flex; flex-direction: column; align-items: flex-start; background: #f4f0fa; border-color: #e3d8ef; }
+.next-task-card h2, .today-brief .daily-synthesis h2 { margin: 0 0 8px; color: var(--ink); font-size: 15px; font-weight: 650; }
+.next-task-name { color: #342d40; font-size: 19px; font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; }
+.next-task-description { margin: 5px 0 0; color: #403e47; line-height: 1.55; overflow-wrap: anywhere; }
+.next-task-reason { margin-top: 5px; color: #69646f; font-size: 12px; overflow-wrap: anywhere; }
+.next-task-action { margin-top: 12px; border: 0; border-radius: 7px; background: #614b87; color: white; padding: 7px 12px; min-height: 36px; font: inherit; font-size: 13px; font-weight: 600; }
+.next-task-action:hover { background: #503a75; }
+@media (max-width: 700px) {
+  .today-brief { grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 10px; }
+  .next-task-card, .today-brief > .daily-synthesis { padding: 13px 15px; }
+  .today-insights { margin-bottom: 12px; }
+  .next-task-action { min-height: 40px; }
+}
+
+.today-totals { display: flex; align-items: center; gap: clamp(16px, 3vw, 38px); margin: 0 6px 0 auto; }
+.today-totals > div { display: flex; flex-direction: column-reverse; }
+.today-totals dt { color: var(--muted); font-size: 12px; }
+.today-totals dd { margin: 0; color: var(--ink); font-size: clamp(18px, 2vw, 26px); font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.4; }
+@media (max-width: 600px) {
+  .desk-masthead:has(.today-totals) { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .today-totals { grid-row: 2; grid-column: 1 / -1; gap: 18px; margin: 0; }
+  .today-totals > div { flex-direction: row; align-items: baseline; gap: 5px; }
+  .today-totals dd { font-size: 14px; }
+  .desk-masthead .desk-reload { grid-column: 2; grid-row: 1; }
+}

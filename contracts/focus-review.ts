@@ -2,6 +2,8 @@ import type { CheckpointSource } from './screen-checkpoint.ts';
 
 export interface ReviewObservation {
   source?: CheckpointSource;
+  appName?: string;
+  taskId?: string | null;
   id: string;
   at: string;
   summary: string;
@@ -27,6 +29,13 @@ export interface ReviewExperiment {
   revision: string;
 }
 
+export interface AppSession {
+  appName: string;
+  from: string;
+  to: string;
+  seconds: number;
+}
+
 export interface FocusReview {
   date: string;
   today: string;
@@ -35,6 +44,7 @@ export interface FocusReview {
   partial: boolean;
   totalSeconds: number;
   sessions: ReviewSegment[];
+  appSessions?: AppSession[];
   observations: ReviewObservation[];
   summary: string;
   suggestion: { action: string; evidence: string } | null;

@@ -22,6 +22,9 @@ export interface RecorderOptions {
   open(options: { signal: AbortSignal; onStop: (reason?: string) => void }): Promise<CaptureSession>;
   analyze(image: string, signal: AbortSignal, targetTaskId?: string): Promise<ObservedPage>;
   save(record: ScreenCheckpoint, signal: AbortSignal): Promise<void>;
+  recordAppSpan?(appName: string, from: number, to: number): Promise<void>;
+  flushAppSpans?(): Promise<void>;
+  now?: () => number;
   pollMs?: number;
   samePageMs?: number;
 }
@@ -34,7 +37,7 @@ function messageOf(error: unknown) {
   return error instanceof Error ? error.message : '前台页面记录暂时不可用，请重新开始。';
 }
 
-export function createForegroundRecorder({ platform, support, open, analyze, save, pollMs = 4_000, samePageMs = 45_000 }: RecorderOptions) {
+export function createForegroundRecorder({ platform, support, open, analyze, save, recordAppSpan, flushAppSpans, now = Date.now, pollMs = 4_000, samePageMs = 45_000 }: RecorderOptions) {
   const status: RecorderStatus = { platform, state: 'idle', supported: true, message: '',
     savedCount: 0, lastSavedAt: null, sessionStartedAt: null, targetTaskId: null, observedTaskId: null, observedAt: null };
   let current: AbortController | undefined;
@@ -71,6 +74,7 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
     const { signal } = controller;
     let device: CaptureSession | undefined;
     let failure = '';
+    let previousApp: { name: string; at: number } | undefined;
     let draining: Promise<void> | undefined;
     // Keep at most three pending samples while the local model reads an earlier page.
     const queue: Sample[] = [];
@@ -95,7 +99,7 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
           nextStep: '', progress: null, completedParts: [] };
       }
       signal.throwIfAborted();
-      if (titleOnly) retryTitleAt = Date.now() + 60_000;
+      if (titleOnly) retryTitleAt = now() + 60_000;
       const facts = JSON.stringify([observation.taskId, observation.summary, observation.readingDocument, observation.readingSection,
         observation.readingPosition?.page, observation.readingPosition?.total, observation.progress?.percent, [...(observation.completedParts ?? [])].sort()]);
       const row: ScreenCheckpoint = { id: randomUUID(), source: 'automatic', appName, capturedAt,
@@ -129,14 +133,21 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
       }
       device = await open({ signal, onStop: reason => stop(reason || '已从桌面停止记录。') });
       signal.throwIfAborted();
-      Object.assign(status, { state: 'recording', supported: true, message: '', sessionStartedAt: new Date().toISOString() });
+      Object.assign(status, { state: 'recording', supported: true, message: '', sessionStartedAt: new Date(now()).toISOString() });
       while (!signal.aborted) {
         const generation = targetGeneration;
         const targetTaskId = status.targetTaskId ?? null;
         const frame = await device.capture(signal);
         signal.throwIfAborted();
+        const at = now();
+        const name = clean(frame?.app, 60);
+        // An interval needs consecutive samples of the same foreground app. Pauses,
+        // lock screens, long capture gaps and recorder restarts break continuity.
+        if (name && previousApp?.name === name && at > previousApp.at && at - previousApp.at <= 12_000) {
+          await recordAppSpan?.(name, previousApp.at, at);
+        }
+        previousApp = name ? { name, at } : undefined;
         if (frame && generation === targetGeneration) {
-          const at = Date.now();
           const changedPage = lastSample?.page !== frame.pageKey || lastSample?.generation !== generation;
           const digest = createHash('sha256').update(frame.image).digest('hex');
           const newPixels = digest !== lastSample?.digest;
@@ -168,6 +179,7 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
       queue.length = 0;
       try { await device?.close(); } catch (error) { failure ||= messageOf(error); }
       await draining;
+      try { if (device) await flushAppSpans?.(); } catch (error) { failure ||= messageOf(error); }
       if (failure) Object.assign(status, { state: 'error', message: failure });
       else if (status.state !== 'unavailable') status.state = 'idle';
       status.targetTaskId = null;

@@ -34,3 +34,48 @@ test('rejects unknown source references and external inference destinations', as
   await assert.rejects(remote({observations}),{status:503});
   assert.equal(calls, 0);
 });
+
+test('identical pending and completed day snapshots share inference; dates and observation edits invalidate it', async () => {
+  let release;
+  let calls = 0;
+  const gate = new Promise(resolve => { release = resolve; });
+  const synthesize = createDailySynthesis({ fetcher: async () => {
+    calls++;
+    await gate;
+    return Response.json({ choices: [{ message: { content: JSON.stringify({
+      summary: '屏幕显示论文方法页。', sourceNumbers: [1], suggestion: '继续读实验。',
+    }) } }] });
+  } });
+  const review = { date: '2026-11-16', observations: [{
+    id: 'same', at: '2026-11-16T02:40:00Z', summary: '阅读论文方法页', source: 'automatic', nextStep: '读实验',
+  }] };
+  const first = synthesize(review);
+  const duplicate = synthesize(structuredClone(review));
+  assert.equal(calls, 1);
+  await assert.rejects(synthesize({ ...review, date: '2026-11-17' }), { status: 429 });
+  release();
+  const result = await first;
+  assert.deepEqual(await duplicate, result);
+  assert.deepEqual(await synthesize(structuredClone(review)), result);
+  assert.equal(calls, 1);
+  assert.match(result.observationRevision, /^[a-f0-9]{64}$/);
+  for (const changed of [
+    { ...review, date: '2026-11-17' },
+    { ...review, observations: [{ ...review.observations[0], nextStep: '读图表' }] },
+    { ...review, observations: [{ ...review.observations[0], source: 'manual' }] },
+  ]) {
+    const revised = await synthesize(changed);
+    assert.notEqual(revised.observationRevision, result.observationRevision);
+  }
+  assert.equal(calls, 4);
+});
+
+test('the same observations can be retried when inference recovers', async () => {
+  let offline = true;
+  const synthesize = createDailySynthesis({ fetcher: async () => offline ? new Response(null, { status: 503 }) :
+    Response.json({ choices: [{ message: { content: JSON.stringify({ summary: '正在校对。', sourceNumbers: [1], suggestion: '' }) } }] }) });
+  const review = { date: '2026-11-16', observations: [{ at: '2026-11-16T05:00:00Z', summary: '校对摘要' }] };
+  await assert.rejects(synthesize(review), { status: 503 });
+  offline = false;
+  assert.equal((await synthesize(review)).summary, '正在校对。');
+});

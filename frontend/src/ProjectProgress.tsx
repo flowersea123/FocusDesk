@@ -82,7 +82,7 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
 
   if (!tasks.length && !error) return null;
 
-  return <section className="project-progress" id="project-progress" aria-labelledby="project-progress-title">
+  return <section className="project-progress" id="project-progress" tabIndex={-1} aria-labelledby="project-progress-title">
     <header><h3 id="project-progress-title">大任务进度{selected && <span> · {selected.title}</span>}</h3>
       {manual && <button type="button" className="project-follow" onClick={onFollow}>跟随识别结果</button>}
     </header>
