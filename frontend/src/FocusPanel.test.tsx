@@ -23,6 +23,32 @@ describe('Focus Mode', () => {
     expect(save).toHaveBeenCalledExactlyOnceWith({ revision: data.revision, action: 'start', task_id: raw.tasks[2].id });
   });
 
+  it('shares the idle selection with the task list and keeps an active session on its original task', async () => {
+    const user = userEvent.setup();
+    const data = idle();
+    const save = vi.fn().mockResolvedValue(active());
+    const select = vi.fn();
+    const [first, done, second] = data.tasks;
+    const panel = (overview: DailyOverview, preferredTaskId: string) => <FocusPanel overview={overview} saving={false}
+      preferredTaskId={preferredTaskId} onTaskSelect={select} onSave={save} />;
+    const view = render(panel(data, second.id));
+    expect(screen.getByRole('combobox', {name:'选择专注任务'})).toHaveValue(second.id);
+    await user.selectOptions(screen.getByRole('combobox'), first.id);
+    expect(select).toHaveBeenCalledExactlyOnceWith(first.id);
+    view.rerender(panel(data, first.id));
+    expect(screen.getByRole('combobox')).toHaveValue(first.id);
+    view.rerender(panel(active(), second.id));
+    expect(screen.getByRole('timer')).toBeVisible();
+    expect(screen.getByText(first.title)).toBeVisible();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(save).not.toHaveBeenCalled();
+    view.rerender(panel(data, second.id));
+    await user.click(screen.getByRole('button', { name:'开始专注 · 25 分钟' }));
+    expect(save).toHaveBeenCalledExactlyOnceWith({revision:data.revision, action:'start', task_id:second.id});
+    view.rerender(panel(data, done.id));
+    expect(screen.getByRole('combobox')).toHaveValue(first.id);
+  });
+
   it('counts down from the confirmed end time, without focus write controls on a read-only source', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-11-03T15:55:30.000Z'));

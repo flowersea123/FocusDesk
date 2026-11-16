@@ -130,6 +130,7 @@ export function RecorderButton({ recorder, taskId }: { recorder: RecorderControl
   const button = pending === 'start' ? '正在启动…' : pending === 'stop' ? '正在停止…' :
     retryRead ? '重新读取状态' : state === 'stopping' ? '正在停止…' : stop ? '停止记录' : '开始记录';
   return <button type="button" className={'recorder-toggle' + (stop ? ' is-active' : '')} disabled={disabled}
+        title={stop ? '停止本次前台画面记录' : '记录当前前台画面，自动更新对应任务的进度'}
         onClick={() => retryRead ? void recorder.refresh() : void recorder.change(stop ? 'stop' : 'start', stop ? undefined : taskId)}>
         <span className="recorder-button-mark" aria-hidden="true" />{button}
     </button>;

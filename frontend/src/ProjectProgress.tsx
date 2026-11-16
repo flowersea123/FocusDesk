@@ -80,6 +80,8 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
     month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: timezone,
   });
 
+  if (!tasks.length && !error) return null;
+
   return <section className="project-progress" id="project-progress" aria-labelledby="project-progress-title">
     <header><h3 id="project-progress-title">大任务进度{selected && <span> · {selected.title}</span>}</h3>
       {manual && <button type="button" className="project-follow" onClick={onFollow}>跟随识别结果</button>}
@@ -90,7 +92,6 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
       {active && target && <div className="project-target"><small>正用「{target.title}」核对截图</small>
         <button type="button" disabled={!!recorder.pending} onClick={() => void recorder.change('target', null)}>恢复自动识别</button></div>}
     </div>}
-    {!tasks.length && <p>屏幕记录会保存在下方时间线。</p>}
     {!current && tasks.length > 0 && <p>点击上方任务名称可查看已有进度。</p>}
     {current && !status && !error && <p role="status">正在读取任务进度…</p>}
     {status && <>

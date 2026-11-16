@@ -29,18 +29,22 @@ function FocusDial({ endsAt }: { endsAt?: string }) {
   </div>;
 }
 
-export default function FocusPanel({ overview, saving, onSave }: {
+export default function FocusPanel({ overview, saving, preferredTaskId, onTaskSelect, onSave }: {
   overview: DailyOverview;
   saving: boolean;
+  preferredTaskId?: string;
+  onTaskSelect?: (taskId: string) => void;
   onSave?: (input: FocusUpdateRequest) => Promise<DailyOverview>;
 }) {
-  const [selected, setSelected] = useState('');
+  const [selected, setSelected] = useState(preferredTaskId);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  useEffect(() => { setSelected(preferredTaskId); }, [preferredTaskId]);
   const tasks = overview.tasks.filter(task => task.status === 'todo');
-  const selectedTask = tasks.find(task => task.id === (overview.focus?.task_id ?? selected)) ?? tasks[0];
-  const taskId = selectedTask?.id ?? '';
   const focus = overview.focus;
+  const selection = onTaskSelect ? preferredTaskId : selected;
+  const selectedTask = tasks.find(task => task.id === (focus?.task_id ?? selection)) ?? tasks[0];
+  const taskId = selectedTask?.id ?? '';
 
   async function submit() {
     if (!onSave || saving || pending || (!focus && !taskId)) return;
@@ -57,26 +61,28 @@ export default function FocusPanel({ overview, saving, onSave }: {
   }
 
   return <section className="focus-panel" aria-labelledby="focus-title">
-    <div className="focus-body">
+    <div className="focus-grid">
       <h2 className="focus-label" id="focus-title"><i aria-hidden="true" />{focus ? '正在专注' : '下一件事'}</h2>
-      <p className="focus-task">{selectedTask?.title ?? (overview.tasks.length ? '今天的任务已完成' : '暂无待办任务')}</p>
+      {!focus && onSave && tasks.length > 1 ? <select className="focus-choice" aria-label="选择专注任务"
+        title={selectedTask?.title} value={taskId} disabled={saving || pending} onChange={event => {
+          const id = event.target.value;
+          setSelected(id);
+          onTaskSelect?.(id);
+          setError(null);
+        }}>
+        {tasks.map(task => <option key={task.id} value={task.id}>{task.title}</option>)}
+      </select> : <p className="focus-task">
+        {selectedTask?.title ?? (overview.tasks.length ? '今天的任务已完成' : '暂无待办任务')}
+      </p>}
       {focus && <p className="focus-time">至 {focusEndLabel(overview)} · {overview.timezone}</p>}
       {onSave && <div className="focus-actions">
         <button type="button" className="focus-action" disabled={saving || pending || (!focus && !taskId)} onClick={() => void submit()}>
           <i className={focus ? 'stop-icon' : 'play-icon'} aria-hidden="true" />
           {pending ? '正在更新专注…' : focus ? '结束专注' : '开始专注 · 25 分钟'}
         </button>
-        {!focus && <label className="focus-chooser">
-          <span aria-hidden="true">切换任务 <i /></span>
-          <select aria-label="选择专注任务" value={taskId} disabled={saving || pending || !tasks.length}
-            onChange={event => { setSelected(event.target.value); setError(null); }}>
-            {tasks.length ? tasks.map(task => <option key={task.id} value={task.id}>{task.title}</option>) :
-              <option value="">暂无未完成任务</option>}
-          </select>
-        </label>}
       </div>}
       {error && <p role="alert" className="focus-error">{error}</p>}
+      <FocusDial endsAt={focus?.ends_at} />
     </div>
-    <FocusDial endsAt={focus?.ends_at} />
   </section>;
 }

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { DailyOverview, Task } from '../../contracts/daily-overview';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Task } from '../../contracts/daily-overview';
 import { createConfiguredSource, type DemoScenario, type OverviewSource } from './data/overview-source';
 import { useOverview } from './data/use-overview';
 import { CheckpointWorkspace } from './CheckpointWorkspace';
@@ -23,29 +23,19 @@ const dateFormat = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric', month: 'long', day: 'numeric', weekday: 'long', timeZone: 'UTC',
 });
 
-function TaskList({ overview, selectedId, observedId, manual, onSelect }: {
-  overview: DailyOverview; selectedId?: string; observedId?: string; manual?: boolean; onSelect?: (id: string) => void;
-}) {
-  if (!overview.tasks.length) return <p className="desk-empty">今天没有安排的任务</p>;
-  const timeFormat = new Intl.DateTimeFormat('zh-CN', {
-    hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: overview.timezone,
-  });
-  return <ul className="desk-tasks">{overview.tasks.map(task => {
-    const done = task.status === 'done';
-    const active = overview.focus?.task_id === task.id;
-    const selected = !!onSelect && selectedId === task.id;
-    return <li key={task.id} className={done ? 'task-done' : ''} data-selected={selected || undefined}>
-      <span className="desk-task-mark" aria-hidden="true">{done && '✓'}</span>
-      <span className="sr-only">{done ? '已完成，' : '待完成，'}</span>
-      {onSelect ? <button type="button" className="task-title task-progress-select" aria-label={'查看 ' + task.title + ' 进度'}
-        aria-controls="project-progress" aria-pressed={selected} onClick={() => onSelect(task.id)}>{task.title}</button> :
-        <span className="task-title">{task.title}</span>}
-      {observedId === task.id && <span className="task-recognized">截图识别</span>}
-      {selected && manual && observedId !== task.id && <span className="desk-task-active">正在查看</span>}
-      {active && <span className="desk-task-active">专注中</span>}
-      {task.due_at && <time className="desk-due" dateTime={task.due_at}>{timeFormat.format(new Date(task.due_at))} 截止</time>}
-    </li>;
-  })}</ul>;
+const symbols = {
+  today: <><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M7 3v4m10-4v4M3 10h18m-14 5 2 2 4-4" /></>,
+  review: <><path d="M4 19V5m0 14h16M8 15v-3m5 3V7m5 8v-5" /></>,
+  mail: <><rect x="3" y="5" width="18" height="14" rx="3" /><path d="m4 7 8 6 8-6" /></>,
+  screen: <><rect x="3" y="4" width="18" height="13" rx="2.5" /><path d="M12 17v3m-4 0h8" /></>,
+  connect: <><path d="m8 9 7 7m-6-6-2 2a4 4 0 0 0 5.7 5.7l2-2M6 18l-3 3m8-10 3-3m0 6 3-3" /></>,
+  menu: <path d="M4 6h16M4 12h16M4 18h16" />,
+  close: <path d="m6 6 12 12M6 18 18 6" />,
+  refresh: <><path d="M19 9a7.4 7.4 0 1 0 .1 6M19 4v5h-5" /></>,
+};
+function DeskIcon({ name }: { name: keyof typeof symbols }) {
+  return <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">{symbols[name]}</svg>;
 }
 
 type View = 'today' | 'review';
@@ -56,6 +46,9 @@ function linkedView(): View {
 
 export default function App({ source = defaultSource }: { source?: OverviewSource }) {
   const [view, setView] = useState<View>(() => source.localWorkspace ? linkedView() : 'today');
+  const [navOpen, setNavOpen] = useState(false);
+  const navButton = useRef<HTMLButtonElement>(null);
+  const header = useRef<HTMLElement>(null);
   const [reviewOpened, setReviewOpened] = useState(view === 'review');
   const [checkpointVersion, setCheckpointVersion] = useState(0);
   const checkpointsChanged = useCallback(() => setCheckpointVersion(value => value + 1), []);
@@ -71,6 +64,8 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
   const manual = tasks.find(task => task.id === chosenTask);
   const session = recorder.status;
   const observed = session?.observedAt ? tasks.find(task => task.id === session.observedTaskId) : undefined;
+  const showRecorderDetails = session?.state !== 'idle' || !!session.observedAt || !!session.savedCount ||
+    !!session.message || !!recorder.readError || !!recorder.actionError;
   const target = recording ? tasks.find(task => task.id === session?.targetTaskId) : undefined;
   const suggested = !session?.observedAt ? tasks.find(task => task.id === overview?.focus?.task_id) ?? tasks.find(task => task.status === 'todo') ?? tasks[0] : undefined;
   const selected = manual ?? observed ?? target ?? suggested;
@@ -79,6 +74,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
   const mock = source.kind === 'mock';
   const local = !mock && Boolean(source.updateTasks);
   const showView = useCallback((next: View) => {
+    setNavOpen(false);
     if (next === 'review') setReviewOpened(true);
     setView(next);
   }, []);
@@ -103,10 +99,32 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
       window.removeEventListener('popstate', followLink);
     };
   }, [source.localWorkspace, showView]);
+  useEffect(() => {
+    if (!navOpen) return;
+    const outside = (event: PointerEvent | FocusEvent) => {
+      if (event.target instanceof Node && !header.current?.contains(event.target)) setNavOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setNavOpen(false);
+        navButton.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('focusin', outside);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('focusin', outside);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [navOpen]);
   function navigate(next: View) {
     showView(next);
     const hash = next === 'review' ? '#review' : '';
     if (window.location.hash !== hash) window.history.pushState(window.history.state, '', window.location.pathname + window.location.search + hash);
+    document.getElementById('workspace')?.focus({ preventScroll: true });
+    if (window.scrollY > 0) window.scrollTo(0, 0);
   }
 
   const previewOverview = useMemo(() => {
@@ -116,37 +134,45 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
     return { ...overview, tasks, focus, ...(suggestionDraft === null ? {} : { ai_suggestion: suggestionDraft }) };
   }, [overview, taskDraft, suggestionDraft]);
 
-  const focusPanel = overview && <FocusPanel overview={overview} saving={saving} onSave={source.updateFocus ? saveFocus : undefined} />;
+  const focusPanel = overview && <FocusPanel overview={overview} saving={saving} preferredTaskId={selected?.id} onTaskSelect={chooseTask} onSave={source.updateFocus ? saveFocus : undefined} />;
   return <div className="dashboard">
     <a className="desk-skip" href="#workspace">跳至工作台</a>
-    <header className="desk-header"><div className="desk-header-inner">
-      <a className="desk-brand" href="./" aria-label="FocusDesk 首页">
-        <span aria-hidden="true" className="desk-brand-mark"><i /><i /><i /></span>FocusDesk
-      </a>
-      <nav className="desk-nav" aria-label="主导航">
-        <a href="#workspace" aria-current={view === 'today' ? 'page' : undefined} onClick={() => showView('today')}>工作台</a>
-        {source.localWorkspace && <a href="#review" aria-current={view === 'review' ? 'page' : undefined}
-          onClick={event => { event.preventDefault(); navigate('review'); }}>每日回顾</a>}
-        {local && <a href={import.meta.env.VITE_MAIL_PAGE_URL} target="_blank" rel="noreferrer">邮件与待办 <span aria-hidden="true">↗</span></a>}
-        <a href="/simulator" target="_blank" rel="noreferrer">模拟屏 <span aria-hidden="true">↗</span></a>
-        <a href="/connect">连接设备</a>
-      </nav>
-      <span className="desk-source"><i aria-hidden="true" />{recording ? '屏幕记录中' : mock ? '本地演示' : local ? '本机 Hub' : '只读 Hub'}</span>
-    </div></header>
+    <header className="desk-header" ref={header} data-open={navOpen}>
+      <div className="desk-header-inner">
+        <a className="desk-brand" href="#workspace" aria-label="FocusDesk 首页"
+          onClick={event => { event.preventDefault(); navigate('today'); }}>
+          <span aria-hidden="true" className="desk-brand-mark"><i /><i /><i /></span>FocusDesk
+        </a>
+        <button type="button" className="desk-menu" ref={navButton} aria-expanded={navOpen}
+          aria-controls="desk-navigation" aria-label={navOpen ? '收起导航' : '展开导航'} onClick={() => setNavOpen(open => !open)}>
+          <DeskIcon name={navOpen ? 'close' : 'menu'} />
+        </button>
+        <nav id="desk-navigation" className="desk-nav" aria-label="主导航">
+          <a href="#workspace" aria-current={view === 'today' ? 'page' : undefined}
+            onClick={event => { event.preventDefault(); navigate('today'); }}><DeskIcon name="today" />工作台</a>
+          {source.localWorkspace && <a href="#review" aria-current={view === 'review' ? 'page' : undefined}
+            onClick={event => { event.preventDefault(); navigate('review'); }}><DeskIcon name="review" />每日回顾</a>}
+          {local && <a href={import.meta.env.VITE_MAIL_PAGE_URL} target="_blank" rel="noreferrer" onClick={() => setNavOpen(false)}>
+            <DeskIcon name="mail" />邮件与待办 <span className="desk-external" aria-hidden="true">↗</span></a>}
+          <div className="desk-nav-divider" aria-hidden="true" />
+          <a href="/simulator" target="_blank" rel="noreferrer" onClick={() => setNavOpen(false)}>
+            <DeskIcon name="screen" />模拟屏 <span className="desk-external" aria-hidden="true">↗</span></a>
+          <a href="/connect"><DeskIcon name="connect" />连接设备</a>
+        </nav>
+        <span className="desk-source" data-recording={recording}><i aria-hidden="true" />{recording ? '屏幕记录中' : mock ? '本地演示' : local ? '本机 Hub' : '只读 Hub'}</span>
+      </div>
+    </header>
 
     <main id="workspace" className="desk-main" tabIndex={-1}>
-      <div className="desk-masthead">
+      {view === 'today' && <div className="desk-masthead">
         <div>
           <h1>今日工作台</h1>
-          {overview && <p className="desk-date">
-            <time dateTime={overview.date}>{dateFormat.format(new Date(overview.date + 'T12:00:00Z'))}</time>
-            <span>{overview.timezone}</span>
-          </p>}
+          {overview && <p className="desk-date"><time dateTime={overview.date}>{dateFormat.format(new Date(overview.date + 'T12:00:00Z'))}</time></p>}
         </div>
-        <button type="button" className="desk-reload" disabled={loading || saving} onClick={reload}>
-          <span aria-hidden="true">↻</span> 重新读取
+        <button type="button" className="desk-reload" disabled={loading || saving} onClick={reload} title="重新读取" aria-label="重新读取">
+          <DeskIcon name="refresh" />
         </button>
-      </div>
+      </div>}
       <div className="status-region" aria-live="polite">
         {error && <div className="error-banner" role="alert">
           <div><strong>读取失败{overview ? ' · 正在显示上次成功内容' : ' · 暂无可显示内容'}</strong><p>{error}</p></div>
@@ -157,40 +183,40 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
       <div hidden={view !== 'today'}>
       <div className="desk-grid">
         <div className="desk-work">
-          {!source.localWorkspace && focusPanel}
           <section className="desk-task-panel" aria-labelledby="overview-title" aria-busy={loading}>
             <div className="desk-section-head">
               <h2 id="overview-title">今日任务</h2>
-              {source.localWorkspace && <RecorderButton recorder={recorder} />}
               {overview && <div className="desk-completion" role="meter" aria-label={`${completed} 项已完成，共 ${count} 项`}
                 aria-valuemin={0} aria-valuemax={Math.max(1, count)} aria-valuenow={completed}
                 aria-valuetext={`${completed} 项已完成，共 ${count} 项`}>
                 <span aria-hidden="true">{completed} / {count} 已完成</span>
                 <span className="desk-progress" aria-hidden="true"><i style={{ width: `${count ? completed / count * 100 : 0}%` }} /></span>
               </div>}
+              {source.localWorkspace && <RecorderButton recorder={recorder} />}
             </div>
-            {source.localWorkspace && <div className="task-recorder-state">
+            {overview && <TaskEditor overview={overview} saving={saving} onSave={source.updateTasks ? saveTasks : undefined}
+              onDraftChange={setTaskDraft} active={view === 'today' && !navOpen}
+              selectedId={selected?.id} observedId={observed?.id} manual={!!manual}
+              onSelect={source.localWorkspace || source.updateFocus ? chooseTask : undefined} />}
+            {source.localWorkspace && showRecorderDetails && <div className="task-recorder-state">
               <RecorderStatusLine recorder={recorder} timezone={overview?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone} />
               <RecorderFeedback recorder={recorder} />
-              <p className="project-recognition" aria-live="polite">{session?.observedAt ?
+              {(session?.observedAt || recording) && <p className="project-recognition" aria-live="polite">{session?.observedAt ?
                 observed ? <>最近识别的任务　<strong>{observed.title}</strong></> : <strong>最近画面未匹配任务</strong> :
-                recording ? '等待识别当前画面…' : '开始记录后，截图会自动更新对应任务的进度。'}</p>
+                '等待识别当前画面…'}</p>}
             </div>}
-            {overview && <TaskList overview={overview} selectedId={selected?.id} observedId={observed?.id} manual={!!manual}
-              onSelect={source.localWorkspace ? chooseTask : undefined} />}
             {source.localWorkspace && <>
               <ProjectProgress overview={overview} selected={selected} manual={!!manual} onFollow={() => chooseTask('')}
                 recorder={recorder} refreshKey={checkpointVersion} onPinned={setPinned} onChange={checkpointsChanged} />
               <CheckpointWorkspace overview={overview} recorder={recorder} active={view === 'today'} refreshKey={checkpointVersion} onChange={checkpointsChanged} />
             </>}
-            {overview && source.updateTasks && <TaskEditor overview={overview} saving={saving} onSave={saveTasks} onDraftChange={setTaskDraft} />}
             {!mock && !source.updateTasks && <p className="readonly-note">请在本机打开 FocusDesk 编辑任务。</p>}
           </section>
-          {source.localWorkspace && focusPanel}
           {overview && <AISuggestionEditor overview={overview} saving={saving} writable={Boolean(source.updateAISuggestion)}
-            onSave={saveAISuggestion} onDraftChange={setSuggestionDraft} />}
+            onSave={saveAISuggestion} onDraftChange={setSuggestionDraft} onReload={reload} />}
         </div>
-        <aside className="desk-side" aria-label="设备">
+        <aside className="desk-side" aria-label="专注与设备">
+          {focusPanel}
           <EpaperPreview overview={previewOverview} project={pinned} draft={taskDraft !== null || suggestionDraft !== null} />
         </aside>
       </div>

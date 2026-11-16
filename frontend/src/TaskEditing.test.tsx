@@ -1,172 +1,194 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { DailyOverview } from '../../contracts/daily-overview';
-import { MAX_TASKS, parseDailyOverview } from '../../contracts/daily-overview';
+import { describe, expect, it, vi } from 'vitest';
+import { parseDailyOverview, MAX_TASKS, type DailyOverview, type Task } from '../../contracts/daily-overview';
+import type { TaskUpdateRequest } from '../../contracts/task-update';
 import fixture from '../../contracts/fixtures/device-demo.json';
-import App from './App';
+import { OverviewRequestError } from './data/overview-source';
 import TaskEditor from './TaskEditor';
-import { OverviewRequestError, type OverviewSource } from './data/overview-source';
 
 const initial = () => parseDailyOverview(fixture);
-afterEach(() => vi.useRealTimers());
+const button = (name: string) => screen.getByRole('button', { name });
+const input = (name = '新任务标题') => screen.getByRole('textbox', { name });
+const click = (element: HTMLElement) => act(async () => { fireEvent.click(element); });
+const key = (element: HTMLElement, value: string, modifiers: Record<string, unknown> = {}) =>
+  act(async () => { fireEvent.keyDown(element, { key: value, ...modifiers }); });
+const change = (element: HTMLElement, text: string) => fireEvent.change(element, { target: { value: text } });
 
-describe('task editor', () => {
-  it('stages edit/complete/remove/add and saves one complete request with stable existing IDs', async () => {
-    const user = userEvent.setup(); const data = initial();
-    const save = vi.fn().mockImplementation(async input => parseDailyOverview({ ...data, ...input, revision: 'saved-version' }));
-    render(<TaskEditor overview={data} saving={false} onSave={save} />);
-    await user.click(screen.getByRole('button', { name: '编辑任务' }));
-    expect(screen.getByRole('button', { name: '添加任务' })).toBeEnabled();
-    expect(screen.getByText(`英文标题 · 最多 ${MAX_TASKS} 项 · 保存后生效`)).toBeInTheDocument();
-    const title = screen.getByLabelText('任务 1 标题');
-    await user.clear(title); await user.type(title, 'Edited task');
-    await user.click(screen.getByLabelText('任务 1 已完成'));
-    await user.click(screen.getByRole('button', { name: '移除任务 2' }));
-    await user.click(screen.getByRole('button', { name: '添加任务' }));
-    await user.type(screen.getByLabelText('任务 3 标题'), 'A new task');
-    for (let taskNumber = 4; taskNumber <= MAX_TASKS; taskNumber++) {
-      await user.click(screen.getByRole('button', { name: '添加任务' }));
-      await user.type(screen.getByLabelText(`任务 ${taskNumber} 标题`), `New task ${taskNumber}`);
-    }
-    expect(screen.getByRole('button', { name: '添加任务' })).toBeDisabled();
-    expect(screen.getByText(`已达任务上限 ${MAX_TASKS} 项，可编辑或移除已有任务。`)).toBeInTheDocument();
+function saving(data: DailyOverview) {
+  let revision = 0;
+  return vi.fn(async (request: TaskUpdateRequest) => ({
+    ...data, tasks: request.tasks, revision: 'saved-' + ++revision,
+    focus: data.focus && request.tasks.some(task => task.id === data.focus!.task_id && task.status === 'todo') ? data.focus : null,
+  }));
+}
+function focusSecond(data: DailyOverview) {
+  return { ...data, tasks: data.tasks.map((task, index) => index === 1 ? { ...task, status: 'todo' as const, due_at: '2026-11-02T04:10:00Z' } : task),
+    focus: { task_id: data.tasks[1].id, started_at: '2026-11-02T01:00:00Z', ends_at: '2026-11-02T01:25:00Z' } };
+}
+
+describe('task rows', () => {
+  it('renames in place, previews edits, and persists completion immediately with stable IDs and due dates', async () => {
+    const data = focusSecond(initial()); const save = saving(data); const preview = vi.fn();
+    const row = data.tasks[1];
+    render(<TaskEditor overview={data} saving={false} onSave={save} onDraftChange={preview} />);
+    await click(button('编辑 ' + row.title));
+    const title = input('任务标题'); expect(title).toHaveFocus();
+    change(title, 'Revised title');
+    expect(preview).toHaveBeenLastCalledWith(data.tasks.map(task => task.id === row.id ? { ...row, title: 'Revised title' } : task));
     expect(save).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: '保存更改' }));
-    await screen.findByText(/已保存/);
-    expect(save).toHaveBeenCalledOnce();
-    const request = save.mock.calls[0][0];
-    expect(request.revision).toBe(data.revision);
-    expect(request.tasks[0]).toEqual({ ...data.tasks[0], title: 'Edited task', status: 'done' });
-    expect(request.tasks[1]).toEqual(data.tasks[2]);
-    expect(request.tasks[2]).toMatchObject({ title: 'A new task', status: 'todo', due_at: null });
-    expect(request.tasks[2].id).toBeTruthy();
-    expect(request.tasks).toHaveLength(MAX_TASKS);
-    expect(new Set(request.tasks.map((task: {id: string}) => task.id)).size).toBe(MAX_TASKS);
-    expect(data.tasks).toEqual(fixture.tasks);
+    await key(title, 'Enter');
+    expect(save.mock.calls[0][0]).toEqual({ revision: data.revision, tasks: data.tasks.map(task => task.id === row.id ? { ...row, title: 'Revised title' } : task) });
+    expect(preview).toHaveBeenLastCalledWith(null);
+    await click(screen.getByRole('checkbox', { name: 'Revised title 已完成' }));
+    expect(save.mock.calls[1][0]).toMatchObject({ revision: 'saved-1' });
+    expect(save.mock.calls[1][0].tasks[1]).toEqual({ ...row, title: 'Revised title', status: 'done' });
+    expect(screen.getByRole('status')).toHaveTextContent('当前专注计时已结束');
+    expect(screen.getByRole('checkbox', { name: 'Revised title 已完成' })).toBeChecked();
   });
 
-  it('cancel discards a removal and invalid titles cannot be saved', async () => {
-    const user = userEvent.setup(); const save = vi.fn();
-    render(<TaskEditor overview={initial()} saving={false} onSave={save} />);
-    await user.click(screen.getByRole('button', { name: '编辑任务' }));
-    expect(screen.getByRole('button', { name: '保存更改' })).toBeDisabled();
-    const title = screen.getByLabelText('任务 1 标题');
-    expect(title).toHaveAttribute('maxlength', '40');
-    await user.clear(title); await user.type(title, '中文');
-    expect(title).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByRole('button', { name: '保存更改' })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: '移除任务 1' }));
-    await user.click(screen.getByRole('button', { name: '取消编辑' }));
-    await user.click(screen.getByRole('button', { name: '编辑任务' }));
-    expect(screen.getByLabelText('任务 1 标题')).toHaveValue(fixture.tasks[0].title);
-    expect(screen.getByRole('button', { name: '添加任务' })).toBeEnabled();
-    expect(save).not.toHaveBeenCalled();
-  });
-
-  it('preserves a draft after a save error and only retries on an explicit click', async () => {
-    const user = userEvent.setup(); const data = initial();
-    const save = vi.fn().mockRejectedValueOnce(new Error('Service unavailable')).mockResolvedValueOnce(data);
+  it('inserts after a named row, appends using the list button, and cancels an unsaved title back to its trigger', async () => {
+    const data = initial(); const save = saving(data); const user = userEvent.setup();
     render(<TaskEditor overview={data} saving={false} onSave={save} />);
-    await user.click(screen.getByRole('button', { name: '编辑任务' }));
-    await user.type(screen.getByLabelText('任务 1 标题'), ' changed');
-    await user.click(screen.getByRole('button', { name: '保存更改' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Service unavailable');
-    expect(screen.getByLabelText('任务 1 标题')).toHaveValue(data.tasks[0].title + ' changed');
-    expect(save).toHaveBeenCalledTimes(1);
-    await user.click(screen.getByRole('button', { name: '保存更改' }));
-    await screen.findByText(/已保存/); expect(save).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe('Dashboard task saves', () => {
-  it('previews completion of the focused task with the same focus clearing as a saved update and restores it on cancel', async () => {
-    const user = userEvent.setup();
-    const data: DailyOverview = { ...initial(), focus: { task_id: fixture.tasks[0].id, started_at: '2026-11-11T01:00:00.000Z', ends_at: '2026-11-11T01:25:00.000Z' } };
-    const update = vi.fn();
-    render(<App source={{ kind: 'http', read: vi.fn().mockResolvedValue(data), updateTasks: update }} />);
-    await user.click(await screen.findByRole('button', { name: '编辑任务' }));
-    await user.click(screen.getByLabelText('任务 1 已完成'));
-    const tasks = data.tasks.map((task, index) => index === 0 ? { ...task, status: 'done' as const } : task);
-    const preview = screen.getByRole('img', { name: '400 × 300 e-paper preview' });
-    expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(tasks.filter(task => task.status === 'todo').map(task => task.title));
-    expect(preview).toHaveAttribute('data-source-revision', data.revision);
-    expect(screen.getByText('未保存草稿')).toBeVisible();
-    expect(document.getElementById('preview-transcript')).not.toHaveTextContent('FOCUS - UNTIL');
-    expect(update).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: '取消编辑' }));
-    expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(data.tasks.filter(task => task.status === 'todo').map(task => task.title));
-    expect(document.getElementById('preview-transcript')).toHaveTextContent('FOCUS - UNTIL 09:25');
-    expect(screen.getByText('当前任务预览')).toBeVisible();
-    expect(update).not.toHaveBeenCalled();
+    const first = data.tasks[0]; const afterFirst = () => button('在 ' + first.title + ' 后添加任务');
+    await user.click(afterFirst()); expect(input()).toHaveFocus();
+    await user.type(input(), 'Adjacent task');
+    expect(screen.getAllByRole('listitem')[1]).toContainElement(input());
+    await user.click(button('保存'));
+    const inserted = save.mock.calls[0][0].tasks[1];
+    expect(inserted).toEqual({ id: expect.any(String), title: 'Adjacent task', status: 'todo', due_at: null });
+    expect(save.mock.calls[0][0].tasks.map(task => task.id)).toEqual([first.id, inserted.id, ...data.tasks.slice(1).map(task => task.id)]);
+    expect(button('编辑 Adjacent task')).toHaveFocus();
+    await user.click(button('添加任务')); await user.type(input(), 'Last task{Enter}');
+    expect(save.mock.calls[1][0].tasks.at(-1)).toMatchObject({ title: 'Last task', due_at: null });
+    await user.click(afterFirst()); change(input(), 'Cancelled addition'); await key(input(), 'Escape');
+    expect(save).toHaveBeenCalledTimes(2); expect(afterFirst()).toHaveFocus();
   });
 
-  it('previews removal of the focused task without a focus marker and restores the saved focused snapshot on cancel', async () => {
-    const user = userEvent.setup();
-    const data: DailyOverview = { ...initial(), focus: { task_id: fixture.tasks[0].id, started_at: '2026-11-11T01:00:00.000Z', ends_at: '2026-11-11T01:25:00.000Z' } };
-    const update = vi.fn();
-    render(<App source={{ kind: 'http', read: vi.fn().mockResolvedValue(data), updateTasks: update }} />);
-    await user.click(await screen.findByRole('button', { name: '编辑任务' }));
-    await user.click(screen.getByRole('button', { name: '移除任务 1' }));
-    const preview = screen.getByRole('img', { name: '400 × 300 e-paper preview' });
-    expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(data.tasks.slice(1).filter(task => task.status === 'todo').map(task => task.title));
-    expect(document.getElementById('preview-transcript')).not.toHaveTextContent('FOCUS - UNTIL');
-    expect(screen.getByText('未保存草稿')).toBeVisible();
-    expect(update).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: '取消编辑' }));
-    expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(data.tasks.filter(task => task.status === 'todo').map(task => task.title));
-    expect(document.getElementById('preview-transcript')).toHaveTextContent('FOCUS - UNTIL 09:25');
-    expect(screen.getByText('当前任务预览')).toBeVisible();
-    expect(update).not.toHaveBeenCalled();
+  it('restores a deleted task using its original neighbors, status, deadline and ID on the newest revision', async () => {
+    const data = focusSecond(initial()); const save = saving(data);
+    const view = render(<TaskEditor overview={data} saving={false} onSave={save} />);
+    const deleted = data.tasks[1];
+    await click(button('删除 ' + deleted.title));
+    expect(save.mock.calls[0][0].tasks).toEqual([data.tasks[0], data.tasks[2]]);
+    expect(screen.getByRole('status')).toHaveTextContent('专注计时已结束'); expect(button('撤销删除')).toHaveFocus();
+    const other = { ...data.tasks[0], title: 'Renamed in other window' };
+    const extra = { ...other, id: 'extra', title: 'Newer task' };
+    view.rerender(<TaskEditor overview={{ ...data, revision: 'other-window', focus: null, tasks: [extra, other, data.tasks[2]] }} saving={false} onSave={save} />);
+    await click(button('撤销删除'));
+    expect(save.mock.calls[1][0]).toEqual({ revision: 'other-window', tasks: [extra, other, deleted, data.tasks[2]] });
+    expect(button('编辑 ' + deleted.title)).toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent('原专注计时已结束'); expect(screen.queryByRole('button', { name: '撤销删除' })).toBeNull();
   });
 
-  it('holds saving controls and ignores a stale poll result after saving', async () => {
-    vi.useFakeTimers();
-    const data = initial(); let resolveRead!: (value: DailyOverview) => void;
-    let resolveSave!: (value: DailyOverview) => void;
-    const read = vi.fn<OverviewSource['read']>().mockResolvedValueOnce(data)
-      .mockImplementationOnce(() => new Promise(resolve => { resolveRead = resolve; }));
-    const update = vi.fn<NonNullable<OverviewSource['updateTasks']>>().mockImplementationOnce(() => new Promise(resolve => { resolveSave = resolve; }));
-    const source: OverviewSource = { kind: 'http', read, updateTasks: update };
-    render(<App source={source} />);
-    await act(async () => { await Promise.resolve(); });
-    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
-    fireEvent.click(screen.getByRole('button', { name: '编辑任务' }));
-    fireEvent.change(screen.getByLabelText('任务 1 标题'), { target: { value: 'A saved title' } });
-    fireEvent.click(screen.getByRole('button', { name: '保存更改' }));
-    expect(screen.getByRole('button', { name: '正在保存…' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '取消编辑' })).toBeDisabled();
-    expect(read.mock.calls[1][1].aborted).toBe(true);
-    const saved = { ...data, revision: 'after-save', tasks: [{ ...data.tasks[0], title: 'A saved title' }, ...data.tasks.slice(1)] };
-    await act(async () => { resolveSave(saved); });
-    await act(async () => { resolveRead(data); });
-    expect(screen.getByRole('region', { name: '今日任务' })).toHaveTextContent('A saved title');
-    expect(document.getElementById('preview-transcript')).toHaveTextContent('A saved title');
-    expect(screen.queryByText(data.tasks[0].title)).not.toBeInTheDocument();
-    expect(update).toHaveBeenCalledOnce();
+  it('merges unrelated online edits, preserves conflicting text until explicit review, and can recover a removed anchor', async () => {
+    const data = initial(); const save = saving(data);
+    const view = render(<TaskEditor overview={data} saving={false} onSave={save} />);
+    await click(button('编辑 ' + data.tasks[0].title)); change(input('任务标题'), 'My draft');
+    const latest = { ...data, revision: 'new-1', tasks: [{ ...data.tasks[0], title: 'Elsewhere' }, ...data.tasks.slice(1)] };
+    view.rerender(<TaskEditor overview={latest} saving={false} onSave={save} />);
+    expect(input('任务标题')).toHaveValue('My draft'); expect(button('保存')).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Elsewhere');
+    await click(button('保留草稿并使用最新版本')); await click(button('保存'));
+    expect(save.mock.calls[0][0].revision).toBe('new-1'); expect(save.mock.calls[0][0].tasks[0].title).toBe('My draft');
+    await click(button('在 ' + data.tasks[1].title + ' 后添加任务')); change(input(), 'Retained');
+    const changed = { ...data, revision: 'new-2', tasks: [latest.tasks[0], data.tasks[2]] };
+    view.rerender(<TaskEditor overview={changed} saving={false} onSave={save} />);
+    expect(input()).toHaveValue('Retained'); expect(button('保存')).toBeDisabled();
+    await click(button('改到列表末尾')); await click(button('保存'));
+    expect(save.mock.calls[1][0].tasks.slice(0, 2)).toEqual(changed.tasks);
+    expect(save.mock.calls[1][0].tasks.at(-1)?.title).toBe('Retained');
   });
 
-  it('preserves a conflicting draft, reads latest data, and requires explicit reload before a new save', async () => {
-    const user = userEvent.setup(); const data = initial();
-    const latest = { ...data, revision: 'other-window', tasks: [{ ...data.tasks[0], title: 'Saved elsewhere' }, ...data.tasks.slice(1)] };
-    const read = vi.fn<OverviewSource['read']>().mockResolvedValueOnce(data).mockResolvedValue(latest);
-    const update = vi.fn<NonNullable<OverviewSource['updateTasks']>>()
-      .mockRejectedValueOnce(new OverviewRequestError('Conflict', 409, 'REVISION_CONFLICT'))
-      .mockImplementationOnce(async input => ({ ...latest, ...input, revision: 'finally-saved' }));
-    render(<App source={{ kind: 'http', read, updateTasks: update }} />);
-    await screen.findAllByText(data.tasks[0].title);
-    await user.click(screen.getByRole('button', { name: '编辑任务' }));
-    const title = screen.getByLabelText('任务 1 标题'); await user.clear(title); await user.type(title, 'My unsaved draft');
-    await user.click(screen.getByRole('button', { name: '保存更改' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('草稿已保留');
-    expect(screen.getByLabelText('任务 1 标题')).toHaveValue('My unsaved draft');
-    expect(update).toHaveBeenCalledOnce();
-    expect(screen.getByRole('button', { name: '保存更改' })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: '放弃草稿，载入最新任务' }));
-    expect(screen.getByLabelText('任务 1 标题')).toHaveValue('Saved elsewhere');
-    await user.type(screen.getByLabelText('任务 1 标题'), ' now');
-    await user.click(screen.getByRole('button', { name: '保存更改' }));
-    await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
-    expect(update.mock.calls[1][0].revision).toBe('other-window');
+  it('retries an interrupted save with the same new ID and prevents repeat writes while awaiting the first reply', async () => {
+    const data = initial();
+    let complete!: (value: DailyOverview) => void;
+    const save = vi.fn<(request: TaskUpdateRequest) => Promise<DailyOverview>>()
+      .mockRejectedValueOnce(new Error('网络中断')).mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+    render(<TaskEditor overview={data} saving={false} onSave={save} />);
+    await click(button('添加任务')); change(input(), 'Retry task'); await key(input(), 'Enter');
+    expect(screen.getByRole('alert')).toHaveTextContent('网络中断'); expect(input()).toHaveValue('Retry task');
+    await click(button('保存')); await key(input(), 'Enter');
+    expect(save).toHaveBeenCalledTimes(2); expect(save.mock.calls[0][0]).toEqual(save.mock.calls[1][0]);
+    expect(button('取消')).toBeDisabled(); expect(screen.getAllByRole('checkbox')[0]).toBeDisabled();
+    await act(async () => { complete({ ...data, revision: 'ok', tasks: save.mock.calls[1][0].tasks }); });
+    expect(screen.queryByRole('textbox', { name: '新任务标题' })).toBeNull();
+    expect(button('编辑 Retry task')).toHaveFocus();
+  });
+
+  it('does not auto-retry a 409 or erase a draft when the first reread has not reached the UI', async () => {
+    const data = initial(); const fail = new OverviewRequestError('changed', 409);
+    const save = vi.fn<(value: TaskUpdateRequest) => Promise<DailyOverview>>()
+      .mockRejectedValueOnce(fail).mockImplementation(async req => ({ ...data, tasks: req.tasks, revision: 'saved' }));
+    const view = render(<TaskEditor overview={data} saving={false} onSave={save} />);
+    await click(button('编辑 ' + data.tasks[0].title)); change(input('任务标题'), 'Keep text'); await click(button('保存'));
+    expect(button('保存')).toBeDisabled(); expect(button('保留草稿并使用最新版本')).toBeDisabled();
+    const updated = { ...data, revision: 'new', tasks: data.tasks.map(task => ({ ...task, due_at: '2026-11-02T09:00:00Z' })) };
+    view.rerender(<TaskEditor overview={updated} saving={false} onSave={save} />);
+    await click(button('保留草稿并使用最新版本')); expect(input('任务标题')).toHaveValue('Keep text');
+    await click(button('保存')); expect(save.mock.calls[1][0]).toMatchObject({ revision: 'new' });
+    expect(save.mock.calls[1][0].tasks[0].due_at).toBe(updated.tasks[0].due_at);
+  });
+
+  it('recognizes a committed creation or removal after a lost response, without duplicating the new task or losing undo', async () => {
+    const data = initial();
+    const save = vi.fn<(value: TaskUpdateRequest) => Promise<DailyOverview>>().mockRejectedValue(new TypeError('回复中断'));
+    const view = render(<TaskEditor overview={data} saving={false} onSave={save} />);
+    await click(button('添加任务')); change(input(), 'Actually saved'); await click(button('保存'));
+    const afterAdd = { ...data, revision: 'confirmed-add', tasks: save.mock.calls[0][0].tasks };
+    view.rerender(<TaskEditor overview={afterAdd} saving={false} onSave={save} />);
+    expect(screen.queryByRole('textbox', { name: '新任务标题' })).toBeNull();
+    expect(button('编辑 Actually saved')).toBeVisible(); expect(save).toHaveBeenCalledOnce();
+    await click(button('删除 Actually saved'));
+    const afterDelete = { ...data, revision: 'confirmed-delete', tasks: save.mock.calls[1][0].tasks };
+    view.rerender(<TaskEditor overview={afterDelete} saving={false} onSave={save} />);
+    expect(button('撤销删除')).toBeEnabled();
+    await click(button('撤销删除'));
+    expect(save.mock.calls[2][0]).toEqual({ revision: 'confirmed-delete', tasks: afterAdd.tasks });
+  });
+
+  it('uses a fresh parent snapshot when another client restores the content and original revision', async () => {
+    const data = initial(); const save = saving(data);
+    const view = render(<TaskEditor overview={data} saving={false} onSave={save} />);
+    await click(button('编辑 ' + data.tasks[0].title)); change(input('任务标题'), 'Brief renamed draft');
+    await click(button('保存'));
+    expect(button('编辑 Brief renamed draft')).toBeVisible();
+    view.rerender(<TaskEditor overview={structuredClone(data)} saving={false} onSave={save} />);
+    expect(button('编辑 ' + data.tasks[0].title)).toBeVisible();
+    expect(screen.queryByRole('button', { name: '编辑 Brief renamed draft' })).toBeNull();
+  });
+
+  it('keeps shortcuts out of text, composition and hidden views, and inserts from the keyboard beside the focused task', async () => {
+    const data = initial(); const save = saving(data);
+    const area = (active: boolean) => <main id="workspace"><textarea aria-label="other input" />
+      <TaskEditor overview={data} saving={false} onSave={save} active={active} /></main>;
+    const view = render(area(true)); const trigger = button('编辑 ' + data.tasks[1].title);
+    await key(document.body, 'n'); await key(trigger, 'n', { metaKey: true }); await key(trigger, 'Enter', { shiftKey: true, isComposing: true });
+    await key(screen.getByRole('textbox', { name: 'other input' }), 'N', { altKey: true, shiftKey: true, code: 'KeyN' });
+    expect(screen.queryByRole('textbox', { name: '新任务标题' })).toBeNull();
+    trigger.focus(); await key(trigger, 'Enter', { shiftKey: true }); expect(input()).toHaveFocus();
+    change(input(), 'IME draft'); await key(input(), 'Enter', { isComposing: true }); expect(save).not.toHaveBeenCalled();
+    await key(input(), 'Escape'); expect(trigger).toHaveFocus();
+    await key(trigger, 'n'); change(input(), 'Adjacent'); await key(input(), 'Enter');
+    expect(save.mock.calls[0][0].tasks[2].title).toBe('Adjacent');
+    view.rerender(area(false)); await key(trigger, 'n'); await key(document.body, 'N', { altKey: true, shiftKey: true, code: 'KeyN' });
+    expect(screen.queryByRole('textbox', { name: '新任务标题' })).toBeNull();
+    view.rerender(area(true)); await key(document.body, 'N', { altKey: true, shiftKey: true, code: 'KeyN' });
+    expect(input()).toHaveFocus();
+  });
+
+  it('enforces the title and list limits and preserves read-only titles, source flags and selection', async () => {
+    const data = initial(); const save = saving(data); const select = vi.fn(); const row = data.tasks[0];
+    const view = render(<TaskEditor overview={data} saving={false} onSelect={select} observedId={row.id} selectedId={row.id} />);
+    expect(screen.queryByRole('button', { name: '添加任务' })).toBeNull(); expect(screen.queryByRole('checkbox')).toBeNull();
+    await click(button('查看 ' + row.title + ' 进度')); expect(select).toHaveBeenCalledWith(row.id);
+    expect(within(button('查看 ' + row.title + ' 进度').closest('li')!).getByText('截图识别')).toBeVisible();
+    const tasks = Array.from({ length: MAX_TASKS }, (_, i): Task => ({ id: 'row-' + i, title: 'Task ' + i, status: 'todo', due_at: null }));
+    view.rerender(<TaskEditor overview={{ ...data, tasks }} saving={false} onSave={save} />);
+    expect(button('添加任务')).toBeDisabled(); expect(button('在 Task 0 后添加任务')).toBeDisabled();
+    await click(button('编辑 Task 0')); change(input('任务标题'), '中文');
+    expect(input('任务标题')).toHaveAttribute('aria-invalid', 'true'); expect(button('保存')).toBeDisabled();
+    expect(input('任务标题')).toHaveAttribute('maxLength', '40'); await key(input('任务标题'), 'Escape');
+    expect(save).not.toHaveBeenCalled();
   });
 });

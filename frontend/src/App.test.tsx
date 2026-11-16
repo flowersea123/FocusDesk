@@ -47,6 +47,7 @@ describe('Dashboard', () => {
     const preview = screen.getByRole('img', { name: '400 × 300 e-paper preview' });
     const pageTitles = within(taskRegion).getAllByRole('listitem').map(item => item.querySelector('.task-title')?.textContent);
     expect(pageTitles).toEqual(today.tasks.map(task => task.title));
+    expect(screen.getByRole('link', { name: /打开模拟屏查看设备/ })).toHaveAttribute('href', '/simulator');
     expect(preview).toHaveClass('paper-design');
     expect(preview).toHaveAttribute('data-width', '400');
     expect(preview).toHaveAttribute('data-height', '300');

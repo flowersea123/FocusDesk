@@ -141,7 +141,7 @@ export default function DailyReview({ refreshKey }: { refreshKey?: string | numb
   const clock = current && new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: current.timezone });
   return <section className="daily-review" aria-labelledby="daily-review-title">
     <header className="review-heading">
-      <h2 id="daily-review-title">每日回顾</h2>
+      <h1 id="daily-review-title">每日回顾</h1>
       <div className="review-date">
         <label>回顾日期 <input aria-label="回顾日期" type="date" value={date || review?.date || ''}
           max={review?.today} onChange={e => { setError(''); setDate(e.target.value); }} /></label>

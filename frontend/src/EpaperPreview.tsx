@@ -48,7 +48,9 @@ export default function EpaperPreview({ overview, draft, project }: { overview: 
       <button type="button" aria-pressed={!sample} onClick={() => setSample(false)}>当前任务</button>
       <button type="button" aria-pressed={sample} onClick={() => setSample(true)}>多任务示例</button>
     </div>
-    <div className="device-stage"><div className="device-frame">
+    <a className="device-stage" href="/simulator" target="_blank" rel="noreferrer"
+      aria-label="打开模拟屏查看设备已保存的画面（新标签页）" title="打开设备模拟屏">
+      <div className="device-frame">
       <div className="paper-design" role="img" aria-label="400 × 300 e-paper preview" aria-describedby="preview-transcript"
         data-width="400" data-height="300" data-source-revision={overview?.revision ?? ''} data-preview-mode={sample ? 'sample' : 'workspace'}>
         {snapshot ? <ProjectCanvas snapshot={snapshot} /> : available ? <div className="paper-layout" aria-hidden="true">
@@ -62,7 +64,8 @@ export default function EpaperPreview({ overview, draft, project }: { overview: 
           <div className="paper-recommendation"><strong>AI RECOMMENDATION</strong><p>{recommendation}</p></div>
         </div> : <div className="paper-waiting">Waiting for work state</div>}
       </div>
-    </div></div>
+      </div>
+    </a>
     <div id="preview-transcript" className="sr-only">{transcript}</div>
     <div className="preview-status"><span className={draft ? 'draft-dot' : 'saved-dot'} /><strong>{pinned ? '电子屏已固定此任务' : draft ? '未保存草稿' : sample ? '示例预览' : '当前任务预览'}</strong></div>
     <p className="preview-note">{pinned ? '模拟屏与设备读取同一份任务进度。' : sample ? '合成任务仅用于查看排版。' : '浏览器内随编辑更新，设备下次读取时使用已保存的内容。'}</p>

@@ -77,7 +77,7 @@ test('built Dashboard and task API share one service; file edits publish new sna
   assert.match(bundle.headers.get('content-type'), /javascript/);
   const code = await bundle.text();
   assert.ok(code.includes('/connect') && code.includes('连接设备'), 'built UI must include the local device connection entry');
-  assert.ok(code.includes('/api/v1/daily-overview') && code.includes('/ai-suggestion') && code.includes('保存建议') && code.includes('保存更改'), 'built Hub must include the real task and suggestion read/write controls');
+  assert.ok(code.includes('/api/v1/daily-overview') && code.includes('/ai-suggestion') && code.includes('保存建议') && code.includes('添加任务') && code.includes('撤销删除'), 'built Hub must include the real task and suggestion read/write controls');
 
   const read = async () => {
     const response = await fetch(`${origin}/api/v1/daily-overview`);
