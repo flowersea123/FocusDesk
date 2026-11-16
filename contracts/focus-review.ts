@@ -36,7 +36,15 @@ export interface AppSession {
   seconds: number;
 }
 
-export interface AiSession {
+export interface AiConversationFields {
+  conversationId?: string;
+  conversationTurnId?: string;
+  conversationTitle?: string;
+  userExcerpt?: string;
+  assistantExcerpt?: string;
+}
+
+export interface AiSession extends AiConversationFields {
   runId: string;
   appName: string;
   title: string;
@@ -56,6 +64,7 @@ export interface FocusReview {
   appSessions?: AppSession[];
   aiSessions?: AiSession[];
   aiUnavailable?: boolean;
+  aiConversationSummaries?: Record<string, string>;
   observations: ReviewObservation[];
   summary: string;
   suggestion: { action: string; evidence: string } | null;

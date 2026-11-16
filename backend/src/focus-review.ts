@@ -10,6 +10,8 @@ const DAY = 86_400_000;
 const RETENTION = 90 * DAY;
 const MAX_SESSIONS = 4096;
 const MAX_BYTES = 4 * 1024 * 1024;
+// 4,096 AI spans can each include two bounded Unicode excerpts.
+const AI_MAX_BYTES = 16 * 1024 * 1024;
 const CHECKPOINT_MS = 60_000;
 const iso = (ms: number) => new Date(ms).toISOString();
 
@@ -102,13 +104,13 @@ async function load(file: string, activated: number): Promise<Journal> {
   return data;
 }
 
-async function store(file: string, data: unknown) {
+async function store(file: string, data: unknown, maxBytes = MAX_BYTES) {
   // One Hub owns this journal. A crash may leave one uncommitted staging file,
   // which is never used as a published record and is replaced on the next write.
   const temp = path.join(path.dirname(file), '.' + path.basename(file) + '.tmp');
   const text = JSON.stringify(data);
   try {
-    if (Buffer.byteLength(text) > MAX_BYTES) throw new Error('Journal full');
+    if (Buffer.byteLength(text) > maxBytes) throw new Error('Journal full');
     try { await unlink(temp); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
     const fd = await open(temp, 'wx', 0o600);
     try { await fd.writeFile(text); await fd.sync(); } finally { await fd.close(); }
@@ -167,7 +169,7 @@ export function createFocusReview(dataPath: string, { now = Date.now }: { now?: 
   const file = path.resolve(dataPath) + '.focus-review.json';
   const aiFile = path.resolve(dataPath) + '.ai-activity.json';
   const aiActivity = createAiActivityJournal({
-    read: () => readSmallFile(aiFile, MAX_BYTES), write: value => store(aiFile, value),
+    read: () => readSmallFile(aiFile, AI_MAX_BYTES), write: value => store(aiFile, value, AI_MAX_BYTES),
   });
   const activated = now();
   let journal: Journal | undefined;

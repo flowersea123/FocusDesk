@@ -1,7 +1,5 @@
-import { createHash } from 'node:crypto';
+import { codexRunId, resolveCodexConversations, defaultCodexHistory } from './codex-conversations.ts';
 import { stat } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import type { DatabaseSync, StatementSync } from 'node:sqlite';
 import type { AiRunObservation } from './ai-activity-types.ts';
 
@@ -36,9 +34,6 @@ function openQueries(db: DatabaseSync) {
   };
 }
 
-function idFor({ thread_id, turn_id }: Identity) {
-  return 'codex-' + createHash('sha256').update(thread_id).update('\0').update(turn_id).digest('hex').slice(0, 24);
-}
 function observe(runId: string, at: number, state: AiRunObservation['state']): AiRunObservation {
   return { runId, appName: 'Codex', title: '轮次 ' + runId.slice(-6), at, state };
 }
@@ -46,8 +41,8 @@ function stamp(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
 }
 
-export function createCodexActivitySource({ databasePath = join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'thread_history_1.sqlite'),
-  now = Date.now }: { databasePath?: string; now?: () => number } = {}) {
+export function createCodexActivitySource({ databasePath = defaultCodexHistory(), statePath,
+  now = Date.now }: { databasePath?: string; statePath?: string; now?: () => number } = {}) {
   let db: DatabaseSync | undefined, query: ReturnType<typeof openQueries> | undefined, fileKey = '';
   let turnCursor = 0, itemCursor = 0, lastPoll: number | undefined, since = 0;
   let closed = false;
@@ -103,9 +98,9 @@ export function createCodexActivitySource({ databasePath = join(process.env.CODE
         const output: AiRunObservation[] = [];
         db!.exec('BEGIN');
         turnCursor = discover(query!.turns, first, turnCursor, identity => {
-          const id = idFor(identity); candidates.set(id, identity); discoveredTurns.add(id);
+          const id = codexRunId(identity); candidates.set(id, identity); discoveredTurns.add(id);
         });
-        itemCursor = discover(query!.items, first, itemCursor, identity => candidates.set(idFor(identity), identity));
+        itemCursor = discover(query!.items, first, itemCursor, identity => candidates.set(codexRunId(identity), identity));
         for (const [id, identity] of candidates) {
           if (delivered.has(id)) continue;
           const args = [identity.thread_id, identity.turn_id];
@@ -155,7 +150,7 @@ export function createCodexActivitySource({ databasePath = join(process.env.CODE
         }
         db!.exec('COMMIT');
         lastPoll = clock;
-        return output.sort((a, b) => a.at - b.at);
+        return resolveCodexConversations(output.sort((a, b) => a.at - b.at), { databasePath, statePath });
       } catch {
         // Missing/locked/incompatible stores lose continuity. Other AI sources continue.
         reset();

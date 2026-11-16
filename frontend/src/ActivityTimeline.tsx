@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type R
 import type { RecorderControls } from './ForegroundRecord';
 import type { Task } from '../../contracts/daily-overview';
 import type { FocusReview } from '../../contracts/focus-review';
+import { groupAiConversations, type AiConversation } from '../../contracts/ai-conversations';
 import { checkpointSourceLabel } from '../../contracts/screen-checkpoint';
 import './activity-timeline.css';
 
@@ -16,7 +17,7 @@ interface Props {
 }
 
 type Entry = { id: string; kind: 'focus' | 'app' | 'ai' | 'observation'; start: number; end: number; seconds: number; detail: string; source?: string; observationGroup?: string; taskId?: string | null };
-type Track = { id: string; name: string; kind: 'focus' | 'app' | 'ai'; entries: Entry[]; seconds: number };
+type Track = { id: string; name: string; kind: 'focus' | 'app' | 'ai'; entries: Entry[]; seconds: number; conversation?: AiConversation };
 const aiLabels = {running:'进行中', finished:'已结束', interrupted:'观测中断'};
 const measureLabels = {focus:'计时', app:'前台', ai:'AI 活动'} as const;
 const HOUR = 3_600_000;
@@ -74,10 +75,16 @@ function buildTracks(review: FocusReview, day: ReturnType<typeof dayBounds>) {
     add('app:' + name, name || '未识别应用', 'app', {id:'a' + segment.from + ':' + i, kind:'app',
       start:Date.parse(segment.from), end:Date.parse(segment.to), seconds:segment.seconds, detail:'前台时段'});
   }
-  for (const run of review.aiSessions ?? []) {
-    const from = Date.parse(run.from), to = Date.parse(run.to);
-    add('ai:' + run.runId, run.appName + ' · ' + run.title, 'ai', {id:'ai:' + run.runId + ':' + run.from, kind:'ai',
-      start:from, end:to, seconds:(to - from) / 1000, detail:aiLabels[run.state]});
+  for (const chat of groupAiConversations(review.aiSessions ?? [])) {
+    const id = 'ai:' + chat.key, name = chat.appName + ' · ' + chat.title;
+    if (chat.linked) {
+      add(id, name, 'ai', {id, kind:'ai', start:chat.from, end:chat.to, seconds:chat.activeSeconds, detail:aiLabels[chat.state]});
+    } else {
+      for (const window of chat.windows) add(id, name, 'ai', {id:id + ':' + window.from, kind:'ai', start:window.from, end:window.to,
+        seconds:(window.to - window.from)/1000, detail:aiLabels[chat.state]});
+    }
+    const track = tracks.get(id);
+    if (track) track.conversation = chat;
   }
   const foreground = (review.appSessions ?? []).map(s => ({name:s.appName.trim(), from:Date.parse(s.from), to:Date.parse(s.to)}))
     .sort((a,b) => a.from - b.from);
@@ -256,6 +263,7 @@ function Chart({review, tasks, revealApp, handled, historical}: {
   const selectedFrom = details.length ? Math.min(...details.map(e => e.start)) : 0;
   const selectedTo = details.length ? Math.max(...details.map(e => e.end)) : 0;
   const zoomLength = Math.max(20_000, (selectedTo - selectedFrom) * 1.5);
+  const selectedChat = current?.conversation;
   const observedWindows = selectedRanges.filter(entries => entries[0].start < entries.at(-1)!.end);
   const singleSamples = selectedRanges.length > observedWindows.length;
   // Include a little context on either side of the selection. All parallel rows
@@ -288,14 +296,19 @@ function Chart({review, tasks, revealApp, handled, historical}: {
         {(plotWidth < 180 ? [0,1] : plotWidth < 400 ? [0,.5,1] : [0,.25,.5,.75,1]).map(fraction => <span key={fraction} style={{left:(100 * fraction) + '%'}}>{time(start + fraction * span)}</span>)}
       </div>
       {plots.map(({row, spans:spanEntries, observations:points, durations, evidence, stamps}) => {
+        const chat = row.conversation;
+        const summary = chat && review.aiConversationSummaries?.[chat.key];
+        const latestReply = chat && [...chat.turns].reverse().find(t => t.assistantExcerpt)?.assistantExcerpt;
+        const firstQuestion = chat?.turns.find(t => t.userExcerpt)?.userExcerpt;
         const measure = measureLabels[row.kind];
         const color = row.kind === 'ai' ? '#307c70' : row.kind === 'focus' ? '#7962a7' : palette.get(row.id);
         const trackStyle = {'--activity-color':color} as CSSProperties;
         return <div className="activity-row" key={row.id} style={trackStyle}>
           <button type="button" className="activity-name" aria-label={'查看 ' + row.name + ' 的全部记录'} aria-controls={detailsId}
             onClick={e => select(e.currentTarget, row.id)}>
-            <strong title={row.name}>{row.name}</strong>
+            <strong className={chat?.linked ? 'activity-chat-title' : undefined} title={row.name}>{row.name}</strong>
             <small className="activity-row-metrics">
+              {chat?.linked && <span>{chat.turns.length} 轮 · </span>}
               {spanEntries.length > 0 && <span>{measure} {formatActivityDuration(row.seconds)}</span>}
               {row.kind === 'ai' && <span> · {row.entries.at(-1)?.detail}</span>}
               {spanEntries.length > 0 && points.length > 0 && <span className="activity-metric-divider"> · </span>}
@@ -321,13 +334,32 @@ function Chart({review, tasks, revealApp, handled, historical}: {
                 style={{'--lane':(isEvidence && durations.length ? 1 : 0) + (onlyBadges && evidence.length ? 1 : 0),
                   left:(100 * left / plotWidth) + '%', width:(100 * (right - left) / plotWidth) + '%'} as CSSProperties}
                 onClick={e => select(e.currentTarget, row.id, entries)}>
-                {onlyBadges ? <i aria-hidden="true" className="activity-stamp">{entries.length === 1 ? time(first,false) : entries.length + ' 张'}</i> :
+                {chat?.linked ? <>
+                  <i className="activity-chat-envelope" aria-hidden="true" />
+                  {chat.windows.map(window => {
+                    const wStart = Math.max(start,window.from), wEnd = Math.min(end,window.to);
+                    if (wEnd < wStart || (wEnd === wStart && window.from !== window.to)) return null;
+                    const firstVisible = Math.max(start,chat.from);
+                    const visibleDuration = Math.min(end,chat.to) - firstVisible;
+                    const px = visibleDuration ? Math.min(right-left,Math.max(2,(right-left)*(wEnd-wStart)/visibleDuration)) : right-left;
+                    const offset = visibleDuration ? Math.max(0, Math.min(right-left-px,(right-left)*(wStart-firstVisible)/visibleDuration)) : 0;
+                    return <i className="activity-chat-active" aria-hidden="true" key={window.from}
+                      style={{left:100*offset/(right-left)+'%',width:100*px/(right-left)+'%'}}/>;
+                  })}
+                </> : onlyBadges ? <i aria-hidden="true" className="activity-stamp">{entries.length === 1 ? time(first,false) : entries.length + ' 张'}</i> :
                   marks.map(mark => <i aria-hidden="true" key={mark.entries[0].id}
                     className={isEvidence ? 'activity-observed' : undefined}
                     style={{left:(100 * (mark.left - left) / (right - left)) + '%', width:(100 * (mark.right - mark.left) / (right - left)) + '%'}} />)}
               </button>;
             })}
           </div>
+          {chat?.linked && <div className="activity-chat-summary">
+            {summary ? <><span>对话小结</span>{summary}</> : firstQuestion || latestReply ? <>
+              {firstQuestion && <p><span>提问摘录</span>{firstQuestion}</p>}
+              {latestReply && <p><span>答复摘录</span>{latestReply}</p>}
+            </> : '这段对话只有主题和活动时间，暂无可读的消息摘录。'}
+          </div>}
+          {chat?.key.endsWith(':unlinked') && <div className="activity-chat-summary">只保留了活动时间，未找到可核对的对话来源。</div>}
         </div>;
       })}
     </div>
@@ -337,7 +369,7 @@ function Chart({review, tasks, revealApp, handled, historical}: {
     <div id={detailsId} className={details.length ? 'activity-details' : undefined}
       onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); close(); } }}>
       {current && details.length > 0 && <>
-        <header><h3 tabIndex={-1} ref={detailHeading}>{current.name} · {details.length} 条记录</h3>
+        <header><h3 tabIndex={-1} ref={detailHeading}>{current.name} · {selectedChat?.linked ? selectedChat.turns.length + ' 轮对话' : details.length + ' 条记录'}</h3>
           <button type="button" className="activity-more" onClick={close}>收起明细</button></header>
         {selection?.ids && !zoom && zoomLength < span && <button type="button" className="activity-more"
           onClick={zoomToSelection}>放大这个时段</button>}
@@ -345,7 +377,17 @@ function Chart({review, tasks, revealApp, handled, historical}: {
           观察范围 {time(entries[0].start,true)}–{time(entries.at(-1)!.end,true)} · {entries.length} 张截图，仅表示首次至末次观察
         </p>)}
         {singleSamples && <p className="activity-range-note">单次截图仅有采样时刻，持续时间未知。</p>}
-        <ol>{details.slice(0,limit).map(entry => {
+        {selectedChat?.linked ? <>
+          <p className="activity-range-note">对话跨度 {time(selectedChat.from,true)}–{time(selectedChat.to,true)} · 实际 AI 活动 {formatActivityDuration(selectedChat.activeSeconds)}。浅色连接同一对话，深色表示观察到的活动。小结依据当天可读的提问与公开答复摘录。</p>
+          <ol>{selectedChat.turns.slice(0,limit).map((turn,index) => <li key={turn.id}>
+            <time dateTime={new Date(turn.from).toISOString()}>{time(turn.from,true)}–{time(turn.to,true)}</time>
+            <div><strong>第 {index + 1} 轮 · {aiLabels[turn.state]}</strong>
+              {turn.userExcerpt && <p className="activity-chat-excerpt"><b>你</b>{turn.userExcerpt}</p>}
+              {turn.assistantExcerpt && <p className="activity-chat-excerpt"><b>AI</b>{turn.assistantExcerpt}</p>}
+              {!turn.userExcerpt && !turn.assistantExcerpt && <small>暂无可读的消息摘录</small>}
+            </div>
+          </li>)}</ol>
+        </> : <ol>{details.slice(0,limit).map(entry => {
           const task = entry.taskId && tasks?.find(t => t.id === entry.taskId);
           const fine = entry.end > entry.start && entry.end - entry.start < 1000;
           return <li key={entry.id}><time dateTime={new Date(entry.start).toISOString()}>{fine ? subsecond.format(entry.start) : time(entry.start,true)}
@@ -353,8 +395,8 @@ function Chart({review, tasks, revealApp, handled, historical}: {
             <div>{entry.kind !== 'observation' && <strong>{measureLabels[entry.kind] + ' '}{formatActivityDuration(entry.seconds)} · </strong>}
               {entry.detail}{entry.kind === 'observation' && <small>{entry.source}{task ? ' · ' + task.title : ''}</small>}</div>
           </li>;
-        })}</ol>
-        {details.length > limit && <button type="button" className="activity-more" onClick={() => setLimit(limit + 24)}>显示更多明细</button>}
+        })}</ol>}
+        {(selectedChat?.linked ? selectedChat.turns.length : details.length) > limit && <button type="button" className="activity-more" onClick={() => setLimit(limit + 24)}>显示更多明细</button>}
       </>}
     </div>
   </>;
@@ -379,9 +421,9 @@ export default function ActivityTimeline({review, tasks, revealApp, error, onRet
       disabled={!!recorder.pending || !!recorder.readError || state === 'stopping'}
       onClick={() => void recorder.change(aiOnly ? 'stop' : 'start-ai')}>{aiOnly ? '停止 AI 状态记录' : '仅记录 AI 状态'}</button>}
     {!historical && <details className="activity-setup"><summary>如何记录并行的 AI 活动</summary>
-      <p>「开始记录」会记录前台画面和 AI 状态。「仅记录 AI 状态」只读取轮次和生成信号，整个过程不截图。每个轮次单独占一行，可与前台活动重叠。</p>
+      <p>「开始记录」会记录前台画面和 AI 状态。「仅记录 AI 状态」只读取轮次和生成信号，整个过程不截图。同一对话的多轮请求归在一行。对话主题和本机小结会随记录更新。</p>
       <p>ChatGPT 网页可通过 Chrome 或 Edge 扩展接入。<a href="/focusdesk-chatgpt.zip" download>下载扩展</a>，解压后在浏览器的扩展管理页打开开发者模式，选择「加载已解压的扩展程序」，再刷新 ChatGPT 标签页。Hub 使用自定义端口时，可在扩展选项中填写。</p>
-      <p>扩展只观察生成按钮。标签休眠、断连后，时段停在最后一次确认处。</p>
+      <p>扩展在记录期间读取当前对话的主题和简短消息摘录。本机模型据此生成小结；标签休眠或断连时，活动停在最后一次确认处。</p>
     </details>}
   </section>;
 }

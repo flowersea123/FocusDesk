@@ -1,7 +1,9 @@
+import type { AiConversationFields } from '../../contracts/focus-review.ts';
+
 export type AiRunState = 'running' | 'finished' | 'interrupted';
 
 /** One observed lifecycle boundary or heartbeat, with a source-confirmed Unix millisecond timestamp. */
-export interface AiRunObservation {
+export interface AiRunObservation extends AiConversationFields {
   runId: string;
   appName: string;
   title: string;

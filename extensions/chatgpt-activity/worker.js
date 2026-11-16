@@ -6,6 +6,12 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     const { port = 8787 } = await chrome.storage.local.get('port');
     if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
     const body = message.action === 'status' ? {action:'status'} : {action:message.action, session:message.session, id:message.id};
+    if (message.action !== 'status' && message.conversationId) {
+      body.conversationId = message.conversationId;
+      for (const field of ['conversationTurnId', 'conversationTitle', 'userExcerpt', 'assistantExcerpt']) {
+        if (typeof message[field] === 'string') body[field] = message[field];
+      }
+    }
     const response = await fetch('http://127.0.0.1:' + port + '/api/v1/ai-browser', {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body),
       cache:'no-store', credentials:'omit', redirect:'error', signal:AbortSignal.timeout(3500),

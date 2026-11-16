@@ -1,5 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
-import type { AiSession } from '../../contracts/focus-review.ts';
+import type { AiConversationFields, AiSession } from '../../contracts/focus-review.ts';
 import type { AiActivitySource, AiRunObservation } from './ai-activity-types.ts';
 
 const RETENTION_MS = 90 * 86_400_000;
@@ -21,6 +21,17 @@ function validIdentity(row: Partial<Span>) {
   return typeof row.runId === 'string' && /^[A-Za-z0-9_.:-]{1,128}$/.test(row.runId) &&
     label(row.appName, 60) && label(row.title, 120) &&
     (row.state === 'running' || row.state === 'finished' || row.state === 'interrupted');
+}
+
+function metadata(row: AiConversationFields): AiConversationFields {
+  const result: AiConversationFields = {};
+  for (const key of ['conversationId','conversationTurnId'] as const) {
+    if (typeof row[key] === 'string' && /^[A-Za-z0-9_.:-]{1,100}$/.test(row[key])) result[key] = row[key];
+  }
+  for (const key of ['conversationTitle','userExcerpt','assistantExcerpt'] as const) {
+    if (label(row[key], key === 'conversationTitle' ? 100 : 320)) result[key] = row[key];
+  }
+  return result;
 }
 
 const keyOf = (row: Pick<Span, 'appName' | 'runId'>) => row.appName + '\0' + row.runId;
@@ -48,8 +59,8 @@ export function createAiActivityJournal(io: {
       throw new Error('AI 活动记录格式无效。');
     }
     // No process restart can attest to an unfinished run after the last persisted heartbeat.
-    return spans = record.spans.map(({ runId, appName, title, from, to, state }) => ({
-      runId, appName, title, from, to, state: state === 'running' ? 'interrupted' : state,
+    return spans = record.spans.map(s => ({
+      runId:s.runId, appName:s.appName, title:s.title, from:s.from, to:s.to, ...metadata(s), state: s.state === 'running' ? 'interrupted' : s.state,
     }));
   }
 
@@ -111,7 +122,7 @@ export function createAiActivityJournal(io: {
             const previous = latest.get(key);
             if (event.state !== 'running' || event.at < since || previous?.state === 'finished' ||
                 (previous && event.at < previous.to)) continue;
-            const row: Span = { runId: event.runId, appName: event.appName, title: event.title, from: event.at, to: event.at, state: 'running' };
+            const row: Span = { runId: event.runId, appName: event.appName, title: event.title, ...metadata(event), from: event.at, to: event.at, state: 'running' };
             active.set(key, rows.length);
             latest.set(key, row);
             rows.push(row);
@@ -120,7 +131,11 @@ export function createAiActivityJournal(io: {
             continue;
           }
 
-          const row = rows[index];
+          const previousRow = rows[index];
+          const fields = metadata(event);
+          const updated = (Object.keys(fields) as (keyof AiConversationFields)[]).some(k => fields[k] !== previousRow[k]);
+          const row = updated ? {...previousRow, ...fields} : previousRow;
+          if (updated) { rows[index] = row; changed = true; }
           if (event.state === 'running') {
             seen.add(key);
             if (event.at > row.to) {

@@ -217,3 +217,15 @@ test('AI-only HTTP recording works with no screen permission, image, capability 
   assert.equal(view.aiSessions.length,1); assert.equal(view.aiSessions[0].state,'interrupted');
   assert.equal(probes,0); assert.equal(opens,0); assert.deepEqual(view.observations,[]);
 });
+
+test('preserves the final chat topic and excerpts on a terminal event and after restart', async t => {
+  const f = await setup(t);
+  const run = event('gpt',1000);
+  await f.batch(0,1000,[{...run,conversationId:'chatgpt-local-A',userExcerpt:'如何标记时长？'}]);
+  await f.batch(1000,5000,[{...event('gpt',5000,'finished'),conversationId:'chatgpt-real',conversationTitle:'时长条',
+    conversationTurnId:'visible-turn',assistantExcerpt:'用起止时间画条。',toolResult:'discard'}]);
+  const item = (await f.make().read()).aiSessions[0];
+  assert.equal(item.conversationId,'chatgpt-real');assert.equal(item.conversationTitle,'时长条');
+  assert.equal(item.conversationTurnId,'visible-turn');assert.equal(item.userExcerpt,'如何标记时长？');
+  assert.equal(item.assistantExcerpt,'用起止时间画条。');assert.equal(item.state,'finished');assert.ok(!('toolResult' in item));
+});

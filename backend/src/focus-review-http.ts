@@ -1,5 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { DailyOverview } from '../../contracts/daily-overview.ts';
+import { groupAiConversations } from '../../contracts/ai-conversations.ts';
+import { resolveCodexConversations } from './codex-conversations.ts';
+import { createConversationSummaries } from './conversation-summary.ts';
 import { createDailySynthesis } from './daily-synthesis.ts';
 import { ReviewInputError, createFocusReview } from './focus-review.ts';
 import { privateJson, privateInput, checkPrivateRequest } from './checkpoint-http.ts';
@@ -12,6 +15,7 @@ export function createReviewHttp(
   load: () => Promise<DailyOverview>,
 ) {
   const synthesize = createDailySynthesis();
+  const summarizeChats = createConversationSummaries();
   return async (request: IncomingMessage, response: ServerResponse) => {
     try {
       checkPrivateRequest(request);
@@ -44,6 +48,11 @@ export function createReviewHttp(
       const { records } = await checkpoints.read();
       const observations = records.map(r => ({ id: r.id, at: r.capturedAt, summary: r.summary, nextStep: r.nextStep, source: r.source, appName: r.appName, taskId: r.taskId }));
       const result = await reviews.read(date, overview.timezone, observations);
+      if (!synthesis && result.aiSessions?.length) {
+        const sessions = await resolveCodexConversations(result.aiSessions);
+        result.aiSessions = sessions;
+        result.aiConversationSummaries = summarizeChats(groupAiConversations(sessions));
+      }
       privateJson(response, 200, synthesis ? await synthesize(result) : result);
     } catch (error) {
       if (error instanceof ReviewInputError || error instanceof CheckpointError || error instanceof WriteRequestError) {

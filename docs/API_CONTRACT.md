@@ -259,8 +259,12 @@ Display schema display-1, layout goal-1, 4096-byte transport, 64 commands and dr
 
 今日清单执行「撤销删除」时，任务更新请求可携带可选的 `restoreTaskId`，标明用户明确要放回原清单的事项。普通后台重试沿用原请求。
 
-### 并行 AI 活动
+### 并行 AI 活动与对话
 
-本机每日回顾可含 `aiSessions`，每段含 `runId,appName,title,from,to,state`。同一时刻可以有多个轮次；停止、失联和重启后的断档可使同一轮次分段。状态有 running、finished 和 interrupted，日期按任务文件时区裁剪。专注累计和前台时长保持各自的计算方法。独立的 AI 日志不可读时返回 `aiUnavailable:true`，其余回顾仍可打开。
+本机每日回顾可含 `aiSessions`。每段保留 `runId,appName,title,from,to,state`。可选字段 `conversationId,conversationTurnId,conversationTitle,userExcerpt,assistantExcerpt` 来自可核对的聊天身份、用户提问与公开答复；两条摘录各不超过 320 个 UTF-16 代码单元。ID 为匿名标识，未辨认来源时允许缺省。时间跨日裁剪、重启断开，状态为 running、finished、interrupted。AI 日志单独限 90 日、4,096 段、16 MiB。不可读时返回 `aiUnavailable:true`，其余回顾仍可访问。
 
-`POST /api/v1/recorder` 接受 `{"action":"start-ai"}`，返回状态可带 `mode:"ai"`。普通 start 同时采集前台和 AI 状态，mode 为 screen。stop 结束当前模式。私有的 `POST /api/v1/ai-browser` 只接受本机捆绑扩展的来源。扩展先获取当前录制会话，再传随机运行 ID 和 running/finished/interrupted；服务端记录本机收到信号的时间。传输不含 URL、对话标题、正文或像素。扩展源在 `extensions/chatgpt-activity`，用 `python3 extensions/package-chatgpt.py` 更新随页面提供的离线下载包。
+`aiConversationSummaries` 以应用与对话身份构成的分组键返回已生成且与当次消息摘录匹配的摘要。当天多轮在同一行，父轮与后台协作以可核实的根轮次去重。活动时长为各段并集，专注计时独立。旧来源无法关联时按应用展示为未关联的活动集合。
+
+`POST /api/v1/recorder` 支持 `start-ai` 开始仅 AI 模式、`start` 开始常规模式、`stop` 停止。`/api/v1/ai-browser` 仅接受本机扩展来源，并核对当前状态会话。旧扩展的三字段事件仍可用；新版可提交哈希对话与轮次标识、标题和简短消息摘录。设备及局域网接口不提供这些内容。
+
+开始仅 AI 模式的请求体为 `{"action":"start-ai"}`，状态中的 `mode` 为 `ai`；常规录制为 `screen`。扩展源码在 `extensions/chatgpt-activity`，运行 `python3 extensions/package-chatgpt.py` 更新工作台的离线下载包。

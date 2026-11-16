@@ -9,6 +9,29 @@ import { createCodexActivitySource } from './codex-activity.ts';
 export const BROWSER_ACTIVITY_ORIGIN = 'chrome-extension://ekcleglehkhodjnllfkbahkijbghdfjd';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const browserFreshMs = 35_000;
+const conversationFields = ['conversationId','conversationTurnId','conversationTitle','userExcerpt','assistantExcerpt'] as const;
+type Conversation = Pick<AiRunObservation, typeof conversationFields[number]>;
+
+function readConversation(input: Record<string, unknown>): Conversation | null {
+  if (!conversationFields.some(field => field in input)) return {};
+  if (typeof input.conversationId !== 'string' ||
+      !(/^chatgpt-[0-9a-f]{24}$/.test(input.conversationId) ||
+        (input.conversationId.startsWith('chatgpt-local-') && uuid.test(input.conversationId.slice(14))))) return null;
+  const value: Conversation = {conversationId:input.conversationId};
+  if (input.conversationTurnId !== undefined) {
+    if (typeof input.conversationTurnId !== 'string' || !/^chatgpt-msg-[0-9a-f]{24}$/.test(input.conversationTurnId)) return null;
+    value.conversationTurnId = input.conversationTurnId;
+  }
+  for (const field of ['conversationTitle','userExcerpt','assistantExcerpt'] as const) {
+    const text = input[field];
+    if (text === undefined) continue;
+    if (typeof text !== 'string' || !text.trim() || text.length > (field === 'conversationTitle' ? 100 : 320) ||
+        /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Cs}]/u.test(text)) return null;
+    value[field] = text.trim();
+  }
+  return value;
+}
+
 
 export function createAiActivitySources({ now = Date.now, codex = createCodexActivitySource }: {
   now?: () => number; codex?: () => AiActivitySource;
@@ -36,15 +59,18 @@ export function createAiActivitySources({ now = Date.now, codex = createCodexAct
       }
       if (req.method !== 'POST') { privateJson(res, 405, {error:'请使用 POST。'}); return; }
       if (req.headers['content-type']?.split(';')[0] !== 'application/json') { privateJson(res,415,{}); return; }
-      const input = JSON.parse(await readUpdateBody(req, 3000, 512));
+      const input = JSON.parse(await readUpdateBody(req, 3000, 4096));
       if (!input || typeof input !== 'object' || Array.isArray(input)) { privateJson(res,400,{}); return; }
       if (input.action === 'status' && Object.keys(input).length === 1) { privateJson(res,200,{session}); return; }
-      if (Object.keys(input).length !== 3 || typeof input.id !== 'string' || !uuid.test(input.id) ||
+      const fields = readConversation(input);
+      if (!fields || Object.keys(input).some(k => !['action','id','session',...conversationFields].includes(k)) ||
+          typeof input.id !== 'string' || !uuid.test(input.id) ||
           !['running','finished','interrupted'].includes(input.action)) { privateJson(res,400,{}); return; }
       if (!session || input.session !== session) { privateJson(res,409,{session:null}); return; }
       expire();
       const key = 'chatgpt-' + input.id, previous = active.get(key);
-      const event: AiRunObservation = { runId:key, appName:'ChatGPT', title:'网页生成 ' + input.id.slice(0,4),
+      const event: AiRunObservation = { ...previous, ...fields, runId:key, appName:'ChatGPT',
+        title:fields.conversationTitle ?? previous?.title ?? '网页对话',
         at:now(), state:input.action };
       if (input.action === 'running') {
         if (!previous && (active.size >= 128 || edges.length >= 256)) { privateJson(res,429,{}); return; }

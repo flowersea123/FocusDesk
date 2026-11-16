@@ -182,3 +182,21 @@ it('magnifies a short measured interval on a long day with parallel rows on the 
   await user.click(reset);
   expect(parseFloat(within(track).getByRole('button').style.width)).toBeCloseTo(5);
 });
+
+it('shows one named conversation and one summary for overlapping worker activity and two user turns', async () => {
+  const user = userEvent.setup();
+  const flags={appName:'Codex',title:'轮次 c0eb5d',conversationTitle:'阅读进展',conversationId:'paper-chat',state:'finished' as const};
+  const {container}=render(<ActivityTimeline review={{...empty, aiSessions:[
+    {...flags,runId:'p',conversationTurnId:'q1',from:at('01'),to:at('04'),userExcerpt:'从哪一章继续？'},
+    {...flags,runId:'helper',conversationTurnId:'q1',from:at('03'),to:at('05'),assistantExcerpt:'接着看方法章节。'},
+    {...flags,runId:'p2',conversationTurnId:'q2',from:at('08'),to:at('09'),userExcerpt:'对照第二个实验。'},
+  ],aiConversationSummaries:{'Codex:chat:paper-chat':'讨论从方法章节继续阅读，并核对第二个实验。'}}}/>);
+  expect(screen.getAllByRole('group',{name:/时间轨道/})).toHaveLength(1);
+  expect(screen.getByText('对话小结')).toBeVisible();
+  expect(screen.queryByText(/c0eb5d/)).toBeNull();
+  const name=screen.getByRole('button',{name:'查看 Codex · 阅读进展 的全部记录'});
+  expect(name).toHaveTextContent('2 轮');expect(name).toHaveTextContent('AI 活动 5 分');
+  expect(container.querySelectorAll('.activity-chat-active')).toHaveLength(2);
+  await user.click(name);expect(screen.getByRole('heading',{name:'Codex · 阅读进展 · 2 轮对话'})).toBeVisible();
+  expect(screen.getAllByRole('listitem')).toHaveLength(2);expect(screen.getByText('接着看方法章节。')).toBeVisible();
+});

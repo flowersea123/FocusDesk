@@ -40,3 +40,34 @@ test('the browser adapter admits the packaged extension, keeps simultaneous runs
   assert.notEqual((await (await post({action:'status'})).json()).session,session);
   assert.deepEqual(await next.poll(new AbortController().signal),[]); await next.close();
 });
+
+test('new web metadata joins repeated turns, promotes temporary chats, retains earlier fields and rejects invalid excerpts', async t => {
+  const sources = createAiActivitySources({codex:() => ({poll:async() => []})});
+  const server = createServer(sources.handle);
+  server.listen(0,'127.0.0.1'); await once(server,'listening');
+  t.after(async () => { server.closeAllConnections(); await new Promise(r => server.close(r)); });
+  const epoch = new AbortController(), source = sources.open(epoch.signal);
+  const post = body => fetch('http://127.0.0.1:' + server.address().port, {method:'POST',
+    headers:{'Content-Type':'application/json', Origin:BROWSER_ACTIVITY_ORIGIN},body:JSON.stringify(body)});
+  const {session} = await (await post({action:'status'})).json();
+  const conversationId = 'chatgpt-' + '9a'.repeat(12), localId = 'chatgpt-local-' + randomUUID(), first = randomUUID();
+  assert.equal((await post({action:'running', session, id:first, conversationId:localId, userExcerpt:'How do the two designs compare?'})).status,200);
+  assert.equal((await post({action:'running', session, id:first, conversationId, conversationTitle:'Design comparison'})).status,200);
+  assert.equal((await post({action:'finished', session, id:first, conversationId, assistantExcerpt:'The second design uses less space.'})).status,200);
+  const second = randomUUID(), conversationTurnId = 'chatgpt-msg-' + 'f1'.repeat(12);
+  assert.equal((await post({action:'running', session, id:second, conversationId, conversationTurnId})).status,200);
+  const events = await source.poll(epoch.signal);
+  const completed = events.find(row => row.state === 'finished');
+  assert.equal(completed.conversationId,conversationId);
+  assert.equal(completed.conversationTitle,'Design comparison');
+  assert.equal(completed.userExcerpt,'How do the two designs compare?');
+  assert.equal(completed.assistantExcerpt,'The second design uses less space.');
+  assert.equal(events.at(-1).conversationId,conversationId);
+  assert.equal(events.at(-1).conversationTurnId,conversationTurnId);
+  for (const bad of [{conversationId:'https://chatgpt.com/c/raw-id'}, {assistantExcerpt:'unbound'},
+    {conversationId, userExcerpt:'x'.repeat(321)}, {conversationId, assistantExcerpt:'a\nb'}, {conversationId, conversationTitle:'x'.repeat(101)},
+    {conversationId, fullConversation:'extra'}, {conversationId, conversationTurnId:'raw-message-id'}]) {
+    assert.equal((await post({id:second,session,action:'running',...bad})).status,400);
+  }
+  await source.close();
+});
