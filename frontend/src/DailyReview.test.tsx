@@ -29,6 +29,7 @@ describe('DailyReview', () => {
     vi.stubGlobal('fetch', request);
     model.observations.push({ id:'b', at:'2026-11-16T16:21:00Z', summary:'屏幕显示批注', source:'automatic' });
     render(<DailyReview refreshKey={1}/>);
+    expect(await screen.findByRole('heading',{name:'当日活动时间轴'})).toBeVisible();
     await screen.findByText(model.summary);
     expect(screen.getByText('00:00–00:15')).toBeInTheDocument();
     expect(screen.getByText('完成两页草稿')).toBeInTheDocument();

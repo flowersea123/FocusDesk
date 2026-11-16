@@ -27,9 +27,9 @@ describe('ActivityTimeline', () => {
     const appBar = app.getByRole('button',{name:/Reader · 前台 09:10–09:20/});
     const shots = app.getByRole('button',{name:'Reader · 09:10 · 2 条截图观察'});
     expect(taskBar.style.left).toBe('0%');
-    expect(parseFloat(taskBar.style.width)).toBeCloseTo(100 * 25 / 60);
-    expect(parseFloat(appBar.style.left)).toBeCloseTo(100 * 10 / 60);
-    expect(shots.style.left).toBe(appBar.style.left);
+    expect(parseFloat(taskBar.style.width)).toBeCloseTo(100);
+    expect(parseFloat(appBar.style.left)).toBeCloseTo(100 * 10 / 25);
+    expect(parseFloat(shots.style.left) + parseFloat(shots.style.width) / 2).toBeCloseTo(parseFloat(appBar.style.left));
     expect(screen.getByText('最近记录')).toHaveTextContent('09:25');
     expect(within(screen.getByRole('group',{name:'Editor 时间轨道'})).getAllByRole('button')).toHaveLength(1);
     await user.click(shots);
@@ -57,7 +57,7 @@ describe('ActivityTimeline', () => {
     expect(screen.getByRole('button',{name:'屏幕观察 · 00:00 · 1 条截图观察'})).toBeVisible();
   });
 
-  it('keeps legacy observations as points, provides all entries in a dense cluster and expands additional application rows', async () => {
+  it('keeps untimed legacy observations as timestamps, provides all entries in a dense cluster and expands additional application rows', async () => {
     const user = userEvent.setup();
     const points = Array.from({length:36}, (_,i) => ({id:'p'+i,at:at('10'),summary:'Item ' + (i+1)}));
     const apps = Array.from({length:7}, (_,i) => ({id:'app'+i,at:at('10'),appName:'App '+i,summary:'Sample '+i}));
@@ -65,7 +65,7 @@ describe('ActivityTimeline', () => {
     expect(screen.getAllByRole('group', {name:/时间轨道/})).toHaveLength(5);
     const rowButton = screen.getByRole('button',{name:'查看 屏幕观察 的全部记录'});
     expect(rowButton).toHaveTextContent('36 条观察'); expect(rowButton).not.toHaveTextContent(/小时|秒|前台/);
-    await user.click(screen.getByRole('button',{name:'屏幕观察 · 09:10 · 36 条截图观察'}));
+    await user.click(screen.getByRole('button',{name:'屏幕观察 · 09:10:00 · 36 条截图观察'}));
     expect(screen.getAllByRole('listitem')).toHaveLength(12);
     await user.click(screen.getByRole('button',{name:'显示更多明细'}));
     expect(screen.getAllByRole('listitem')).toHaveLength(36);
@@ -83,6 +83,8 @@ describe('ActivityTimeline', () => {
     const row = screen.getByRole('button',{name:'查看 Reader 的全部记录'});
     expect(row).toHaveTextContent('前台 1 秒 · 1 条观察');
     await user.click(row); expect(screen.getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.getAllByText(/不足 1 秒/)).toHaveLength(2);
+    expect(screen.getByText('14:00:00.000–14:00:00.730')).toBeVisible();
     expect(formatActivityDuration(3599.999)).toBe('59 分 59 秒');
     expect(formatActivityDuration(3670.32)).toBe('1 小时 1 分');
   });
@@ -142,4 +144,41 @@ it('shows simultaneous AI runs independently of the person and preserves the end
   await user.click(first);
   const details = screen.getByRole('heading',{name:'Codex · 轮次 A · 1 条记录'}).parentElement!.parentElement!;
   expect(within(details).getByRole('list')).toHaveTextContent('已结束');
+});
+
+it('groups consecutive automatic screenshots into evidence windows without filling interruptions or crediting focus', async () => {
+  const user = userEvent.setup();
+  const shot = (id:string, sec:number, appName = 'Reader', source:'automatic'|'manual' = 'automatic') => ({id, appName, source,
+    at:new Date(Date.parse(at('00')) + sec * 1000).toISOString(), summary:'Screenshot ' + id});
+  render(<ActivityTimeline review={{...empty, observations:[
+    shot('a',0), shot('b',45), shot('c',90), shot('other',92,'Editor'), shot('d',95), shot('e',100),
+    shot('manual',102,'Reader','manual'), shot('f',110), shot('g',115), shot('h',180), shot('i',183),
+  ], appSessions:[{appName:'Editor',from:'2026-11-16T01:01:36Z',to:'2026-11-16T01:01:37Z',seconds:1}]}}/>);
+  const track = screen.getByRole('group',{name:'Reader 时间轨道'});
+  expect(track.querySelectorAll('.activity-observed')).toHaveLength(3);
+  const first = within(track).getByRole('button',{name:/09:00:00–09:01:30 · 3 条截图观察/});
+  await user.click(first);
+  expect(screen.getByText(/仅表示首次至末次观察/)).toHaveTextContent('3 张截图');
+  expect(screen.getAllByRole('listitem')).toHaveLength(3);
+  expect(screen.getByRole('button',{name:'查看 Reader 的全部记录'})).not.toHaveTextContent('前台');
+});
+
+it('magnifies a short measured interval on a long day with parallel rows on the same scale', async () => {
+  const user = userEvent.setup();
+  const from = '2026-11-16T09:00:00Z', to = '2026-11-16T09:00:08Z';
+  render(<ActivityTimeline review={{...empty, sessions:[paper],appSessions:[{appName:'Editor',from,to,seconds:8}],
+    aiSessions:[{appName:'Codex',title:'A',runId:'x',from,to,state:'finished'}]}}/>);
+  const track = screen.getByRole('group',{name:'Editor 时间轨道'});
+  const bar = within(track).getByRole('button');
+  expect(parseFloat(bar.style.width)).toBeCloseTo(5);
+  await user.click(bar);
+  await user.click(screen.getByRole('button',{name:'放大这个时段'}));
+  expect(parseFloat(within(track).getByRole('button').style.width)).toBeCloseTo(40);
+  const ai = within(screen.getByRole('group',{name:'Codex · A 时间轨道'})).getByRole('button');
+  expect(ai.style.width).toBe(within(track).getByRole('button').style.width);
+  expect(within(screen.getByRole('group',{name:'Read paper 时间轨道'})).queryByRole('button')).toBeNull();
+  const reset = screen.getByRole('button',{name:'返回全天'});
+  expect(reset).toHaveFocus();
+  await user.click(reset);
+  expect(parseFloat(within(track).getByRole('button').style.width)).toBeCloseTo(5);
 });

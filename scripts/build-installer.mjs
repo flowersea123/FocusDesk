@@ -105,8 +105,8 @@ export async function compileLauncher({ projectRoot = ROOT, output, compiler = '
 
 export async function buildInstaller({ projectRoot = ROOT, output, cacheDir = DEFAULT_TOOL_CACHE,
                                       testUserDataDir, testAppVersion, compiler } = {}) {
-  if (process.platform !== 'win32') throw new Error('Windows installer builds require Windows.');
   if (testAppVersion && !testUserDataDir) throw new Error('A test app version requires isolated test user data.');
+  if (process.platform !== 'win32') throw new Error('Windows installer builds require Windows.');
   const root = path.resolve(projectRoot);
   const destination = path.resolve(root, output ?? '.cache/m1-dist/FocusDesk-Setup.exe');
   if (path.basename(destination).toLowerCase() !== 'focusdesk-setup.exe')

@@ -59,7 +59,7 @@ unsigned remainingSeconds() { return windowSeconds; }
 int fakeSocket(int, int, int) { ++opened; return 3; }
 int fakeFcntl(int, int, int) { return 0; }
 int fakeConnect(int, sockaddr*, size_t) { return 0; }
-unsigned htons(unsigned value) { return value; }
+unsigned fakeHtons(unsigned value) { return value; }
 int fakeInetPton(int, const char*, void*) { return 1; }
 int fakeGetSockOpt(int, int, int, int* output, socklen_t*) { *output = network.connectionError; return 0; }
 int fakeSelect(int, FakeFdSet* reading, FakeFdSet* writing, void*, FakeTimeval* timeout) {
@@ -82,6 +82,11 @@ char hubReply[6145] = {};
 #define portEXIT_CRITICAL(mux) static_cast<void>(mux)
 #define fd_set FakeFdSet
 #define timeval FakeTimeval
+// Some host SDKs expose these socket operations as macros through standard headers.
+#undef htons
+#define htons fakeHtons
+#undef FD_ZERO
+#undef FD_SET
 #define FD_ZERO(set) static_cast<void>(set)
 #define FD_SET(fd, set) do { static_cast<void>(fd); static_cast<void>(set); } while (false)
 #define socket fakeSocket

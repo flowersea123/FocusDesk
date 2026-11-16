@@ -15,17 +15,21 @@ interface Props {
   onRetry?: () => void;
 }
 
-type Entry = { id: string; kind: 'focus' | 'app' | 'ai' | 'observation'; start: number; end: number; seconds: number; detail: string; source?: string; taskId?: string | null };
+type Entry = { id: string; kind: 'focus' | 'app' | 'ai' | 'observation'; start: number; end: number; seconds: number; detail: string; source?: string; observationGroup?: string; taskId?: string | null };
 type Track = { id: string; name: string; kind: 'focus' | 'app' | 'ai'; entries: Entry[]; seconds: number };
 const aiLabels = {running:'进行中', finished:'已结束', interrupted:'观测中断'};
 const measureLabels = {focus:'计时', app:'前台', ai:'AI 活动'} as const;
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const shownTracks = 5;
+// The recorder normally revisits a stable page every 45 seconds. Use close samples only to
+// show the first-to-last observation window; it never contributes to measured foreground time.
+const observationGap = 60_000;
 const colors = ['#467eb1', '#ba713e', '#658753', '#a86689', '#3d8a81', '#947942', '#786da4', '#986154'];
 const endLabels = {running:'计时中', stopped:'提前结束', expired:'自然到期', unobserved:'计至最后一次确认', continued:'延续至次日'};
 
 export function formatActivityDuration(seconds: number) {
+  if (seconds > 0 && seconds < 1) return '不足 1 秒';
   const whole = Math.floor(Math.round(seconds * 1000) / 1000);
   const h = Math.floor(whole / 3600), m = Math.floor(whole / 60) % 60, s = h ? 0 : whole % 60;
   return [h ? h + ' 小时' : '', m ? m + ' 分' : '', s || (!h && !m) ? s + ' 秒' : ''].filter(Boolean).join(' ');
@@ -63,7 +67,7 @@ function buildTracks(review: FocusReview, day: ReturnType<typeof dayBounds>) {
   }
   for (const [i, segment] of review.sessions.entries()) {
     add('task:' + segment.taskId, segment.title, 'focus', {id:'f' + segment.from + ':' + i, kind:'focus',
-      start:Date.parse(segment.from), end:Date.parse(segment.to), seconds:segment.seconds, detail:endLabels[segment.end]});
+      start:Date.parse(segment.from), end:Date.parse(segment.to), seconds:(Date.parse(segment.to) - Date.parse(segment.from)) / 1000, detail:endLabels[segment.end]});
   }
   for (const [i, segment] of (review.appSessions ?? []).entries()) {
     const name = segment.appName.trim();
@@ -75,11 +79,28 @@ function buildTracks(review: FocusReview, day: ReturnType<typeof dayBounds>) {
     add('ai:' + run.runId, run.appName + ' · ' + run.title, 'ai', {id:'ai:' + run.runId + ':' + run.from, kind:'ai',
       start:from, end:to, seconds:(to - from) / 1000, detail:aiLabels[run.state]});
   }
-  for (const observation of review.observations) {
-    const name = observation.appName?.trim();
-    const at = Date.parse(observation.at);
-    add(name ? 'app:' + name : 'observations', name || '屏幕观察', 'app', {id:'o' + observation.id, kind:'observation',
-      start:at, end:at, seconds:0, detail:observation.summary, source:checkpointSourceLabel(observation.source), taskId:observation.taskId});
+  const foreground = (review.appSessions ?? []).map(s => ({name:s.appName.trim(), from:Date.parse(s.from), to:Date.parse(s.to)}))
+    .sort((a,b) => a.from - b.from);
+  const observations = review.observations.map(o => ({o, at:Date.parse(o.at)})).filter(({at}) => at >= day.begin && at < day.end)
+    .sort((a,b) => a.at - b.at);
+  let previous: {at:number; name:string; group:string; task?:string | null} | undefined;
+  let spanIndex = 0;
+  for (const {o, at} of observations) {
+    const name = o.appName?.trim();
+    let group = o.id;
+    if (o.source === 'automatic' && name) {
+      if (previous && previous.name === name && previous.task === o.taskId && at - previous.at <= observationGap) {
+        while (spanIndex < foreground.length && foreground[spanIndex].to <= previous.at) spanIndex++;
+        let otherApp = false;
+        for (let j = spanIndex; j < foreground.length && foreground[j].from < at; j++) {
+          if (foreground[j].name !== name) { otherApp = true; break; }
+        }
+        if (!otherApp) group = previous.group;
+      }
+      previous = {at, name, group, task:o.taskId};
+    } else previous = undefined;
+    add(name ? 'app:' + name : 'observations', name || '屏幕观察', 'app', {id:'o' + o.id, kind:'observation',
+      start:at, end:at, seconds:0, observationGroup:group, detail:o.summary, source:checkpointSourceLabel(o.source), taskId:o.taskId});
   }
   const rows = [...tracks.values()];
   for (const row of rows) row.entries.sort((a,b) => a.start - b.start || a.id.localeCompare(b.id));
@@ -88,12 +109,43 @@ function buildTracks(review: FocusReview, day: ReturnType<typeof dayBounds>) {
   return rows;
 }
 
-function clusters(entries: Entry[], minGap: number) {
-  const groups: Entry[][] = [];
+function observationRanges(entries: Entry[]) {
+  const ranges = new Map<string, Entry[]>();
   for (const entry of entries) {
-    const last = groups.at(-1);
-    if (last && entry.start - last[0].start < minGap) last.push(entry);
-    else groups.push([entry]);
+    const key = entry.observationGroup!;
+    const range = ranges.get(key);
+    if (range) range.push(entry);
+    else ranges.set(key, [entry]);
+  }
+  return [...ranges.values()];
+}
+
+type Mark = {entries:Entry[]; from:number; to:number; left:number; right:number; enlarged:boolean};
+type MarkGroup = {marks:Mark[]; left:number; right:number};
+
+// Layout in pixels first so even a few seconds remains selectable on a day-long axis.
+// Keep the true timestamps on each mark. If targets touch, open them through a shared button.
+function placeMarks(ranges: Entry[][], start: number, span: number, plotWidth: number) {
+  const layout: Mark[] = [];
+  for (const entries of ranges) {
+    const from = entries[0].start, to = entries.at(-1)!.end;
+    const clippedFrom = Math.max(from, start), clippedTo = Math.min(to, start + span);
+    if (clippedTo < clippedFrom || (clippedTo === clippedFrom && from !== to)) continue;
+    const natural = plotWidth * (clippedTo - clippedFrom) / span;
+    const badge = entries[0].kind === 'observation' && from === to;
+    const width = Math.min(plotWidth, Math.max(badge ? 48 : 18, natural));
+    const left = Math.max(0, Math.min(plotWidth - width, plotWidth * (clippedFrom - start) / span - (width - natural) / 2));
+    layout.push({entries, from, to, left, right:left + width, enlarged:!badge && natural < width - .01});
+  }
+  const groups: MarkGroup[] = [];
+  for (const mark of layout.sort((a,b) => a.left - b.left || a.from - b.from)) {
+    const {left, right} = mark;
+    const previous = groups.at(-1);
+    if (previous && left < previous.right - .01) {
+      previous.marks.push(mark);
+      previous.left = Math.min(previous.left, left);
+      previous.right = Math.max(previous.right, right);
+    } else groups.push({marks:[mark],left,right});
   }
   return groups;
 }
@@ -114,8 +166,8 @@ function trackColors(rows: Track[]) {
   return result;
 }
 
-function Chart({review, tasks, revealApp, handled}: {
-  review: FocusReview; tasks?: Props['tasks']; revealApp?: Props['revealApp']; handled: RefObject<Props['revealApp']>;
+function Chart({review, tasks, revealApp, handled, historical}: {
+  review: FocusReview; tasks?: Props['tasks']; historical?: boolean; revealApp?: Props['revealApp']; handled: RefObject<Props['revealApp']>;
 }) {
   const day = useMemo(() => dayBounds(review.date, review.timezone), [review.date, review.timezone]);
   const rows = useMemo(() => buildTracks(review, day), [review, day]);
@@ -124,7 +176,11 @@ function Chart({review, tasks, revealApp, handled}: {
     minute:'2-digit', hourCycle:'h23'}), [review.timezone]);
   const exact = useMemo(() => new Intl.DateTimeFormat('zh-CN', {timeZone:review.timezone, hour:'2-digit',
     minute:'2-digit', second:'2-digit', hourCycle:'h23'}), [review.timezone]);
+  const subsecond = useMemo(() => new Intl.DateTimeFormat('zh-CN', {timeZone:review.timezone, hour:'2-digit',
+    minute:'2-digit', second:'2-digit', fractionalSecondDigits:3, hourCycle:'h23'}), [review.timezone]);
   const [all, setAll] = useState(false);
+  const [zoom, setZoom] = useState<{from:number; to:number} | null>(null);
+  const resetZoom = useRef<HTMLButtonElement | null>(null);
   const [limit, setLimit] = useState(12);
   const [selection, setSelection] = useState<{rowId:string; ids?:string[]} | null>(null);
   const opener = useRef<HTMLButtonElement | null>(null);
@@ -137,12 +193,14 @@ function Chart({review, tasks, revealApp, handled}: {
     const index = rows.findIndex(row => row.id === 'app:' + revealApp.name.trim());
     if (index < 0) return;
     handled.current = revealApp;
+    setZoom(null);
     opener.current = document.activeElement instanceof HTMLButtonElement ? document.activeElement : null;
     setAll(true);
     setLimit(12);
     setSelection({rowId:rows[index].id});
   }, [revealApp, rows, handled]);
   useEffect(() => { if (selection) detailHeading.current?.focus(); }, [selection]);
+  useEffect(() => { if (zoom) resetZoom.current?.focus({preventScroll:true}); }, [zoom]);
   const hasRows = rows.length > 0;
   useEffect(() => {
     if (!hasRows || !ruler.current) return;
@@ -160,7 +218,7 @@ function Chart({review, tasks, revealApp, handled}: {
     observer.observe(node);
     return () => observer.disconnect();
   }, [hasRows]);
-  if (!hasRows) return <p className="activity-empty">今天还没有活动记录。开启屏幕记录或开始一次专注计时后，时间轴会出现在这里。</p>;
+  if (!hasRows) return <p className="activity-empty">{historical ? '这一天没有活动记录。' : '今天还没有活动记录。开启记录或开始一次专注计时后，时间轴会出现在这里。'}</p>;
 
   let earliest = day.end, latest = day.begin;
   for (const row of rows) for (const entry of row.entries) {
@@ -169,10 +227,10 @@ function Chart({review, tasks, revealApp, handled}: {
   }
   const ai = rows.filter(row => row.kind === 'ai');
   const range = latest - earliest;
-  const unit = !ai.length || range > 15 * 60_000 ? HOUR : range > 5 * 60_000 ? 5 * 60_000 : range > 90_000 ? 60_000 : 15_000;
-  const minimum = unit === 15_000 ? 60_000 : unit;
-  const start = Math.min(day.end - minimum, day.begin + Math.floor((earliest - day.begin) / unit) * unit);
-  const end = Math.min(day.end, Math.max(start + minimum, day.begin + Math.ceil((latest - day.begin) / unit) * unit));
+  const unit = range > 30 * 60_000 ? HOUR : range > 5 * 60_000 ? 5 * 60_000 : range > 90_000 ? 60_000 : range > 30_000 ? 15_000 : 5_000;
+  const minimum = Math.max(20_000, unit);
+  const start = zoom?.from ?? Math.min(day.end - minimum, day.begin + Math.floor((earliest - day.begin) / unit) * unit);
+  const end = zoom?.to ?? Math.min(day.end, Math.max(start + minimum, day.begin + Math.ceil((latest - day.begin) / unit) * unit));
   const span = end - start;
   const percent = (at: number) => 100 * (at - start) / span;
   const time = (at: number, seconds = span <= 5 * 60_000) => at === day.end ? (seconds ? '24:00:00' : '24:00') : (seconds ? exact : clock).format(at);
@@ -181,9 +239,31 @@ function Chart({review, tasks, revealApp, handled}: {
     newest.find(row => row.entries.at(-1)?.detail === aiLabels.running) ?? newest[0]].filter((row): row is Track => !!row);
   const ordered = ai.length ? [...new Set([...lead, ...rows])] : rows;
   const visibleRows = all ? ordered : ordered.slice(0, shownTracks);
+  const plots = visibleRows.map(row => {
+    const spans = row.entries.filter(e => e.kind !== 'observation');
+    const observations = row.entries.filter(e => e.kind === 'observation');
+    const ranges = observationRanges(observations);
+    const instants = ranges.filter(r => r[0].start === r.at(-1)!.end);
+    const windows = ranges.filter(r => r[0].start !== r.at(-1)!.end);
+    return {row, spans, observations, durations:placeMarks(spans.map(e => [e]), start, span, plotWidth),
+      evidence:placeMarks(windows, start, span, plotWidth), stamps:placeMarks(instants, start, span, plotWidth)};
+  });
+  const enlarged = plots.some(p => [...p.durations, ...p.evidence].some(g => g.marks.some(m => m.enlarged)));
   const current = visibleRows.find(row => row.id === selection?.rowId);
   const selectedIds = selection?.ids && new Set(selection.ids);
   const details = current?.entries.filter(entry => !selectedIds || selectedIds.has(entry.id)) ?? [];
+  const selectedRanges = selection?.ids ? observationRanges(details.filter(e => e.kind === 'observation')) : [];
+  const selectedFrom = details.length ? Math.min(...details.map(e => e.start)) : 0;
+  const selectedTo = details.length ? Math.max(...details.map(e => e.end)) : 0;
+  const zoomLength = Math.max(20_000, (selectedTo - selectedFrom) * 1.5);
+  const observedWindows = selectedRanges.filter(entries => entries[0].start < entries.at(-1)!.end);
+  const singleSamples = selectedRanges.length > observedWindows.length;
+  // Include a little context on either side of the selection. All parallel rows
+  // share the magnified scale and keep their original timestamps and daily totals.
+  function zoomToSelection() {
+    const left = Math.max(day.begin, Math.min(day.end - zoomLength, Math.floor((selectedFrom + selectedTo - zoomLength) / 2)));
+    setZoom({from:left, to:left + zoomLength});
+  }
   function select(button: HTMLButtonElement, rowId: string, entries?: Entry[]) {
     opener.current = button;
     setLimit(12);
@@ -197,17 +277,17 @@ function Chart({review, tasks, revealApp, handled}: {
     <div className="activity-legend">
       <span><i className="activity-key-focus" />任务计时</span><span><i className="activity-key-app" />应用前台</span>
       {ai.length > 0 && <span><i className="activity-key-ai" />AI 并行活动</span>}
-      <span><i className="activity-key-shot" />截图观察点</span>
+      {review.observations.length > 0 && <span><i className="activity-key-shot" />截图观察范围</span>}
       <span className="activity-latest-label"><i/>最近记录 <time dateTime={new Date(latest).toISOString()}>{time(latest)}</time></span>
     </div>
+    {zoom && <div className="activity-zoom"><span>局部时间轴 {time(start,true)}–{time(end,true)} · 行内时长为全天累计</span>
+      <button className="activity-more" ref={resetZoom} onClick={() => { setZoom(null); detailHeading.current?.focus({preventScroll:true}); }}>返回全天</button></div>}
     <div className="activity-grid">
       <span className="activity-axis-heading">时间</span>
       <div className="activity-axis" ref={ruler} aria-label="时间刻度">
-        {[0,.25,.5,.75,1].map(fraction => <span key={fraction} style={{left:(100 * fraction) + '%'}}>{time(start + fraction * span)}</span>)}
+        {(plotWidth < 180 ? [0,1] : plotWidth < 400 ? [0,.5,1] : [0,.25,.5,.75,1]).map(fraction => <span key={fraction} style={{left:(100 * fraction) + '%'}}>{time(start + fraction * span)}</span>)}
       </div>
-      {visibleRows.map(row => {
-        const spanEntries = row.entries.filter(e => e.kind !== 'observation');
-        const points = row.entries.filter(e => e.kind === 'observation');
+      {plots.map(({row, spans:spanEntries, observations:points, durations, evidence, stamps}) => {
         const measure = measureLabels[row.kind];
         const color = row.kind === 'ai' ? '#307c70' : row.kind === 'focus' ? '#7962a7' : palette.get(row.id);
         const trackStyle = {'--activity-color':color} as CSSProperties;
@@ -222,31 +302,36 @@ function Chart({review, tasks, revealApp, handled}: {
               {points.length > 0 && <span>{points.length} 条观察</span>}
             </small>
           </button>
-          <div className="activity-track" role="group" aria-label={row.name + ' 时间轨道'}>
-            <span className="activity-latest-line" style={{left:percent(latest) + '%'}} aria-hidden="true"/>
-            {clusters(spanEntries, span * 22 / plotWidth).map(group => {
-              const first = group[0].start, last = Math.max(...group.map(e => e.end));
-              const label = row.name + ' · ' + measure + ' ' + time(first) + '–' + time(last) +
-                ' · ' + formatActivityDuration(group.reduce((s,e) => s + e.seconds, 0)) + (group.length > 1 ? ' · ' + group.length + ' 段' : '');
-              return <button type="button" className="activity-span" key={group[0].id} aria-label={label} title={label}
-                aria-controls={detailsId} style={{left:percent(first) + '%', width:(percent(last) - percent(first)) + '%'}}
-                onClick={e => select(e.currentTarget, row.id, group)}>
-                {group.map(entry => <i key={entry.id} style={{left:(last > first ? 100 * (entry.start - first) / (last - first) : 0) + '%',
-                  width:(last > first ? 100 * (entry.end - entry.start) / (last - first) : 0) + '%'}} />)}
-              </button>;
-            })}
-            {clusters(points, span * 29 / plotWidth).map(group => {
-              const label = row.name + ' · ' + time(group[0].start) + ' · ' + group.length + ' 条截图观察';
-              return <button type="button" className="activity-point" key={group[0].id} title={label} aria-label={label}
-                aria-controls={detailsId} style={{left:percent(group[0].start) + '%'}}
-                onClick={e => select(e.currentTarget, row.id, group)}>
-                <i aria-hidden="true" className={group.length > 1 ? 'is-cluster' : ''}>{group.length > 1 && (group.length > 99 ? '99+' : group.length)}</i>
+          <div className="activity-track" style={{'--lanes':Number(durations.length > 0) + Number(evidence.length > 0) + Number(stamps.length > 0)} as CSSProperties} role="group" aria-label={row.name + ' 时间轨道'}>
+            {latest >= start && latest <= end && <span className="activity-latest-line" style={{left:percent(latest) + '%'}} aria-hidden="true"/>}
+            {[...durations, ...evidence, ...stamps].map(group => {
+              const {marks, left, right} = group;
+              const isEvidence = marks[0].entries[0].kind === 'observation';
+              const entries = marks.flatMap(m => m.entries);
+              const first = Math.min(...marks.map(m => m.from)), last = Math.max(...marks.map(m => m.to));
+              const stamp = first === last;
+              const showSeconds = !stamp && last - first < 60_000 || span <= 5 * 60_000;
+              const when = time(first,showSeconds) + (stamp ? '' : '–' + time(last,showSeconds));
+              const label = row.name + ' · ' + (isEvidence ? when + ' · ' + entries.length + ' 条截图观察' :
+                measure + ' ' + when + ' · ' + formatActivityDuration(entries.reduce((sum,e) => sum + e.seconds, 0))) +
+                (marks.length > 1 && !stamp ? ' · ' + marks.length + ' 组' : '');
+              const onlyBadges = isEvidence && marks.every(m => m.from === m.to);
+              return <button type="button" className={'activity-span ' + (onlyBadges ? 'activity-badges' : isEvidence ? 'activity-evidence' : 'activity-duration')}
+                key={entries[0].id} aria-label={label} title={label} aria-controls={detailsId}
+                style={{'--lane':(isEvidence && durations.length ? 1 : 0) + (onlyBadges && evidence.length ? 1 : 0),
+                  left:(100 * left / plotWidth) + '%', width:(100 * (right - left) / plotWidth) + '%'} as CSSProperties}
+                onClick={e => select(e.currentTarget, row.id, entries)}>
+                {onlyBadges ? <i aria-hidden="true" className="activity-stamp">{entries.length === 1 ? time(first,false) : entries.length + ' 张'}</i> :
+                  marks.map(mark => <i aria-hidden="true" key={mark.entries[0].id}
+                    className={isEvidence ? 'activity-observed' : undefined}
+                    style={{left:(100 * (mark.left - left) / (right - left)) + '%', width:(100 * (mark.right - mark.left) / (right - left)) + '%'}} />)}
               </button>;
             })}
           </div>
         </div>;
       })}
     </div>
+    {enlarged && <p className="activity-scale-note">短时段已加宽显示，点选可查看准确起止时间。</p>}
     {rows.length > shownTracks && <button type="button" className="activity-more" aria-expanded={all} onClick={() => setAll(!all)}>
       {all ? '收起活动行' : '显示另外 ' + (rows.length - shownTracks) + ' 行'}</button>}
     <div id={detailsId} className={details.length ? 'activity-details' : undefined}
@@ -254,10 +339,17 @@ function Chart({review, tasks, revealApp, handled}: {
       {current && details.length > 0 && <>
         <header><h3 tabIndex={-1} ref={detailHeading}>{current.name} · {details.length} 条记录</h3>
           <button type="button" className="activity-more" onClick={close}>收起明细</button></header>
+        {selection?.ids && !zoom && zoomLength < span && <button type="button" className="activity-more"
+          onClick={zoomToSelection}>放大这个时段</button>}
+        {observedWindows.slice(0,limit).map(entries => <p className="activity-range-note" key={entries[0].id}>
+          观察范围 {time(entries[0].start,true)}–{time(entries.at(-1)!.end,true)} · {entries.length} 张截图，仅表示首次至末次观察
+        </p>)}
+        {singleSamples && <p className="activity-range-note">单次截图仅有采样时刻，持续时间未知。</p>}
         <ol>{details.slice(0,limit).map(entry => {
           const task = entry.taskId && tasks?.find(t => t.id === entry.taskId);
-          return <li key={entry.id}><time dateTime={new Date(entry.start).toISOString()}>{time(entry.start,true)}
-            {entry.kind !== 'observation' && '–' + time(entry.end,true)}</time>
+          const fine = entry.end > entry.start && entry.end - entry.start < 1000;
+          return <li key={entry.id}><time dateTime={new Date(entry.start).toISOString()}>{fine ? subsecond.format(entry.start) : time(entry.start,true)}
+            {entry.kind !== 'observation' && '–' + (fine ? subsecond.format(entry.end) : time(entry.end,true))}</time>
             <div>{entry.kind !== 'observation' && <strong>{measureLabels[entry.kind] + ' '}{formatActivityDuration(entry.seconds)} · </strong>}
               {entry.detail}{entry.kind === 'observation' && <small>{entry.source}{task ? ' · ' + task.title : ''}</small>}</div>
           </li>;
@@ -281,7 +373,7 @@ export default function ActivityTimeline({review, tasks, revealApp, error, onRet
     {error && <p role="alert" className="activity-error">活动记录读取失败。{error} {onRetry &&
       <button type="button" className="activity-more" onClick={onRetry}>重试</button>}</p>}
     {review?.aiUnavailable && <p className="activity-error" role="status">AI 活动记录暂时无法读取。</p>}
-    {review ? <Chart key={review.date + review.timezone} review={review} tasks={tasks} revealApp={revealApp} handled={handled}/> :
+    {review ? <Chart key={review.date + review.timezone} review={review} historical={historical} tasks={tasks} revealApp={revealApp} handled={handled}/> :
       !error && <p className="activity-empty" role="status">正在读取今日活动…</p>}
     {recorder?.status && (!recording || aiOnly) && <button type="button" className="activity-more ai-only-button"
       disabled={!!recorder.pending || !!recorder.readError || state === 'stopping'}
