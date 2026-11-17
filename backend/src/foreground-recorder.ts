@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { RecorderStatus } from '../../contracts/foreground-recorder.ts';
 import type { ScreenCheckpoint } from '../../contracts/screen-checkpoint.ts';
+import { CheckpointCapacityError } from './checkpoint-store.ts';
 import { WriteRequestError } from './write-policy.ts';
 
 export interface ForegroundFrame {
@@ -84,6 +85,8 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
     let changingImage: string | undefined;
     let lastSaved: { page: string; facts: string; titleOnly: boolean } | undefined;
     let retryTitleAt = 0;
+    let retryStorageAt = 0;
+    const storageNotice = '检查点已满，新的画面观察暂停保存。前台时长和已接入的 AI 记录继续；腾出空间后将在一分钟内重试。';
     const modelIssues = new Set(['MODEL_CONFIG', 'MODEL_UNAVAILABLE', 'MODEL_TIMEOUT', 'INVALID_OBSERVATION', 'INCOMPLETE_OBSERVATION', 'OBSERVATION_BUSY']);
 
     async function record({ frame, capturedAt, targetTaskId, generation }: Sample) {
@@ -106,8 +109,19 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
         observation.readingPosition?.page, observation.readingPosition?.total, observation.progress?.percent, [...(observation.completedParts ?? [])].sort()]);
       const row: ScreenCheckpoint = { id: randomUUID(), source: 'automatic', appName, capturedAt,
         ...(pageTitle ? { pageTitle } : {}), ...(titleOnly ? { detailSource: 'window-title' as const } : {}), ...observation };
-      if (lastSaved?.page !== frame.pageKey || lastSaved.facts !== facts || lastSaved.titleOnly !== titleOnly) {
-        await save(row, signal);
+      if (retryStorageAt || lastSaved?.page !== frame.pageKey || lastSaved.facts !== facts || lastSaved.titleOnly !== titleOnly) {
+        try {
+          await save(row, signal);
+        } catch (error) {
+          if (!(error instanceof CheckpointCapacityError)) throw error;
+          retryStorageAt = now() + 60_000;
+          status.message = storageNotice;
+          queue.length = 0;
+          lastSample = undefined;
+          return;
+        }
+        retryStorageAt = 0;
+        if (status.message === storageNotice) status.message = '';
         lastSaved = { page: frame.pageKey, facts, titleOnly };
         status.savedCount++;
         status.lastSavedAt = capturedAt;
@@ -160,7 +174,7 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
           await recordAppSpan?.(name, previousApp.at, at);
         }
         previousApp = name ? { name, at } : undefined;
-        if (frame && generation === targetGeneration) {
+        if (frame && generation === targetGeneration && at >= retryStorageAt) {
           const changedPage = lastSample?.page !== frame.pageKey || lastSample?.generation !== generation;
           const digest = createHash('sha256').update(frame.image).digest('hex');
           const newPixels = digest !== lastSample?.digest;

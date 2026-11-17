@@ -235,7 +235,7 @@ Display schema display-1, layout goal-1, 4096-byte transport, 64 commands and dr
 
 ### 大任务进度与设备画面
 
-本机 GET /api/v1/project-progress 返回逐个任务的百分比、已完成部分和步骤清单。PUT 使用 revision、taskId 和 plan/pin/unpin 更新清单或选择设备内容。有清单时根据已记录的步骤计数，无清单时仅采用可核对的比例。GET /api/v1/display-snapshot 继续提供标准 400×300 display-1 绘制指令。固定后设备显示大任务完整进度及完成部分，取消固定后恢复今日总览。当前设备字库支持 ASCII，可为自定义步骤提供英文短名。
+本机 GET /api/v1/project-progress 返回逐个任务的百分比、已完成部分和步骤清单。PUT 使用 revision、taskId 和 plan/pin/unpin 更新清单或选择设备内容。set-step 接收清单中原样的 section 和布尔值 done；人工设定覆盖该步的观察结论，恢复到观察结论时清除覆盖。配置的可选 stepEdits 随未改名的步骤保留。有清单时根据已记录的步骤计数，无清单时仅采用可核对的比例。GET /api/v1/display-snapshot 继续提供标准 400×300 display-1 绘制指令。固定后设备显示大任务完整进度及完成部分，取消固定后恢复今日总览。当前设备字库支持 ASCII，可为自定义步骤提供英文短名。
 
 ### 每日回顾与专注时段
 

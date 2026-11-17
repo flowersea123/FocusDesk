@@ -1,3 +1,4 @@
+import { workspaceClock } from './data/workspace-clock';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DailyOverview } from '../../contracts/daily-overview';
 import { checkpointSourceLabel, type ScreenCheckpoint, type CheckpointHistory } from '../../contracts/screen-checkpoint';
@@ -35,7 +36,7 @@ export function CheckpointWorkspace({ overview, recorder, active, refreshKey, on
   const pendingSave = useRef<{ key: string; id: string } | null>(null);
   const sequence = useRef(0);
   const tasks = overview?.tasks ?? [];
-  const timezone = overview?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timezone = overview?.timezone;
   const load = useCallback(async () => {
     const request = ++sequence.current;
     setLoading(true);
@@ -73,7 +74,7 @@ export function CheckpointWorkspace({ overview, recorder, active, refreshKey, on
     } catch (err) { setActionError((err as Error).message); }
     finally { setWorking(false); }
   }
-  const formatTime = new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: timezone });
+  const formatTime = workspaceClock(timezone, true);
   function renderRow(row: ScreenCheckpoint) {
     return <li key={row.id}>
         <div className="checkpoint-meta">

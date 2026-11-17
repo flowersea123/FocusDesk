@@ -30,3 +30,6 @@
 .paper-recommendation strong { display: block; font-size: 2.5cqw; line-height: 3cqw; font-weight: 750; letter-spacing: .05cqw; }
 .paper-recommendation p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; white-space: pre-line; margin: .5cqw 0 0; font-size: 3.25cqw; line-height: 4cqw; }
 .paper-waiting { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; }
+
+.preview-pin-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:6px; font-size:13px; }
+.preview-pin-actions button { border:0; padding:4px 0; background:transparent; color:var(--accent); font:inherit; text-decoration:underline; cursor:pointer; }

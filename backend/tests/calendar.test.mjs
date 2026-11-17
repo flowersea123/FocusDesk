@@ -69,6 +69,24 @@ test('device-only polling publishes at local midnight without a browser, retains
   assert.equal((await fixture.store.load()).revision, overview.revision);
 });
 
+test('a manual Chinese calendar item keeps its dashboard title at publication and can be renamed afterwards', async t => {
+  const f = await setup(t);
+  const item = { id: 'cal-00000000-0000-4000-8000-000000000001', source: 'manual',
+    title: '核对实验结果', deviceTitle: 'Check results', plannedDate: '2026-11-17', dueDate: null, dueAt: null };
+  const scheduled = await planned(f.store, await f.store.readCalendar(), item);
+  assert.equal(scheduled.entries[0].status, 'scheduled');
+  assert.deepEqual((await f.store.load()).tasks, []);
+  f.clock(midnight);
+  const expected = { id: item.id, title: item.title, device_title: item.deviceTitle, status: 'todo', due_at: null };
+  assert.deepEqual((await f.store.load()).tasks, [expected]);
+
+  const renamed = { ...item, title: '复查实验误差' };
+  const calendar = await planned(f.store, await f.store.readCalendar(), renamed);
+  assert.deepEqual(calendar.entries, [{ ...renamed, status: 'published' }]);
+  const reopened = createOverviewLoader(f.dataPath, { now: f.now });
+  assert.deepEqual((await reopened.load()).tasks, [{ ...expected, title: renamed.title }]);
+});
+
 test('catch-up after missed days and restart uses the configured timezone and publishes exactly once', async t => {
   const f = await setup(t, [], 'UTC');
   const due = { ...reading, dueAt: '2026-11-27T12:30:00.000Z' };

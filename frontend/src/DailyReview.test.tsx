@@ -14,7 +14,7 @@ function result(date = today): FocusReview {
     observations: [{ id: 'a', at: '2026-11-16T16:20:00Z', summary: '完成两页草稿' }],
     summary: '当天记录了任务计时和草稿观察。', suggestion, experiment: null, previousExperimentDate: null };
 }
-afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+afterEach(() => { sessionStorage.clear(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 describe('DailyReview', () => {
   it('shows timer and observation evidence, saves a checkable experiment and restores it on refresh', async () => {
     const model = result();
@@ -252,4 +252,21 @@ describe('automatic daily synthesis', () => {
     expect(await screen.findByText('暂用当日记录小结，稍后自动重试。')).toBeVisible();
     expect(screen.queryByText('不属于这个证据版本')).toBeNull();
   });
+});
+
+it('restores an unsaved experiment in the same tab and isolates it from another date', async () => {
+  vi.stubGlobal('fetch',async (url:string) => Response.json(result(url.includes('?date=') ? url.split('=')[1] : today)));
+  const first = render(<DailyReview/>);
+  fireEvent.change(await screen.findByLabelText('下一次尝试'),{target:{value:'复核实验'}});
+  fireEvent.change(screen.getByLabelText(/复查结果/),{target:{value:'已复核第一组'}});
+  first.unmount();
+  render(<DailyReview/>);
+  expect(await screen.findByLabelText('下一次尝试')).toHaveValue('复核实验');
+  expect(screen.getByLabelText(/复查结果/)).toHaveValue('已复核第一组');
+  fireEvent.change(screen.getByLabelText('回顾日期'),{target:{value:'2026-11-16'}});
+  await waitFor(() => expect(screen.getByLabelText('下一次尝试')).toHaveValue(''));
+  fireEvent.click(screen.getByRole('button',{name:'今天'}));
+  await waitFor(() => expect(screen.getByLabelText('下一次尝试')).toHaveValue('复核实验'));
+  fireEvent.click(screen.getByRole('button',{name:'放弃草稿'}));
+  expect(screen.getByLabelText('下一次尝试')).toHaveValue('');
 });

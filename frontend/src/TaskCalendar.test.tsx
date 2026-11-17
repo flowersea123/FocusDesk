@@ -70,3 +70,27 @@ it('uses the revision from the start of editing and refreshes after a conflictin
   expect(screen.getByRole('button', { name: '改期' })).toBeVisible();
   expect(changed).not.toHaveBeenCalled();
 });
+
+it('creates and renames a manual Chinese entry using the same ID and selected day', async () => {
+  let current: CalendarSnapshot = {...fixture,entries:[]};
+  const writes: CalendarSnapshot['entries'] = [];
+  vi.stubGlobal('fetch', async (_: string, options: RequestInit) => {
+    if (options.method === 'PUT') {
+      const body = JSON.parse(String(options.body));
+      expect(body.revision).toBe(current.revision);
+      writes.push(body.entry);
+      current = {...current, revision:'after-'+writes.length, entries:[{...body.entry,status:'scheduled'}]};
+    }
+    return Response.json(current);
+  });
+  const user = userEvent.setup(); mount('2026-11-18');
+  await user.click(await screen.findByRole('button',{name:/添加待办/}));
+  fireEvent.change(screen.getByRole('textbox',{name:'新待办名称'}),{target:{value:'看论文'}});
+  await user.click(screen.getByRole('button',{name:'保存待办'}));
+  await user.click(await screen.findByRole('button',{name:'改名'}));
+  fireEvent.change(screen.getByRole('textbox',{name:'待办名称'}),{target:{value:'Read methods'}});
+  await user.click(screen.getByRole('button',{name:'保存名称'}));
+  expect(writes).toHaveLength(2);
+  expect(writes[0]).toMatchObject({source:'manual',title:'看论文',deviceTitle:'Kan lun wen',plannedDate:'2026-11-18'});
+  expect(writes[1]).toMatchObject({id:writes[0].id,title:'Read methods',deviceTitle:'Read methods',plannedDate:'2026-11-18'});
+});

@@ -6,6 +6,8 @@ import { buildProjectDisplay, type DisplaySnapshot } from '../../contracts/displ
 import { paintDisplaySnapshot } from './simulator/canvas';
 import './epaper-preview.css';
 
+const overviewDate = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+
 function ProjectCanvas({ snapshot }: { snapshot: DisplaySnapshot }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -19,8 +21,17 @@ const sampleTasks: Task[] = [
   'Prepare tomorrow’s outline', 'Organize research notes', 'Reply to project feedback',
 ].map((title, index) => ({ id: `preview-${index}`, title, status: 'todo', due_at: null }));
 
-export default function EpaperPreview({ overview, draft, project }: { overview: DailyOverview | null; draft: boolean; project?: ProjectStatus | null }) {
+export default function EpaperPreview({ overview, draft, project, onUnpin }: { overview: DailyOverview | null; draft: boolean; project?: ProjectStatus | null; onUnpin?: () => Promise<void> }) {
   const [sample, setSample] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [error, setError] = useState('');
+  async function unpin() {
+    if (restoring || !onUnpin) return;
+    setRestoring(true); setError('');
+    try { await onUnpin(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : '恢复总览失败，请重试。'); }
+    finally { setRestoring(false); }
+  }
   const tasks = sample ? sampleTasks : overview?.tasks ?? [];
   const pending = tasks.filter(task => task.status === 'todo');
   const focus = sample ? null : overview?.focus;
@@ -29,11 +40,12 @@ export default function EpaperPreview({ overview, draft, project }: { overview: 
   const visible = ordered.slice(0, 5).map(task => ({ ...task, title:deviceTaskLabel(task) }));
   const hidden = Math.max(0, ordered.length - visible.length);
   const date = overview?.date ?? '2026-11-12';
-  const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
+  const dateLabel = overviewDate
     .format(new Date(`${date}T12:00:00Z`)).toUpperCase();
   const progress = `${tasks.filter(task => task.status === 'done').length} / ${tasks.length} DONE`;
+  const focusTime = useMemo(() => new Intl.DateTimeFormat('en-GB', {hour:'2-digit', minute:'2-digit', hourCycle:'h23', timeZone:overview?.timezone}), [overview?.timezone]);
   const focusLabel = focus && priority?.id === focus.task_id
-    ? `FOCUS - UNTIL ${new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: overview?.timezone }).format(new Date(focus.ends_at))}`
+    ? `FOCUS - UNTIL ${focusTime.format(new Date(focus.ends_at))}`
     : '';
   const emptyLabel = tasks.length ? 'All tasks done' : 'No tasks for today';
   const recommendation = (overview?.ai_suggestion ?? (sample ? 'Draft the outline, then focus for 25 min.' : '')).trim() || 'No suggestion yet.';
@@ -68,7 +80,12 @@ export default function EpaperPreview({ overview, draft, project }: { overview: 
       </div>
     </a>
     <div id="preview-transcript" className="sr-only">{transcript}</div>
-    <div className="preview-status"><span className={draft ? 'draft-dot' : 'saved-dot'} /><strong>{pinned ? '电子屏已固定此任务' : draft ? '未保存草稿' : sample ? '示例预览' : '当前任务预览'}</strong></div>
+    <div className="preview-status"><span className={draft ? 'draft-dot' : 'saved-dot'} /><strong>{pinned ? '电子屏已固定「' + pinned.title + '」' : draft ? '未保存草稿' : sample ? '示例预览' : '当前任务预览'}</strong></div>
+    {project && onUnpin && <div className="preview-pin-actions">
+      {sample && <span>电子屏已固定「{project.title}」</span>}
+      <button type="button" disabled={restoring} onClick={() => void unpin()}>{restoring ? '正在恢复…' : '恢复电子屏总览'}</button>
+    </div>}
+    {error && project && <p role="alert">{error}</p>}
     <p className="preview-note">{pinned ? '模拟屏与设备读取同一份任务进度。' : sample ? '合成任务仅用于查看排版。' : '浏览器内随编辑更新，设备下次读取时使用已保存的内容。'}</p>
     <div className="display-colors" aria-label="电子纸四色"><span><i className="color-black" />黑</span><span><i className="color-white" />白</span><span><i className="color-yellow" />黄</span><span><i className="color-red" />红</span></div>
     <a className="connection-link" href="/connect">连接设备 <span aria-hidden="true">↗</span></a>

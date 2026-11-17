@@ -40,6 +40,23 @@ test('checkpoint evidence drives a pinned device view and unpin restores the dai
   const labels = snapshot.commands.filter(c=>c[0]===1).map(c=>c[5]);
   for (const text of ['40%','Introduction','Method']) assert.ok(labels.includes(text));
   assert.ok(!labels.includes('Results'));
+  const toggleStep = async (revision,section,done) => write(endpoint,'PUT',{taskId:'paper',action:'set-step',revision,section,done});
+  let revision = pinned.config.revision;
+  assert.equal((await toggleStep(revision,'Missing',true)).status,400);
+  const checked = await (await toggleStep(revision,'Results',true)).json();
+  assert.equal(checked.statuses[0].percent,60);
+  assert.deepEqual(checked.config.plans[0].stepEdits,[{section:'Results',done:true}]);
+  assert.ok(!checked.statuses[0].automaticParts.includes('Results'));
+  assert.ok((await display()).commands.some(c=>c[0]===1 && c[5]==='60%'));
+  assert.equal((await toggleStep(revision,'Results',false)).status,409);
+  const reverted = await (await toggleStep(checked.config.revision,'Results',false)).json();
+  assert.equal(reverted.statuses[0].percent,40);
+  assert.equal(reverted.config.plans[0].stepEdits,undefined);
+  const corrected = await (await toggleStep(reverted.config.revision,'Method',false)).json();
+  assert.equal(corrected.statuses[0].percent,20);
+  const recovered = await (await toggleStep(corrected.config.revision,'Method',true)).json();
+  assert.equal(recovered.statuses[0].percent,40);
+  revision = recovered.config.revision;
   async function recordReading(minute, details = {}) {
     const row = { ...checkpoint, id:randomUUID(), readingDocument:'Example Paper', readingSection:'Results',
       completedParts:[], summary:'Results is visible.', capturedAt:`2026-11-16T01:${minute}:00.000Z`, ...details };
@@ -60,7 +77,7 @@ test('checkpoint evidence drives a pinned device view and unpin restores the dai
   assert.notEqual(advanced.revision, page.revision);
   assert.ok(advanced.commands.some(c=>c[0]===1 && c[5]==='Page 7/12'));
   assert.equal((await (await fetch(endpoint)).json()).statuses[0].percent, 40);
-  assert.equal((await write(endpoint,'PUT',{taskId:'paper',action:'unpin',revision:pinned.config.revision})).status,200);
+  assert.equal((await write(endpoint,'PUT',{taskId:'paper',action:'unpin',revision})).status,200);
   assert.deepEqual(await display(), initial);
   const config = (await (await fetch(endpoint)).json()).config;
   const sections = Array.from({ length: 24 }, (_, i) => '文'.repeat(60) + i);

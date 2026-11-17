@@ -4,7 +4,7 @@ import {
   CalendarError, calendarDay, parseCalendarItem, validCalendarId,
   type CalendarEntry, type CalendarItem, type CalendarSnapshot,
 } from '../../contracts/calendar.ts';
-import { MAX_TASKS, type DailyOverview, type Task } from '../../contracts/daily-overview.ts';
+import { isTaskTitle, MAX_TASKS, type DailyOverview, type Task } from '../../contracts/daily-overview.ts';
 
 type Row = { item: CalendarItem; phase: 'scheduled' | 'published' | 'removed' | 'cancelled' };
 type State = { version: 1; rows: Row[] };
@@ -107,7 +107,9 @@ export function createTaskCalendar(dataPath: string, now: () => number) {
       }
       if (!existing && tasks.length >= MAX_TASKS) continue;
       const trial = tasks.filter(task => task.id !== item.id);
-      trial.splice(position, 0, { id: item.id, title: item.deviceTitle, status: 'todo', due_at: item.dueAt });
+      const useOriginal = item.source === 'manual' && isTaskTitle(item.title);
+      trial.splice(position, 0, { id: item.id, title: useOriginal ? item.title : item.deviceTitle,
+        ...(useOriginal && item.title !== item.deviceTitle ? { device_title:item.deviceTitle } : {}), status: 'todo', due_at: item.dueAt });
       if (!fits(trial, today)) continue;
       tasks = trial;
       position++;

@@ -78,3 +78,12 @@
   .desk-task-panel .desk-section-head { gap: 5px 8px; }
   .desk-task-panel .desk-completion .desk-progress { display: none; }
 }
+
+.project-steps { margin:10px 0; padding-left:1.6em; }
+.project-steps li { padding:4px 0; background:transparent; }
+.project-steps li::marker { color:var(--muted); }
+.project-steps small { margin-left:8px; font-size:12px; }
+.project-steps [data-state="next"] small { color:var(--accent); font-weight:650; }
+.project-steps [data-state="done"] small { color:#386846; }
+.project-steps label { cursor:pointer; }
+.project-steps input { margin:0 7px 0 1px; vertical-align:middle; accent-color:var(--accent); }

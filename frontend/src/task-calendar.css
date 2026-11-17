@@ -31,3 +31,6 @@
 
 .calendar-first { min-width:0; max-width:100%; font-size:11px; line-height:1.4; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 @media(max-width:650px){ .calendar-first { display:none; } }
+
+.calendar-add { margin-top:12px; }
+.calendar-agenda form input { max-width:100%; }

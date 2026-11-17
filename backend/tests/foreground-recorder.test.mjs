@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setTimeout as delay } from 'node:timers/promises';
+import { CheckpointCapacityError } from '../src/checkpoint-store.ts';
 import { createForegroundRecorder } from '../src/foreground-recorder.ts';
 import { WriteRequestError } from '../src/write-policy.ts';
 
@@ -170,4 +171,38 @@ test('same-app samples measure foreground intervals through deduplication, but n
   t.after(() => recorder.close()); recorder.start();
   await until(() => spans.length === 4);
   assert.deepEqual(spans, [['A',0,4000],['B',8000,12000],['B',20000,24000],['B',120000,124000]]);
+});
+
+test('a full checkpoint store keeps app and AI tracking live and retries the same page after space is freed', async t => {
+  let now = 4_000, page = 'First', full = false, appThrough = 0, aiThrough = 0, attempts = 0;
+  const saved = [];
+  const recorder = createForegroundRecorder({
+    platform: 'linux', support: supported, pollMs: 2, now: () => now,
+    open: async () => ({ capture: async () => frame(page), close() {} }),
+    analyze: async image => result(image),
+    save: async row => {
+      attempts++;
+      if (full) throw new CheckpointCapacityError();
+      saved.push(row.pageTitle);
+    },
+    recordAppSpan: async (_app, _from, to) => { appThrough = to; },
+    monitorAi: async signal => {
+      while (!signal.aborted) { aiThrough = now; await delay(2); }
+    },
+  });
+  t.after(() => recorder.close());
+  recorder.start();
+  await until(() => saved.length === 1);
+  full = true; page = 'Second'; now = 8_000;
+  await until(async () => (await recorder.readStatus()).message.includes('已满'));
+  now = 12_000;
+  await until(() => appThrough === now && aiThrough === now);
+  assert.equal((await recorder.readStatus()).state, 'recording');
+  assert.equal(attempts, 2);
+  assert.deepEqual(saved, ['First']);
+
+  full = false; now = 68_000;
+  await until(() => saved.length === 2);
+  assert.deepEqual(saved, ['First', 'Second']);
+  assert.equal((await recorder.readStatus()).message, '');
 });

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CalendarEntry, CalendarSnapshot } from '../../contracts/calendar';
+import { isTaskTitle } from '../../contracts/daily-overview';
+import { deviceTaskLabel } from '../../contracts/device-task-label';
 import './task-calendar.css';
 
 const endpoint = '/api/v1/calendar';
@@ -43,7 +45,7 @@ export default function TaskCalendar({ active, date, onDate, onChange }: Props) 
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
-  const [edit, setEdit] = useState<{ entry: CalendarEntry; revision: string; day: string; remove: boolean } | null>(null);
+  const [edit, setEdit] = useState<{ entry: CalendarEntry; revision: string; day: string; mode: 'create' | 'rename' | 'move' | 'remove' } | null>(null);
   const request = useRef(0);
   const busy = useRef(false);
   const grid = useRef<HTMLDivElement>(null);
@@ -80,25 +82,30 @@ export default function TaskCalendar({ active, date, onDate, onChange }: Props) 
   const entries = byDate.get(selected) ?? [];
   function choose(day: string, keyboard = false) {
     if (busy.current || !validDay(day)) return;
-    onDate(day); setEdit(null); setError(''); setNotice('');
+    onDate(day); setEdit(current => current?.mode === 'create' ? { ...current, day } : null); setError(''); setNotice('');
     if (keyboard) requestAnimationFrame(() => grid.current?.querySelector<HTMLButtonElement>('[data-date="' + day + '"]')?.focus());
   }
   async function save() {
-    if (!edit || busy.current || (!edit.remove && !validDay(edit.day))) return;
+    if (!edit || busy.current || ((edit.mode === 'create' || edit.mode === 'rename') && !isTaskTitle(edit.entry.title)) || (edit.mode !== 'remove' && !validDay(edit.day))) return;
     busy.current = true; ++request.current; setSaving(true); setError(''); setNotice('');
     const { status: _status, ...item } = edit.entry;
+    const original = snapshot?.entries.find(row => row.id === item.id);
+    if (edit.mode === 'create' || edit.mode === 'rename') {
+      item.title = item.title.trim();
+      if (!original || original.deviceTitle === deviceTaskLabel(original)) item.deviceTitle = deviceTaskLabel(item);
+    }
     try {
-      const body = edit.remove ? { revision: edit.revision, id: item.id } :
-        { revision: edit.revision, entry: { ...item, plannedDate: edit.day } };
-      const response = await fetch(endpoint, { method: edit.remove ? 'DELETE' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const body = edit.mode === 'remove' ? { revision: edit.revision, id: item.id } :
+        { revision: edit.mode === 'create' && snapshot ? snapshot.revision : edit.revision, entry: { ...item, plannedDate: edit.day } };
+      const response = await fetch(endpoint, { method: edit.mode === 'remove' ? 'DELETE' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data = await response.json();
       if (!response.ok) {
-        if (response.status === 409) setEdit(null);
+        if (response.status === 409 && edit.mode !== 'create') setEdit(null);
         throw new Error(data.error || '保存失败，请重试。');
       }
       setSnapshot(data); setEdit(null); setReadError('');
-      if (!edit.remove) onDate(edit.day);
-      setNotice(edit.remove ? '已移除这项安排。' : '计划日期已更新。');
+      if (edit.mode !== 'remove') onDate(edit.day);
+      setNotice(edit.mode === 'remove' ? '已移除这项安排。' : edit.mode === 'create' ? '已添加到所选日期。' : edit.mode === 'rename' ? '待办名称已更新。' : '计划日期已更新。');
       onChange();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '保存失败，请重试。');
@@ -138,6 +145,18 @@ export default function TaskCalendar({ active, date, onDate, onChange }: Props) 
       </section>
       <section className="calendar-agenda" aria-label="当日安排"><header><h2>{fullDate.format(dateOf(selected))}</h2>
         <span>{entries.length} 项待办</span></header>
+        {edit?.mode === 'create' ? <form onSubmit={event => { event.preventDefault(); void save(); }}>
+          <label>新待办名称<input autoFocus value={edit.entry.title} disabled={saving}
+            onChange={event => setEdit({...edit, entry:{...edit.entry,title:event.target.value}})}
+            onKeyDown={event => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)) event.preventDefault(); }}/></label>
+          {!!edit.entry.title && !isTaskTitle(edit.entry.title) && <p role="status">请输入 1–40 个字符的任务名称。</p>}
+          <button type="submit" disabled={saving || !isTaskTitle(edit.entry.title)}>保存待办</button>
+          <button type="button" disabled={saving} onClick={() => setEdit(null)}>取消</button>
+        </form> : <button className="calendar-add" type="button" disabled={saving} onClick={() => {
+          setError(''); setNotice('');
+          setEdit({entry:{id:'cal-'+crypto.randomUUID(),title:'',deviceTitle:'',plannedDate:selected,dueDate:null,dueAt:null,source:'manual',status:'scheduled'},
+            day:selected,revision:snapshot.revision,mode:'create'});
+        }}>＋ 添加待办</button>}
         {!entries.length && <p className="calendar-empty">这一天还没有安排。</p>}
         <ul>{entries.map(entry => <li key={entry.id}>
           <div className="calendar-source"><span>{sourceLabels[entry.source]}</span><span>{statusLabels[entry.status]}</span></div>
@@ -147,13 +166,15 @@ export default function TaskCalendar({ active, date, onDate, onChange }: Props) 
             {entry.sourceTitle && entry.sourceTitle !== entry.title && <><dt>来源标题</dt><dd>{entry.sourceTitle}</dd></>}
           </dl>
           {edit?.entry.id === entry.id ? <form onSubmit={event => { event.preventDefault(); void save(); }}>
-            {edit.remove ? <p>从日历移除这项待办？</p> : <label>新的计划日期<input autoFocus type="date" required value={edit.day} disabled={saving}
+            {edit.mode === 'remove' ? <p>从日历移除这项待办？</p> : edit.mode === 'rename' ? <label>待办名称<input autoFocus value={edit.entry.title} disabled={saving}
+              onChange={event => setEdit({...edit,entry:{...edit.entry,title:event.target.value}})}
+              onKeyDown={event => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)) event.preventDefault(); }}/></label> : <label>新的计划日期<input autoFocus type="date" required value={edit.day} disabled={saving}
               onChange={event => setEdit({ ...edit, day: event.target.value })}/></label>}
-            <button type="submit" disabled={saving || (!edit.remove && !validDay(edit.day))}>{edit.remove ? '确认移除' : '保存日期'}</button>
+            <button type="submit" disabled={saving || (edit.mode === 'rename' && (!isTaskTitle(edit.entry.title) || edit.entry.title === entry.title)) || (edit.mode !== 'remove' && !validDay(edit.day))}>{edit.mode === 'remove' ? '确认移除' : edit.mode === 'rename' ? '保存名称' : '保存日期'}</button>
             <button type="button" disabled={saving} onClick={() => setEdit(null)}>取消</button></form> :
-            entry.status !== 'done' && <div className="calendar-actions">{['改期','移除'].map((label,i) =>
+            entry.status !== 'done' && <div className="calendar-actions">{(entry.source === 'manual' ? ['改名','改期','移除'] : ['改期','移除']).map(label =>
               <button type="button" key={label} disabled={saving} onClick={() => { setNotice(''); setError('');
-                setEdit({ entry, revision: snapshot.revision, day: entry.plannedDate, remove: i === 1 }); }}>{label}</button>)}</div>}
+                setEdit({ entry, revision: snapshot.revision, day: entry.plannedDate, mode: label === '改名' ? 'rename' : label === '移除' ? 'remove' : 'move' }); }}>{label}</button>)}</div>}
         </li>)}</ul>
         {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
       </section>

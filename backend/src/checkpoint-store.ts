@@ -7,6 +7,9 @@ export class CheckpointError extends Error {
   status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }
 }
+export class CheckpointCapacityError extends CheckpointError {
+  constructor() { super(409, '检查点已满，请先移除不再需要的记录。'); }
+}
 function inputError(): never { throw new CheckpointError(400, '检查点格式无效，请检查时间、摘要和进度依据。'); }
 function text(value: unknown, limit: number, optional = false): string {
   if (typeof value !== 'string' || value.trim().length > limit || (!optional && !value.trim()) || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(value)) inputError();
@@ -51,10 +54,10 @@ function parseRecord(row: Partial<ScreenCheckpoint>): ScreenCheckpoint {
 
 export function createCheckpointStore(dataPath: string) {
   const filename = dataPath + '.checkpoints.json';
-  let tail: Promise<unknown> = Promise.resolve();
+  let tail: Promise<void> = Promise.resolve();
   function serial<T>(run: () => Promise<T>): Promise<T> {
     const pending = tail.then(run, run);
-    tail = pending.catch(() => {});
+    tail = pending.then(() => {}, () => {});
     return pending;
   }
   async function read(): Promise<CheckpointHistory> {
@@ -97,7 +100,7 @@ export function createCheckpointStore(dataPath: string) {
           if (JSON.stringify(savedObservation) !== JSON.stringify(record)) throw new CheckpointError(409, '该检查点的内容已变化，请刷新后重试。');
           return;
         }
-        if (state.records.length >= CHECKPOINT_LIMIT) throw new CheckpointError(409, '检查点已满，请先移除不再需要的记录。');
+        if (state.records.length >= CHECKPOINT_LIMIT) throw new CheckpointCapacityError();
         signal?.throwIfAborted();
         state.records.push(record);
         await persist(state);

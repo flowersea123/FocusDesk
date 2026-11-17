@@ -24,11 +24,13 @@ npm --prefix experiments/mail-ai ci
 npm run dev
 ```
 
-在另一个终端启动本地 `llama-server`。试用默认采用 Qwen3.5-2B Q4_K_M。下载同一模型目录的主权重和视觉权重 `mmproj-F16.gguf`，把下面两条路径换成实际位置。Windows 使用 `llama-server.exe`。推理期间使用本机文件。[默认模型的两个 GGUF 文件](https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/tree/main) · [运行程序及三平台构建](https://github.com/ggml-org/llama.cpp/releases)
+在另一个终端启动本地 `llama-server`。试用默认采用 Qwen3.5-2B Q4_K_M。下载同一模型目录的主权重和视觉权重 `mmproj-F16.gguf`，将下方主权重和视觉权重的路径换成实际位置。Windows 使用 `llama-server.exe`。推理期间使用本机文件。[默认模型的两个 GGUF 文件](https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/tree/main) · [运行程序及三平台构建](https://github.com/ggml-org/llama.cpp/releases)
 
 ```sh
-llama-server --offline --host 127.0.0.1 --port 18187 --alias focusdesk-mail -c 8192 -np 1 --reasoning-budget 0 --no-webui --log-disable -m "Qwen3.5-2B-Q4_K_M.gguf" --mmproj "mmproj-F16.gguf"
+npm run model -- -m "Qwen3.5-2B-Q4_K_M.gguf" --mmproj "mmproj-F16.gguf"
 ```
+
+从仓库根目录运行上面的命令，系统需能找到 `llama-server`。入口默认关闭跨请求的提示缓存（`--cache-ram 0`），以限制持续读图时模型占用的内存。空闲 60 秒后服务自动休眠并释放大部分模型内存，下一次读图会自动唤醒，首个请求会稍慢。已用旧命令单独启动的模型服务下次启动时采用新参数。
 
 开发版在仓库根目录下另开终端运行试读页。保持 Hub 和模型服务运行。若本机已启动 Hub 或模型，可直接复用。
 
@@ -36,7 +38,7 @@ llama-server --offline --host 127.0.0.1 --port 18187 --alias focusdesk-mail -c 8
 node experiments/mail-ai/trial.mjs
 ```
 
-打开本机试读页，点「试用示例邮件」，或选择一封自己的 EML 并点「读取邮件」。样例的截止日期是试读当天之后两天。先看摘要、截止事项和引句，展开邮件正文或图片可以核对来源。选择计划日并点「加入日历」，点击「查看这一天」可在 Hub 月历核对。Linux 和 macOS 可在已安装程序的终端运行上面的命令，Windows PowerShell 从解压目录运行程序时使用 `.\llama-server.exe`。[打开邮件试读](http://127.0.0.1:5184/) · [模型比较与完整输出](evaluation/RESULTS.md)
+打开本机试读页，点「试用示例邮件」，或选择一封自己的 EML 并点「读取邮件」。样例的截止日期是试读当天之后两天。先看摘要、截止事项和引句，展开邮件正文或图片可以核对来源。选择计划日并点「加入日历」，点击「查看这一天」可在 Hub 月历核对。Linux 和 macOS 可在已安装程序的终端运行上面的命令，Windows 可将解压后的 `llama-server.exe` 所在目录加入当前终端的 PATH。[打开邮件试读](http://127.0.0.1:5184/) · [模型比较与完整输出](evaluation/RESULTS.md)
 
 ## 用命令行读取和写入
 

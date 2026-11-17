@@ -1,4 +1,5 @@
-import { useEffect, useId, useLayoutEffect, useState, useSyncExternalStore } from 'react';
+import { workspaceClock } from './data/workspace-clock';
+import { useEffect, useId, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { checkpointSourceLabel, type CheckpointSource } from '../../contracts/screen-checkpoint';
 import type { FocusReview, ReviewObservation } from '../../contracts/focus-review';
 import './daily-review.css';
@@ -31,8 +32,10 @@ function subscribe(listener: () => void) {
 }
 const lastStarted = new Map<string, number>();
 
-export function synthesisKey(review: FocusReview | null) {
-  return review?.observations.length ? JSON.stringify([review.date, review.observations]) : '';
+export function useSynthesisKey(review: FocusReview | null) {
+  const date = review?.date;
+  const observations = review?.observations;
+  return useMemo(() => observations?.length ? JSON.stringify([date, observations]) : '', [date, observations]);
 }
 
 function remember<T>(entries: Map<string, T>, key: string, value: T) {
@@ -111,7 +114,7 @@ export default function DailySynthesis({ active = true, review, onSuggestion }: 
 }) {
   const heading = useId();
   const date = review?.date;
-  const key = synthesisKey(review);
+  const key = useSynthesisKey(review);
   const [failedKey, setFailedKey] = useState('');
   useSyncExternalStore(subscribe, readVersion);
   const count = review?.observations.length ?? 0;
@@ -119,7 +122,7 @@ export default function DailySynthesis({ active = true, review, onSuggestion }: 
   const exact = completed.get(key);
   const earlier = !exact && review && minimum < count ? latestPrefix(review, minimum) : undefined;
   const digest = (exact ?? earlier)?.digest;
-  const clock = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: review?.timezone });
+  const clock = workspaceClock(review?.timezone);
   const cutoff = earlier ? '截至 ' + clock.format(new Date(earlier.through)) : '';
 
   useLayoutEffect(() => {

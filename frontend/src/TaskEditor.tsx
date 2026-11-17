@@ -1,3 +1,4 @@
+import { workspaceClock } from './data/workspace-clock';
 import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { isTaskTitle, MAX_TASKS, type DailyOverview, type Task } from '../../contracts/daily-overview';
 import { deviceTaskLabel } from '../../contracts/device-task-label';
@@ -22,6 +23,11 @@ type Draft = {
   deviceText: string; initialDeviceText: string; after: string | null; date: string; returnTo: string;
 };
 type Removed = { task: Task; endedFocus: boolean; previous?: string; next?: string; index: number; date: string };
+
+const undoLimit = 20;
+function rememberRemoval(items: Removed[], deletion: Removed) {
+  return [...items.filter(item => item.task.id !== deletion.task.id).slice(1 - undoLimit), deletion];
+}
 
 const newId = () => globalThis.crypto?.randomUUID?.() ?? `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 function proposed(tasks: Task[], draft: Draft): Task[] {
@@ -94,7 +100,7 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
     if (!unconfirmedRemoval || busy) return;
     if (unconfirmedRemoval.date !== current.date) { setUnconfirmedRemoval(null); return; }
     if (tasks.some(task => task.id === unconfirmedRemoval.task.id)) return;
-    setRemoved(items => [...items.filter(item => item.task.id !== unconfirmedRemoval.task.id), unconfirmedRemoval]);
+    setRemoved(items => rememberRemoval(items, unconfirmedRemoval));
     setUnconfirmedRemoval(null); setFailure('');
     setMessage('最新列表已移除「' + unconfirmedRemoval.task.title + '」。' + (unconfirmedRemoval.endedFocus ? '原专注计时已结束。' : ''));
   }, [busy, current.date, tasks, unconfirmedRemoval]);
@@ -207,7 +213,7 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
     const deletion = { task, endedFocus, previous: tasks[index - 1]?.id, next: tasks[index + 1]?.id, index, date: current.date };
     setUnconfirmedRemoval(null);
     if (await persist(tasks.filter(item => item.id !== task.id), { onUncertain: () => setUnconfirmedRemoval(deletion) })) {
-      setRemoved(items => [...items, deletion]);
+      setRemoved(items => rememberRemoval(items, deletion));
       setFocusKey('undo'); setMessage('已删除「' + task.title + '」。' + (endedFocus ? '当前专注计时已结束。' : ''));
     }
   }
@@ -221,7 +227,7 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
       setRemoved(items => items.filter(item => item !== undo)); setFocusKey('edit:' + undo.task.id); setMessage('已恢复「' + undo.task.title + '」。' + (undo.endedFocus ? '原专注计时已结束。' : ''));
     }
   }
-  const time = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: current.timezone });
+  const time = workspaceClock(current.timezone);
 
   function compose() {
     if (!draft) return null;

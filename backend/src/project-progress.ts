@@ -9,6 +9,14 @@ import { CheckpointError, createCheckpointStore } from './checkpoint-store.ts';
 import { privateJson, privateInput, checkPrivateRequest } from './checkpoint-http.ts';
 import { WriteRequestError } from './write-policy.ts';
 
+function validPlan(plan: ProjectPlan) {
+  if (typeof plan?.taskId !== 'string' || !validSections(plan.sections)) return false;
+  const edits = plan.stepEdits;
+  return edits === undefined || (Array.isArray(edits) && edits.length <= plan.sections.length &&
+    edits.every(edit => edit && typeof edit.done === 'boolean' && plan.sections.includes(edit.section)) &&
+    new Set(edits.map(edit => edit.section)).size === edits.length);
+}
+
 export function createProjectProgress(dataPath: string, checkpoints: ReturnType<typeof createCheckpointStore>, load: () => Promise<DailyOverview>,
   loadCalendar?: () => Promise<CalendarSnapshot>) {
   const filePath = dataPath + '.progress.json';
@@ -17,7 +25,7 @@ export function createProjectProgress(dataPath: string, checkpoints: ReturnType<
     try {
       const config = JSON.parse(await readFile(filePath, 'utf8'));
       if (typeof config.revision !== 'string' || !Array.isArray(config.plans) ||
-          !config.plans.every((p:ProjectPlan) => typeof p?.taskId === 'string' && validSections(p.sections)) ||
+          !config.plans.every(validPlan) ||
           (config.pinned !== null && typeof config.pinned !== 'string')) throw Error();
       return config;
     } catch (error) {
@@ -30,9 +38,22 @@ export function createProjectProgress(dataPath: string, checkpoints: ReturnType<
     if (state.revision !== input.revision) throw new CheckpointError(409,'进度设置已变化，请重新载入再保存。');
     if (typeof input.taskId !== 'string' || !overview.tasks.some(t => t.id === input.taskId)) throw new CheckpointError(400,'请选择现有任务。');
     const id = input.taskId;
+    const plan = state.plans.find(row => row.taskId === id);
     if (input.action === 'plan' && validSections(input.sections)) {
       state.plans = state.plans.filter(p => p.taskId !== id && overview.tasks.some(t => t.id === p.taskId));
-      if (input.sections.length) state.plans.push({ taskId:id, sections:input.sections.map(s=>s.trim()) });
+      const sections = input.sections.map(s => s.trim());
+      const stepEdits = plan?.stepEdits?.filter(edit => sections.includes(edit.section));
+      if (sections.length) state.plans.push({taskId:id, sections, ...(stepEdits?.length ? {stepEdits} : {})});
+    } else if (input.action === 'set-step') {
+      const {section, done} = input;
+      if (!plan || typeof section !== 'string' || !plan.sections.includes(section) || typeof done !== 'boolean')
+        throw new CheckpointError(400,'请选择清单中的步骤。');
+      const task = overview.tasks.find(item => item.id === id)!;
+      const evidence = projectStatus(task,{taskId:id, sections:plan.sections},(await checkpoints.read()).records);
+      const edits = (plan.stepEdits ?? []).filter(edit => edit.section !== section);
+      if (evidence.completed.includes(section) !== done) edits.push({section, done});
+      if (edits.length) plan.stepEdits = edits;
+      else delete plan.stepEdits;
     } else if (input.action === 'pin') state.pinned = id;
     else if (input.action === 'unpin') state.pinned = null;
     else throw new CheckpointError(400,'请检查步骤名称；自定义中文名称可用“中文 | English”添加设备短名。');

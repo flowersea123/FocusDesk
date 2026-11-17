@@ -6,6 +6,7 @@
   "engines": { "node": ">=24" },
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "model": "llama-server --offline --host 127.0.0.1 --port 18187 --alias focusdesk-mail -c 8192 -np 1 --cache-ram 0 --sleep-idle-seconds 60 --reasoning-budget 0 --no-webui --log-disable",
     "build": "npm --prefix frontend run build",
     "start": "node backend/server.ts --host 127.0.0.1",
     "lan": "node scripts/start-focusdesk.mjs",

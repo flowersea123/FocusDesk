@@ -1,8 +1,10 @@
+import { workspaceClock } from './data/workspace-clock';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { checkpointSourceLabel } from '../../contracts/screen-checkpoint';
+import type { FocusSession } from '../../contracts/daily-overview';
 import type { FocusReview } from '../../contracts/focus-review';
 import ActivityTimeline from './ActivityTimeline';
-import DailySynthesis, { synthesisKey } from './DailySynthesis';
+import DailySynthesis, { useSynthesisKey } from './DailySynthesis';
 import { useFocusReview } from './data/use-focus-review';
 import './daily-review.css';
 
@@ -27,9 +29,30 @@ async function responseMessage(response: Response) {
   return 'Hub 请求失败（' + response.status + '）。';
 }
 
+type ExperimentDraft = {plan:string; outcome:string; revision:string};
+const draftKey = 'focusdesk.review.experiment-drafts';
+const dateKey = 'focusdesk.review.selected-date';
+function savedDrafts(): [string, ExperimentDraft][] {
+  try {
+    const rows = JSON.parse(sessionStorage.getItem(draftKey) || '[]');
+    if (!Array.isArray(rows)) return [];
+    return rows.filter(row => Array.isArray(row) && /^\d{4}-\d{2}-\d{2}$/.test(row[0]) &&
+      typeof row[1]?.plan === 'string' && typeof row[1]?.outcome === 'string' && typeof row[1]?.revision === 'string').slice(-90);
+  } catch { return []; }
+}
+
 function Experiment({ review, refresh, changeDate }: { review: FocusReview; refresh: () => void; changeDate: (date: string) => void }) {
   const base = review.experiment ?? { plan: '', outcome: '', revision: 'none' };
-  const [draft, setDraft] = useState<{ plan: string; outcome: string; revision: string } | null>(null);
+  const [draft, updateDraft] = useState<ExperimentDraft | null>(() => savedDrafts().find(([day]) => day === review.date)?.[1] ?? null);
+  function setDraft(value: ExperimentDraft | null) {
+    updateDraft(value);
+    try {
+      const rows = savedDrafts().filter(([day]) => day !== review.date);
+      if (value) rows.push([review.date,value]);
+      if (rows.length) sessionStorage.setItem(draftKey,JSON.stringify(rows.slice(-90)));
+      else sessionStorage.removeItem(draftKey);
+    } catch { /* A restricted tab can still edit and save to the Hub. */ }
+  }
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [failed, setFailed] = useState(false);
@@ -94,20 +117,29 @@ function Experiment({ review, refresh, changeDate }: { review: FocusReview; refr
       </div>}
       <div className="review-save">
         <button type="submit" disabled={!draft || !draft.plan.trim() || busy || conflict}>{busy ? '正在保存…' : '保存实验'}</button>
+        {draft && !busy && !conflict && <button type="button" className="review-link" onClick={() => { setDraft(null); setMessage(''); }}>放弃草稿</button>}
         {message && <span role={failed ? 'alert' : 'status'}>{message}</span>}
       </div>
     </form>
   </section>;
 }
 
-export default function DailyReview({ active = true, refreshKey }: { active?: boolean; refreshKey?: string | number }) {
-  const [date, setDate] = useState('');
-  const { review, error, refresh } = useFocusReview({ date, active, refreshKey });
+export default function DailyReview({ active = true, refreshKey, focus }: { active?: boolean; refreshKey?: string | number; focus?: FocusSession | null }) {
+  const [date, selectDate] = useState(() => {
+    try { return sessionStorage.getItem(dateKey) || ''; } catch { return ''; }
+  });
+  function setDate(value: string) {
+    const day = value === review?.today ? '' : value;
+    selectDate(day);
+    try { if (day) sessionStorage.setItem(dateKey,day); else sessionStorage.removeItem(dateKey); } catch { /* Optional in private tabs. */ }
+  }
+  const { review, error, refresh } = useFocusReview({ date, active, refreshKey, focus });
   const [ai, setAI] = useState<{ key: string; value: FocusReview['suggestion'] } | null>(null);
   const onSuggestion = useCallback((value: FocusReview['suggestion'], key: string) => setAI(value ? { key, value } : null), []);
   const current = review && review.date === (date || review.today) ? review : null;
-  const suggestion = (ai?.key === synthesisKey(current) ? ai.value : null) ?? current?.suggestion ?? null;
-  const clock = current && new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: current.timezone });
+  const key = useSynthesisKey(current);
+  const suggestion = (ai?.key === key ? ai.value : null) ?? current?.suggestion ?? null;
+  const clock = workspaceClock(current?.timezone);
   return <section className="daily-review" aria-labelledby="daily-review-title">
     <header className="review-heading">
       <h1 id="daily-review-title">每日回顾</h1>
@@ -127,9 +159,7 @@ export default function DailyReview({ active = true, refreshKey }: { active?: bo
       </div>
       <ActivityTimeline review={current} historical/>
       <DailySynthesis active={active} review={current} onSuggestion={onSuggestion}/>
-      {current.partial && <p className="review-note">专注计时可追溯至 {new Intl.DateTimeFormat('zh-CN', {
-        month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: current.timezone,
-      }).format(new Date(current.trackingSince))}（{current.timezone}）。</p>}
+      {current.partial && <p className="review-note">专注计时可追溯至 {workspaceClock(current.timezone, true).format(new Date(current.trackingSince))}（{current.timezone}）。</p>}
       {current.sessions.length > 0 && <details className="review-evidence"><summary>查看计时段</summary>
         <ul>{current.sessions.map(s => <li key={s.taskId + s.from}>
           <span className="review-time">{clock!.format(new Date(s.from))}–{clock!.format(new Date(s.to))}</span>

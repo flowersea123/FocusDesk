@@ -189,7 +189,7 @@ function Chart({review, tasks, revealApp, handled, historical}: {
   const [zoom, setZoom] = useState<{from:number; to:number} | null>(null);
   const resetZoom = useRef<HTMLButtonElement | null>(null);
   const [limit, setLimit] = useState(12);
-  const [selection, setSelection] = useState<{rowId:string; ids?:string[]} | null>(null);
+  const [selection, setSelection] = useState<{rowId:string; ids?:string[]; excerpts?:boolean} | null>(null);
   const opener = useRef<HTMLButtonElement | null>(null);
   const detailHeading = useRef<HTMLHeadingElement | null>(null);
   const ruler = useRef<HTMLDivElement | null>(null);
@@ -272,10 +272,10 @@ function Chart({review, tasks, revealApp, handled, historical}: {
     const left = Math.max(day.begin, Math.min(day.end - zoomLength, Math.floor((selectedFrom + selectedTo - zoomLength) / 2)));
     setZoom({from:left, to:left + zoomLength});
   }
-  function select(button: HTMLButtonElement, rowId: string, entries?: Entry[]) {
+  function select(button: HTMLButtonElement, rowId: string, entries?: Entry[], excerpts = false) {
     opener.current = button;
     setLimit(12);
-    setSelection({rowId, ids:entries?.map(e => e.id)});
+    setSelection({rowId, excerpts, ids:entries?.map(e => e.id)});
   }
   function close() {
     setSelection(null);
@@ -297,9 +297,6 @@ function Chart({review, tasks, revealApp, handled, historical}: {
       </div>
       {plots.map(({row, spans:spanEntries, observations:points, durations, evidence, stamps}) => {
         const chat = row.conversation;
-        const summary = chat && review.aiConversationSummaries?.[chat.key];
-        const latestReply = chat && [...chat.turns].reverse().find(t => t.assistantExcerpt)?.assistantExcerpt;
-        const firstQuestion = chat?.turns.find(t => t.userExcerpt)?.userExcerpt;
         const measure = measureLabels[row.kind];
         const color = row.kind === 'ai' ? '#307c70' : row.kind === 'focus' ? '#7962a7' : palette.get(row.id);
         const trackStyle = {'--activity-color':color} as CSSProperties;
@@ -353,12 +350,11 @@ function Chart({review, tasks, revealApp, handled, historical}: {
               </button>;
             })}
           </div>
-          {chat?.linked && <div className="activity-chat-summary">
-            {summary ? <><span>对话小结</span>{summary}</> : firstQuestion || latestReply ? <>
-              {firstQuestion && <p><span>提问摘录</span>{firstQuestion}</p>}
-              {latestReply && <p><span>答复摘录</span>{latestReply}</p>}
-            </> : '这段对话只有主题和活动时间，暂无可读的消息摘录。'}
-          </div>}
+          {chat?.linked && <div className="activity-chat-summary"><button type="button" className="activity-more"
+            aria-expanded={selection?.rowId === row.id && !!selection.excerpts} aria-controls={detailsId}
+            onClick={e => selection?.rowId === row.id && selection.excerpts ? close() : select(e.currentTarget, row.id, undefined, true)}>
+            {selection?.rowId === row.id && selection.excerpts ? '收起对话摘录' : '查看对话摘录'}
+          </button></div>}
           {chat?.key.endsWith(':unlinked') && <div className="activity-chat-summary">只保留了活动时间，未找到可核对的对话来源。</div>}
         </div>;
       })}
@@ -379,12 +375,13 @@ function Chart({review, tasks, revealApp, handled, historical}: {
         {singleSamples && <p className="activity-range-note">单次截图仅有采样时刻，持续时间未知。</p>}
         {selectedChat?.linked ? <>
           <p className="activity-range-note">对话跨度 {time(selectedChat.from,true)}–{time(selectedChat.to,true)} · 实际 AI 活动 {formatActivityDuration(selectedChat.activeSeconds)}。浅色连接同一对话，深色表示观察到的活动。小结依据当天可读的提问与公开答复摘录。</p>
+          {selection?.excerpts && review.aiConversationSummaries?.[selectedChat.key] && <p className="activity-chat-excerpt"><b>对话小结</b>{review.aiConversationSummaries[selectedChat.key]}</p>}
           <ol>{selectedChat.turns.slice(0,limit).map((turn,index) => <li key={turn.id}>
             <time dateTime={new Date(turn.from).toISOString()}>{time(turn.from,true)}–{time(turn.to,true)}</time>
             <div><strong>第 {index + 1} 轮 · {aiLabels[turn.state]}</strong>
-              {turn.userExcerpt && <p className="activity-chat-excerpt"><b>你</b>{turn.userExcerpt}</p>}
-              {turn.assistantExcerpt && <p className="activity-chat-excerpt"><b>AI</b>{turn.assistantExcerpt}</p>}
-              {!turn.userExcerpt && !turn.assistantExcerpt && <small>暂无可读的消息摘录</small>}
+              {selection?.excerpts && turn.userExcerpt && <p className="activity-chat-excerpt"><b>你</b>{turn.userExcerpt}</p>}
+              {selection?.excerpts && turn.assistantExcerpt && <p className="activity-chat-excerpt"><b>AI</b>{turn.assistantExcerpt}</p>}
+              {selection?.excerpts && !turn.userExcerpt && !turn.assistantExcerpt && <small>暂无可读的消息摘录</small>}
             </div>
           </li>)}</ol>
         </> : <ol>{details.slice(0,limit).map(entry => {

@@ -10,7 +10,7 @@ import DailySynthesis from './DailySynthesis';
 import ActivityTimeline, { formatActivityDuration } from './ActivityTimeline';
 import NextTask, { nextAction } from './NextTask';
 import { useFocusReview } from './data/use-focus-review';
-import ProjectProgress from './ProjectProgress';
+import ProjectProgress, { updateProject } from './ProjectProgress';
 import type { ProjectStatus } from '../../contracts/project-progress';
 import TaskEditor from './TaskEditor';
 import FocusPanel from './FocusPanel';
@@ -68,7 +68,19 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
   const checkpointsChanged = useCallback(() => setCheckpointVersion(value => value + 1), []);
   const recorder = useForegroundRecorder(!!source.localWorkspace, checkpointsChanged);
   const recording = recorder.status?.state === 'recording' && !recorder.readError;
-  const [pinned, setPinned] = useState<ProjectStatus | null>(null);
+  const [pinned, setPinned] = useState<{project:ProjectStatus; revision:string} | null>(null);
+  const acceptPinned = useCallback((project:ProjectStatus | null, revision:string) => {
+    setPinned(project ? {project, revision} : null);
+  }, []);
+  async function restoreOverview() {
+    if (!pinned) return;
+    try {
+      await updateProject({action:'unpin', taskId:pinned.project.taskId, revision:pinned.revision});
+      setPinned(null);
+    } finally {
+      checkpointsChanged();
+    }
+  }
   const [scenario, setScenario] = useState<DemoScenario>('today');
   const [taskDraft, setTaskDraft] = useState<Task[] | null>(null);
   const [suggestionDraft, setSuggestionDraft] = useState<string | null>(null);
@@ -86,7 +98,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
   const mock = source.kind === 'mock';
   const local = !mock && Boolean(source.updateTasks);
   const reviewKey = (overview?.revision ?? '') + ':' + checkpointVersion;
-  const activity = useFocusReview({ active: !!overview && !!source.localWorkspace && view === 'today', refreshKey: reviewKey });
+  const activity = useFocusReview({ active: !!overview && !!source.localWorkspace && view === 'today', focus:overview?.focus, refreshKey: reviewKey });
   const activityDate = activity.review?.date ?? overview?.date;
   const next = useMemo(() => overview && source.localWorkspace ? nextAction(overview, activity.review) : null,
     [overview, source.localWorkspace, activity.review]);
@@ -268,7 +280,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
             </div>}
             {source.localWorkspace && <>
               <ProjectProgress overview={overview} selected={selected} manual={!!manual} onFollow={() => chooseTask('')}
-                recorder={recorder} refreshKey={checkpointVersion} onPinned={setPinned} onChange={checkpointsChanged} />
+                recorder={recorder} refreshKey={checkpointVersion} onPinned={acceptPinned} onChange={checkpointsChanged} />
               <CheckpointWorkspace overview={overview} recorder={recorder} active={view === 'today'} refreshKey={checkpointVersion} onChange={checkpointsChanged} />
             </>}
             {!mock && !source.updateTasks && <p className="readonly-note">请在本机打开 FocusDesk 编辑任务。</p>}
@@ -278,7 +290,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
         </div>
         <aside className="desk-side" aria-label="专注与设备">
           {focusPanel}
-          <EpaperPreview overview={previewOverview} project={pinned} draft={taskDraft !== null || suggestionDraft !== null} />
+          <EpaperPreview overview={previewOverview} project={pinned?.project} onUnpin={restoreOverview} draft={taskDraft !== null || suggestionDraft !== null} />
         </aside>
       </div>
       <details className="desk-details" open={mock}>
@@ -296,7 +308,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
         <TaskCalendar active={view === 'calendar'} date={calendarDate} onDate={chooseCalendarDay} onChange={reload}/>
       </div>}
       {source.localWorkspace && overview && reviewOpened && <div hidden={view !== 'review'}>
-        <DailyReview refreshKey={reviewKey} active={view === 'review'} />
+        <DailyReview focus={overview?.focus} refreshKey={reviewKey} active={view === 'review'} />
       </div>}
     </main>
   </div>;

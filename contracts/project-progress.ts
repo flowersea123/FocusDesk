@@ -4,6 +4,7 @@ import { validReadingDocument, validReadingPosition, type CheckpointSource, type
 export interface ProjectPlan {
   taskId: string;
   sections: string[];
+  stepEdits?: {section:string; done:boolean}[];
 }
 
 export interface ProgressConfig {
@@ -157,13 +158,13 @@ export function projectStatus(task: Task, plan: ProjectPlan | undefined, records
     const completed: string[] = [];
     const remaining: string[] = [];
     for (const section of sections) {
-      const found = section.split('|').some(name => observed.has(sectionKey(name)));
+      const found = plan?.stepEdits?.find(edit => edit.section === section)?.done ?? section.split('|').some(name => observed.has(sectionKey(name)));
       (found ? completed : remaining).push(section);
     }
     return {
       ...identity, percent: Math.round(100 * completed.length / sections.length),
       total: sections.length, completed, remaining, evidence: null,
-      automaticParts: completed.filter(s => !s.split('|').some(name => reviewed.has(sectionKey(name)))),
+      automaticParts: completed.filter(s => !plan?.stepEdits?.some(edit => edit.section === s) && !s.split('|').some(name => reviewed.has(sectionKey(name)))),
     };
   }
 

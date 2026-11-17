@@ -3,8 +3,8 @@ import { open, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { FOCUS_DURATION_MS, MAX_OVERVIEW_BYTES, type DailyOverview, type FocusSession } from '../../contracts/daily-overview.ts';
 import { createAiActivityJournal } from './ai-activity.ts';
-import { checkpointSourceLabel } from '../../contracts/screen-checkpoint.ts';
-import type { AppSession, ReviewObservation, FocusReview, ReviewExperiment, ReviewSegment } from '../../contracts/focus-review.ts';
+import { summarizeReview } from '../../contracts/focus-review.ts';
+import type { ReviewObservation, FocusReview, ReviewExperiment, ReviewSegment } from '../../contracts/focus-review.ts';
 
 const DAY = 86_400_000;
 const RETENTION = 90 * DAY;
@@ -132,36 +132,6 @@ function trim(data: Journal, now: number) {
   }
   if (data.appSpans) data.appSpans = data.appSpans.filter(s => s.to >= limit).slice(-MAX_SESSIONS);
   data.experiments = data.experiments.filter(e => e.date >= iso(floor).slice(0, 10));
-}
-
-function shortDuration(seconds: number) {
-  if (seconds < 60) return String(seconds) + ' 秒';
-  return Math.floor(seconds / 60) + ' 分钟';
-}
-
-function summarize(sessions: ReviewSegment[], total: number, observations: ReviewObservation[], appSessions: AppSession[]) {
-  const last = observations.at(-1);
-  const most = sessions.reduce((best, s) => !best || s.seconds > best.seconds ? s : best, null as ReviewSegment | null);
-  const timer = most ? '共 ' + sessions.length + ' 段计时，合计 ' + shortDuration(total) + '。' +
-    '最长一段用于「' + most.title + '」。' : '这一天没有留下专注计时记录。';
-  const appTotals = new Map<string, number>();
-  for (const session of appSessions) appTotals.set(session.appName, (appTotals.get(session.appName) ?? 0) + session.seconds);
-  const longestApp = [...appTotals].sort((a, b) => b[1] - a[1])[0];
-  const appSummary = longestApp ? '记录到的前台应用中，' + longestApp[0] + ' 的时长最多，合计 ' +
-    shortDuration(Math.floor(longestApp[1])) + '。' : '';
-  const summary = (most || !appSummary ? timer : '') + appSummary + (last ? '最近一次' + checkpointSourceLabel(last.source) + '的屏幕观察写道：“' + last.summary + '”' : '');
-  const next = observations.findLast(o => Boolean(o.nextStep?.trim()));
-  let suggestion: FocusReview['suggestion'] = null;
-  if (next) suggestion = { action: next.nextStep!, evidence: '来自' + checkpointSourceLabel(next.source) + '的屏幕观察：“' + next.summary + '”' };
-  else if (most) suggestion = {
-    action: '下次开始「' + most.title + '」前，写下一项能在一段计时内检查的成果。结束后记下是否做到。',
-    evidence: '该任务今天有一段 ' + shortDuration(most.seconds) + ' 的计时记录。',
-  };
-  else if (last) suggestion = {
-    action: '下次开始前写下要完成的一个动作，结束时再确认一次屏幕观察，核对前后的变化。',
-    evidence: '这一天共有 ' + observations.length + ' 条屏幕观察。',
-  };
-  return { summary, suggestion };
 }
 
 /** The Hub's existing data lock gives this sidecar one writer. Call observe only with a successful, authoritative Hub snapshot. */
@@ -309,7 +279,7 @@ export function createFocusReview(dataPath: string, { now = Date.now }: { now?: 
         const keptExperiments = data.experiments.filter(e => e.date >= iso(at - RETENTION).slice(0, 10));
         return {
           date: selected, today, timezone: zone, trackingSince: iso(floor), partial: begin < floor,
-          totalSeconds, sessions, appSessions, ...ai, observations: dailyObservations, ...summarize(sessions, totalSeconds, dailyObservations, appSessions),
+          totalSeconds, sessions, appSessions, ...ai, observations: dailyObservations, ...summarizeReview(sessions, totalSeconds, dailyObservations, appSessions),
           experiment: keptExperiments.find(e => e.date === selected) ?? null,
           previousExperimentDate: keptExperiments.filter(e => e.date < selected && !e.outcome)
             .map(e => e.date).sort().at(-1) ?? null,

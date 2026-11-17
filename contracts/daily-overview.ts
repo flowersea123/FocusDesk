@@ -105,6 +105,8 @@ export function isDeviceTaskTitle(value: unknown): boolean {
 }
 
 /** Validate the candidate DTO and return a fresh object containing known fields. */
+const validTimezones = new Set<string>();
+
 export function parseDailyOverview(input: unknown): DailyOverview {
   const source = record(input, 'overview');
   let serialized: string;
@@ -125,10 +127,11 @@ export function parseDailyOverview(input: unknown): DailyOverview {
   if (!timezone || encoder.encode(timezone).byteLength > 64 || /^[+-]/.test(timezone)) {
     fail('timezone must be a valid IANA timezone');
   }
-  try {
-    new Intl.DateTimeFormat('en', { timeZone: timezone });
-  } catch {
-    return fail('timezone must be a valid IANA timezone');
+  if (!validTimezones.has(timezone)) {
+    try { new Intl.DateTimeFormat('en', { timeZone: timezone }); }
+    catch { return fail('timezone must be a valid IANA timezone'); }
+    if (validTimezones.size >= 4) validTimezones.delete(validTimezones.values().next().value!);
+    validTimezones.add(timezone);
   }
   const updated_at = timestamp(source.updated_at, 'updated_at');
   if (!Array.isArray(source.tasks) || source.tasks.length > MAX_TASKS) {

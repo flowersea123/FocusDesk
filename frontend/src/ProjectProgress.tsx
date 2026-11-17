@@ -15,9 +15,15 @@ type Props = {
   onFollow: () => void;
   refreshKey: number;
   recorder: RecorderControls;
-  onPinned: (status: ProjectStatus | null) => void;
+  onPinned: (status: ProjectStatus | null, revision:string) => void;
   onChange: () => void;
 };
+
+export function updateProject(input: {revision:string; taskId:string; action:string; sections?:string[]; section?:string; done?:boolean}) {
+  return checkpointRequest<ProgressResponse>('/api/v1/project-progress', {
+    method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(input),
+  });
+}
 
 function ProgressMeter({ name, value, text }: { name: string; value: number; text: string }) {
   return <div className="project-meter" role="progressbar" aria-label={name} aria-valuemin={0} aria-valuemax={100}
@@ -38,10 +44,11 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
     (manual || !recorder.status?.observedAt || recorder.status.observedTaskId !== current);
   const timezone = overview?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const status=data?.statuses.find(p=>p.taskId===current);
-  const plan=data?.config.plans.find(p=>p.taskId===current)?.sections ?? [];
+  const currentPlan = data?.config.plans.find(p => p.taskId === current);
+  const plan = currentPlan?.sections ?? [];
   const accept=useCallback((value:ProgressResponse)=>{
     if (!Array.isArray(value.statuses) || !value.config || !Array.isArray(value.config.plans)) throw new Error('本机 Hub 的进度接口不可用。');
-    setData(value);onPinned(value.statuses.find(s=>s.taskId===value.config.pinned) ?? null);
+    setData(value);onPinned(value.statuses.find(s=>s.taskId===value.config.pinned) ?? null, value.config.revision);
   },[onPinned]);
   const load=useCallback(async()=>{
     const request=++requests.current;
@@ -51,13 +58,13 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
   },[accept]);
   useEffect(()=>{void load(); window.addEventListener('focus',load); return ()=>{requests.current++;window.removeEventListener('focus',load);};},[load,overview?.revision,refreshKey]);
 
-  async function change(action:'plan'|'pin'|'unpin') {
+  async function change(action:'plan'|'pin'|'unpin'|'set-step', step?:{section:string; done:boolean}) {
     if(!data||!current||busy)return;
     const sections=draft?.text.split('\n').map(s=>s.trim()).filter(Boolean) ?? [];
     if(action==='plan' && !validSections(sections)){setError('请检查重复或过长的步骤。中文自定义步骤可写为“中文 | English”。');return;}
     setBusy(true);setError('');
-    try {const updated=await checkpointRequest<ProgressResponse>('/api/v1/project-progress',{method:'PUT',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({revision:action==='plan'?draft?.revision:data.config.revision,taskId:current,action,...(action==='plan'?{sections}:{})})});
+    try {const updated = await updateProject({revision:action === 'plan' && draft ? draft.revision : data.config.revision,
+        taskId:current, action, ...step, ...(action === 'plan' ? {sections} : {})});
       ++requests.current;accept(updated);if(action==='plan')setDraft(null);
     }catch(e){setError((e as Error).message);}finally{setBusy(false);}
   }
@@ -117,7 +124,17 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
         {status.evidence && <p>{checkpointSourceLabel(status.evidenceSource)} · {status.evidence}</p>}
       </div>}
       {!position && !section && status.percent === null && !latest && <p>暂无进度记录。识别到页码、章节或明确的完成标记后会自动更新。</p>}
-      {status.completed.length > 0 && <><h3>已完成的部分</h3>
+      {plan.length > 0 && <ol className="project-steps" aria-label="完成步骤">{plan.map(part => {
+        const done = status.completed.includes(part);
+        const next = part === status.remaining[0];
+        const edited = currentPlan?.stepEdits?.find(edit => edit.section === part);
+        return <li key={part} data-state={done ? 'done' : next ? 'next' : 'later'}>
+          <label><input type="checkbox" checked={done} disabled={busy || draft?.id === current}
+            onChange={event => void change('set-step', {section:part,done:event.target.checked})}/>{part.split('|')[0].trim()}</label>
+          <small>{edited?.done ? '已完成 · 手动勾选' : done ? '已完成 · ' + checkpointSourceLabel(status.automaticParts?.includes(part) ? 'automatic' : 'manual') : next ? '下一步' : '待完成'}</small>
+        </li>;
+      })}</ol>}
+      {!plan.length && status.completed.length > 0 && <><h3>已完成的部分</h3>
         <ul>{status.completed.map(part => <li key={part}><span aria-hidden="true">✓</span> {part.split('|')[0].trim()}
           <small> {checkpointSourceLabel(status.automaticParts?.includes(part) ? 'automatic' : 'manual')}</small></li>)}</ul></>}
       <div className="project-actions"><button type="button" disabled={busy} onClick={()=>change(pinned?'unpin':'pin')}>{pinned?'恢复电子屏总览':'在电子屏显示此任务'}</button>
