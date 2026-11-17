@@ -6,7 +6,7 @@ import { validCalendarId } from '../../contracts/calendar';
 import { isDeviceTaskTitle, type TaskUpdateRequest } from '../../contracts/task-update';
 import { OverviewRequestError } from './data/overview-source';
 import type { ProjectStatus } from '../../contracts/project-progress';
-import TaskProgressLine from './TaskProgressLine';
+import TaskAccomplishments, {type SaveAccomplishment} from './TaskAccomplishments';
 import './task-list.css';
 
 interface Props {
@@ -15,6 +15,7 @@ interface Props {
   onSave?(input: TaskUpdateRequest): Promise<DailyOverview>;
   onDraftChange?(tasks: Task[] | null): void;
   statuses?: ProjectStatus[];
+  onAccomplishment?: SaveAccomplishment;
   selectedId?: string;
   observedId?: string;
   manual?: boolean;
@@ -58,7 +59,7 @@ function TaskIcon({ action }: { action: keyof typeof iconPath }) {
   </svg>;
 }
 
-export default function TaskEditor({ overview, saving, onSave, onDraftChange, statuses, selectedId, observedId, manual, onSelect, active = true }: Props) {
+export default function TaskEditor({ overview, saving, onSave, onDraftChange, statuses, onAccomplishment, selectedId, observedId, manual, onSelect, active = true }: Props) {
   const formId = useId();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [ack, setAck] = useState<{ parent: DailyOverview; value: DailyOverview } | null>(null);
@@ -290,7 +291,7 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, st
             <span className="desk-task-mark" aria-hidden="true">{done && '✓'}</span>}
           <div className="task-row-main">
             {!onSave && <span className="sr-only">{done ? '已完成，' : '待完成，'}</span>}
-            {onSelect ? <button type="button" className="task-title task-progress-select" aria-label={'查看 ' + task.title + ' 进度'}
+            {onSelect ? <button type="button" className="task-title task-progress-select" aria-label={'查看 ' + task.title + ' 详情'}
               data-task-focus={'title:' + task.id} aria-pressed={selected} aria-controls="project-progress" onClick={() => onSelect(task.id)}>{task.title}</button> :
               <span className="task-title">{task.title}</span>}
             <div className="task-row-meta">
@@ -309,7 +310,7 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, st
               title={current.focus?.task_id === task.id ? '删除此任务会结束当前专注计时' : '删除任务'}
               onClick={() => void remove(task)}><TaskIcon action="remove" /></button>
           </div>}
-          {status && <TaskProgressLine status={status} />}
+          {status && <TaskAccomplishments status={status} onSave={onAccomplishment} />}
         </>}
       </li>
       {draft?.kind === 'add' && draft.after === task.id && <li className="task-compose-row">{compose()}</li>}

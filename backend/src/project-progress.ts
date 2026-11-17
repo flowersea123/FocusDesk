@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { CalendarSnapshot } from '../../contracts/calendar.ts';
 import type { DailyOverview } from '../../contracts/daily-overview.ts';
-import { validSections, projectStatus, type ProjectPlan, type ProgressConfig, type ProjectStatus } from '../../contracts/project-progress.ts';
+import { MAX_ACCOMPLISHMENTS, accomplishmentKey, validAccomplishment, validSections, projectStatus, type ProjectPlan, type ProgressConfig, type ProjectStatus } from '../../contracts/project-progress.ts';
 import type { ScreenCheckpoint } from '../../contracts/screen-checkpoint.ts';
 import { paperVisitOwner } from './reading-attribution.ts';
 import { CheckpointError, createCheckpointStore } from './checkpoint-store.ts';
@@ -52,6 +52,10 @@ function addPaperVisits(statuses: ProjectStatus[], overview: DailyOverview, rows
 
 function validPlan(plan: ProjectPlan) {
   if (typeof plan?.taskId !== 'string' || !validSections(plan.sections)) return false;
+  const notes = plan.notes;
+  if (notes !== undefined && (!Array.isArray(notes) || notes.length > MAX_ACCOMPLISHMENTS ||
+      !notes.every(note => validAccomplishment(note) && note === note.trim()) ||
+      new Set(notes.map(accomplishmentKey)).size !== notes.length)) return false;
   const edits = plan.stepEdits;
   return edits === undefined || (Array.isArray(edits) && edits.length <= plan.sections.length &&
     edits.every(edit => edit && typeof edit.done === 'boolean' && plan.sections.includes(edit.section)) &&
@@ -76,15 +80,40 @@ export function createProjectProgress(dataPath: string, checkpoints: ReturnType<
   }
   async function update(input: Record<string,unknown>, overview: DailyOverview) {
     const state = await read();
-    if (state.revision !== input.revision) throw new CheckpointError(409,'进度设置已变化，请重新载入再保存。');
+    if (typeof input.revision !== 'string' || !input.revision) throw new CheckpointError(400,'缺少进度设置版本。');
     if (typeof input.taskId !== 'string' || !overview.tasks.some(t => t.id === input.taskId)) throw new CheckpointError(400,'请选择现有任务。');
     const id = input.taskId;
     const plan = state.plans.find(row => row.taskId === id);
-    if (input.action === 'plan' && validSections(input.sections)) {
-      state.plans = state.plans.filter(p => p.taskId !== id && overview.tasks.some(t => t.id === p.taskId));
+    const adding = input.action === 'add-accomplishment';
+    const editingNote = adding || input.action === 'remove-accomplishment';
+    let note = '';
+    let noteIndex = -1;
+    if (editingNote) {
+      if (!validAccomplishment(input.text)) throw new CheckpointError(400,'完成事项须为 1–160 个字符的单行文字。');
+      note = input.text.trim();
+      noteIndex = plan?.notes?.findIndex(value => accomplishmentKey(value) === accomplishmentKey(note)) ?? -1;
+      // A retry after a lost response is safe when the requested state already exists.
+      if (adding === (noteIndex >= 0)) return;
+    }
+    if (state.revision !== input.revision) throw new CheckpointError(409,'进度设置已变化，请重新载入再保存。');
+    if (editingNote) {
+      const target = plan ?? {taskId:id, sections:[]};
+      const notes = target.notes ?? [];
+      if (adding) {
+        if (notes.length >= MAX_ACCOMPLISHMENTS) throw new CheckpointError(400,'每项任务最多可手动登记 64 条完成事项。');
+        notes.push(note);
+      } else notes.splice(noteIndex, 1);
+      if (notes.length) target.notes = notes;
+      else delete target.notes;
+      if (!plan) state.plans.push(target);
+      else if (!notes.length && !target.sections.length) state.plans = state.plans.filter(row => row !== target);
+    } else if (input.action === 'plan' && validSections(input.sections)) {
+      state.plans = state.plans.filter(p => p.taskId !== id && (p.notes?.length || overview.tasks.some(t => t.id === p.taskId)));
       const sections = input.sections.map(s => s.trim());
       const stepEdits = plan?.stepEdits?.filter(edit => sections.includes(edit.section));
-      if (sections.length) state.plans.push({taskId:id, sections, ...(stepEdits?.length ? {stepEdits} : {})});
+      if (sections.length || plan?.notes?.length) {
+        state.plans.push({taskId:id, sections, ...(stepEdits?.length ? {stepEdits} : {}), ...(plan?.notes?.length ? {notes:plan.notes} : {})});
+      }
     } else if (input.action === 'set-step') {
       const {section, done} = input;
       if (!plan || typeof section !== 'string' || !plan.sections.includes(section) || typeof done !== 'boolean')

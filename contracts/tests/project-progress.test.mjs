@@ -6,15 +6,15 @@ const task={id:'paper',title:'Read the paper',status:'todo',due_at:null};
 const plan={taskId:'paper',sections:['摘要 | Abstract','Introduction','Method','Results','Discussion']};
 const row=(parts,at='2026-11-16T03:00:00.000Z')=>({taskId:'paper',capturedAt:at,summary:'Working on this paper',progress:null,completedParts:parts});
 
-test('deduplicates confirmed sections, matches named aliases, computes whole-task progress and lists the parts under the bar',()=>{
+test('deduplicates confirmed sections, matches named aliases, computes whole-task progress and lists the completed steps in order',()=>{
   const rows=[row(['Introduction','2. Methods']),row(['摘要', 'Method']),{...row(['Discussion']),taskId:'another'}];
   const project=projectStatus(task,plan,rows);
   assert.equal(project.percent,60);assert.equal(project.total,5);assert.equal(project.completed.length,3);
   const snap=buildProjectDisplay(project,'project:test');
   const labels=snap.commands.filter(c=>c[0]===1).map(c=>c[5]);
-  assert.deepEqual(labels.slice(-3),['Abstract','Introduction','Method']);
-  assert.ok(labels.includes('60%'));
-  assert.equal(snap.commands.find(c=>c[0]===0&&c[5]===2)[3],216);
+  assert.deepEqual(labels.slice(-6),['1.','Abstract','2.','Introduction','3.','Method']);
+  assert.ok(!labels.some(label=>label.includes('%')));
+  assert.ok(snap.commands.every(c=>c[0]===1));
   assert.ok(JSON.stringify(snap).length<=4096); assert.ok(snap.commands.length<=64);
   assert.equal(validSections(['Method','Methods']),false);
   assert.equal(validSections(['阅读结论 | Read conclusion']),true);
@@ -37,7 +37,7 @@ test('marks automatic evidence on Hub and device, and gives a reviewed part prec
   assert.equal(observed.evidenceSource,'automatic');
   const labels = buildProjectDisplay(observed,'test').commands.filter(c=>c[0]===1).map(c=>c[5]);
   assert.equal(labels.filter(s=>s==='AUTO').length,1);
-  assert.ok(labels.includes('Auto-recorded'));
+  assert.ok(labels.includes('COMPLETED'));
 });
 
 test('bookmark movements track the latest section and only explicit reader confirmations advance progress', () => {
@@ -87,7 +87,7 @@ test('the latest visible page can move backwards, and document position is separ
   const withPlan = projectStatus(task,plan,[...observations, row(['Abstract','Introduction'])]);
   assert.equal(withPlan.percent,40);
   const text = buildProjectDisplay(withPlan,'both').commands.filter(c=>c[0]===1).map(c=>c[5]);
-  for (const label of ['READING POSITION','Page 6/12','50%','Section: Method','TASK COMPLETION','40%','2 / 5 parts','Abstract','Introduction']) {
+  for (const label of ['READING POSITION','Page 6/12','Section: Method','COMPLETED','Abstract','Introduction']) {
     assert.ok(text.includes(label),label);
   }
   const atEnd = projectStatus(task,plan,[pageRow('01',undefined,{page:12,total:12})]);
@@ -136,7 +136,7 @@ test('section-only reading is visible on the device, while observation summaries
 });
 
 test('a scheduled mail stays visible alongside a pinned project with completed steps', () => {
-  const pinned = { ...projectStatus(task, plan, []), completed: ['Part A','Part B','Part C','Part D','Part E','Part F'],
+  const pinned = { ...projectStatus(task, plan, []), accomplishments: ['Part A','Part B','Part C','Part D','Part E','Part F'].map(text=>({text,source:'manual',removable:true})),
     calendarReminder: { title: 'Read student week brief', count: 3 } };
   const snapshot = buildProjectDisplay(pinned,'test');
   const text = snapshot.commands.filter(command => command[0] === 1).map(command => command[5]);

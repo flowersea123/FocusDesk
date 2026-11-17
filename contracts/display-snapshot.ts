@@ -160,49 +160,37 @@ export function buildProjectDisplay(project: ProjectStatus, revision: string): D
   const page = project.readingPosition;
   const section = page ? page.section : project.readingBookmark?.current.section;
   const reading = !!(page || section);
-  draw('FOCUSDESK  /  TASK PROGRESS',18,25,FONT.bold11,360);
+  draw('FOCUSDESK  /  TASK LOG',18,25,FONT.bold11,360);
   draw(deviceTaskLabel({id:project.taskId,title:project.title,device_title:project.deviceTitle}),18,reading ? 48 : 61,FONT.bold17,364);
   if (reading) {
     draw('READING POSITION',18,71,FONT.bold11,137);
-    if (page) {
-      const ratio = page.page / page.total;
-      draw('Page ' + page.page + '/' + page.total,161,71,FONT.regular13,152);
-      const percentLabel = Math.round(100 * ratio) + '%';
-      draw(percentLabel,382 - textBounds(percentLabel,FONT.bold16).width,71,FONT.bold16,70);
-      rect(18,99,364,5,0); rect(19,100,362,3,1);
-      rect(19,100,Math.max(1,Math.round(362 * ratio)),3,0);
-    }
+    if (page) draw('Page ' + page.page + '/' + page.total,161,71,FONT.regular13,210);
     if (section) {
       const name = devicePart(section,[...project.completed,...project.remaining]);
       draw(name ? 'Section: ' + name : 'Section name on Hub',18,92,FONT.regular13,364);
     } else if (page?.document && page.document !== project.title && /^[\x20-\x7e]+$/.test(page.document)) {
       draw(page.document,18,92,FONT.regular13,364);
     }
-    draw('TASK COMPLETION',18,127,FONT.bold11,123);
   }
-  const percent = project.percent;
-  const progressY = reading ? 128 : 96;
-  const progressLabel = percent === null ? (reading ? 'Unknown' : 'Progress unknown') : percent+'%';
-  draw(progressLabel,reading ? 148 : 18,progressY,FONT.bold17,reading ? 86 : 180);
-  if (project.total !== null) draw(project.completed.length+' / '+project.total+' parts',reading ? 251 : 216,progressY-1,FONT.regular13,reading ? 131 : 166);
-  if (project.total === null && project.evidenceSource === 'automatic') draw('Auto-recorded',reading ? 251 : 216,progressY-1,FONT.regular13,reading ? 131 : 166);
-  const barY = reading ? 139 : 109;
-  rect(18,barY,364,12,0); rect(20,barY+2,360,8,1);
-  if (percent !== null && percent > 0) rect(20,barY+2,Math.round(360*percent/100),8,2);
-  draw('COMPLETED',18,reading ? 172 : 149,FONT.bold11,364);
   const automatic = new Set(project.automaticParts ?? []);
-  const named = project.completed.map(part => ({name: devicePart(part), auto: automatic.has(part)}));
+  const items = project.accomplishments ?? project.completed.map(text => ({
+    text, source: automatic.has(text) ? 'automatic' : 'manual',
+  }));
   const reminder = project.calendarReminder;
-  const visible = named.filter(p => p.name !== null).slice(0,reminder ? 4 : 5);
-  const firstRow = reading ? 191 : 174;
-  visible.forEach(({name,auto},i)=>{
-    const y = firstRow + i*(reading ? 20 : 23);
-    rect(19,y-8,5,5,0);
-    draw(name!,33,y,FONT.regular13,auto ? 295 : 347);
-    if (auto) draw('AUTO',329,y,FONT.regular10,52);
+  const visible = items.slice(0, reminder ? 4 : 5);
+  const headingY = reading ? 120 : 92;
+  draw('COMPLETED',18,headingY,FONT.bold11,364);
+  visible.forEach(({text,source},i) => {
+    const y = headingY + 28 + i * 23;
+    const planItem = project.completed.find(item => item.split('|')[0].trim() === text);
+    const name = planItem ? devicePart(planItem) : /^[\x20-\x7e]+$/.test(text) ? text : devicePart(text);
+    const label = name ?? deviceTaskLabel({id:String(i+1),title:text});
+    draw(String(i + 1) + '.',18,y,FONT.bold11,23);
+    draw(label,44,y,FONT.regular13,source === 'automatic' ? 273 : 336);
+    if (source === 'automatic') draw('AUTO',329,y,FONT.regular10,52);
   });
-  if (!named.length) draw('No completed parts recorded',18,firstRow+2,FONT.regular13,364);
-  if (named.length>visible.length) draw('+'+(named.length-visible.length)+' more on Hub',18,reminder ? 266 : 292,FONT.regular10,364);
+  if (!items.length) draw('No completed items recorded',18,headingY+28,FONT.regular13,364);
+  if (items.length>visible.length) draw('+'+(items.length-visible.length)+' more on Hub',18,reminder ? 264 : 283,FONT.regular10,364);
   if (reminder) {
     rect(0,272,400,28,2);
     draw('TO DO',18,290,FONT.bold11,44);

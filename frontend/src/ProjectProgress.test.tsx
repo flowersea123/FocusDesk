@@ -18,7 +18,7 @@ const paper: ProjectStatus = { ...base, taskId: 'read', title: 'Read paper', per
   readingBookmark: { current: { id: 'book', section: 'Method', document: 'Sample Paper', capturedAt: at, source: 'automatic', confirmed: false } },
   latestObservation: { summary: '读到实验方法的第二页。', capturedAt: at, source: 'automatic' } };
 function fixture() {
-  const model = { recorder: { ...idle }, statuses: [{ ...base }, { ...paper }], actions: [] as { action: string; taskId?: string | null }[], patches: [] as unknown[] };
+  const model = { revision:'one', conflict:false, writes:[] as string[], recorder: { ...idle }, statuses: [{ ...base }, { ...paper }], actions: [] as { action: string; taskId?: string | null }[], patches: [] as unknown[] };
   vi.stubGlobal('fetch', async (url: string, options?: RequestInit) => {
     if (url === '/api/v1/recorder') {
       if (options?.method === 'POST') {
@@ -28,7 +28,19 @@ function fixture() {
       }
       return Response.json(model.recorder);
     }
-    if (url === '/api/v1/project-progress') return Response.json({ config: { pinned: null, revision: 'one', plans: [] }, statuses: model.statuses });
+    if (url === '/api/v1/project-progress') {
+      if (options?.method === 'PUT') {
+        const body = JSON.parse(options.body as string);
+        model.writes.push(body.action);
+        if (model.conflict || model.revision !== body.revision) return Response.json({error:'进度设置已变化，请重新载入再保存。'},{status:409});
+        const task = model.statuses.find(status => status.taskId === body.taskId)!;
+        const entries = task.accomplishments ?? [];
+        task.accomplishments = body.action === 'add-accomplishment' ? [...entries,{text:body.text,source:'manual',removable:true}] :
+          entries.filter(entry => entry.text !== body.text);
+        model.revision += '1';
+      }
+      return Response.json({ config: { pinned: null, revision: model.revision, plans: [] }, statuses: model.statuses });
+    }
     if (url === '/api/v1/checkpoints') {
       if (options?.method === 'PATCH') model.patches.push(JSON.parse(options.body as string));
       return Response.json({ records: [] });
@@ -41,7 +53,7 @@ afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState(null, '', '
 const refresh = () => act(async () => { fireEvent(window, new Event('focus')); });
 const click = async (name: string) => act(async () => { fireEvent.click(screen.getByRole('button', { name })); });
 const mount = () => render(<App source={{ kind: 'http', localWorkspace: true, read: async () => data }} />);
-const select = (name: string) => fireEvent.click(screen.getByRole('button', { name: name ? '查看 ' + name + ' 进度' : '跟随识别结果' }));
+const select = (name: string) => fireEvent.click(screen.getByRole('button', { name: name ? '查看 ' + name + ' 详情' : '跟随识别结果' }));
 
 test('default start has no task hint, auto-follows the observed task, and distinguishes reading position from completed steps', async () => {
   const model = fixture(); mount(); await act(async () => {});
@@ -50,13 +62,14 @@ test('default start has no task hint, auto-follows the observed task, and distin
   expect(model.actions).toEqual([{ action: 'start' }]);
   model.recorder = { ...model.recorder, observedTaskId: 'read', observedAt: at, savedCount: 1, lastSavedAt: at };
   await refresh();
-  const card = screen.getByRole('region', { name: /^大任务进度/ });
+  const card = screen.getByRole('region', { name: /^任务详情/ });
   expect(screen.getByRole('region', { name: '今日任务' })).toHaveTextContent('最近识别的任务 Read paper');
-  const readingRow = screen.getByRole('button', {name:'查看 Read paper 进度'}).closest('li')!;
-  expect(within(readingRow).getByRole('progressbar', {name:'Read paper · 阅读位置'})).toHaveAttribute('aria-valuetext','第 6 / 12 页');
-  expect(within(card).getByRole('progressbar', { name: 'Read paper阅读位置' })).toHaveAttribute('aria-valuenow', '50');
-  expect(within(card).getByRole('progressbar', { name: 'Read paper整体进度' })).toHaveAttribute('aria-valuenow', '20');
-  expect(card).toHaveTextContent('第 6 / 12 页'); expect(card).toHaveTextContent('1 / 5 个步骤已完成');
+  const readingRow = screen.getByRole('button', {name:'查看 Read paper 详情'}).closest('li')!;
+  expect(within(readingRow).getByRole('list', {name:'Read paper 已完成事项'})).toHaveTextContent('Introduction');
+  expect(readingRow).not.toHaveTextContent('Method');
+  expect(within(readingRow).queryByRole('progressbar')).not.toBeInTheDocument();
+  expect(within(card).queryByRole('progressbar')).not.toBeInTheDocument();
+  expect(card).toHaveTextContent('第 6 / 12 页');
   expect(card).toHaveTextContent('读到 Method');
   await click('确认已读 Method'); expect(model.patches).toEqual([{ id: 'book', readingSection: 'Method' }]);
   select('Prepare slides');
@@ -66,7 +79,7 @@ test('default start has no task hint, auto-follows the observed task, and distin
   expect(card).toHaveTextContent('正用「Prepare slides」核对截图');
   await click('恢复自动识别');
   expect(model.actions.at(-1)).toEqual({ action: 'target', taskId: null });
-  select(''); expect(within(card).getByRole('progressbar', { name: 'Read paper阅读位置' })).toBeVisible();
+  select(''); expect(within(card).getByText('第 6 / 12 页')).toBeVisible();
   model.recorder = { ...model.recorder, observedAt: '2026-11-16T08:12:00Z', observedTaskId: null };
   await refresh();
   expect(screen.getByRole('region', { name: '今日任务' })).toHaveTextContent('最近画面未匹配任务');
@@ -81,7 +94,7 @@ test('a section alone has no numerical completion and unquantified work shows th
     { ...paper, percent: null, total: null, readingPosition: undefined, completed: [] }];
   model.recorder = { ...idle, state: 'recording', observedTaskId: 'read', observedAt: at };
   mount(); await act(async () => {});
-  const card = screen.getByRole('region', { name: /^大任务进度/ });
+  const card = screen.getByRole('region', { name: /^任务详情/ });
   expect(card).toHaveTextContent('读到 Method'); expect(card).not.toHaveTextContent('%');
   expect(within(card).queryByRole('progressbar')).not.toBeInTheDocument();
   select('Prepare slides');
@@ -94,30 +107,58 @@ test('a section alone has no numerical completion and unquantified work shows th
 });
 
 
-test('paper window sightings remain visible on the task row without a percentage or selected task', async () => {
+test('paper window sightings remain in the task details and do not create accomplishments', async () => {
   const model = fixture();
   model.statuses = [{...base}, {...base, taskId:'read', title:'Read paper', paperVisits:{
     date:'2026-11-16', documents:2, count:4, minutes:[642,665,717],
     recent:[{title:'Methods for Visual Search',at:'2026-11-16T03:57:00Z'}],
   }}];
   mount(); await act(async () => {});
-  const row = screen.getByRole('button', {name:'查看 Read paper 进度'}).closest('li')!;
-  expect(row).toHaveTextContent('论文访问 · 2 个标题');
-  expect(row).toHaveTextContent('页码未知');
-  expect(within(row).getByRole('img', {name:/10:42 至 11:57 有 4 次记录/})).toBeVisible();
-  expect(row.querySelectorAll('.paper-visit-ticks i')).toHaveLength(3);
+  const row = screen.getByRole('button', {name:'查看 Read paper 详情'}).closest('li')!;
+  expect(row).not.toHaveTextContent('论文访问');
+  expect(within(row).queryByRole('list')).not.toBeInTheDocument();
   expect(within(row).queryByRole('progressbar')).not.toBeInTheDocument();
-  expect(row).not.toHaveTextContent('%');
   model.recorder = { ...idle, state:'recording', observedAt:at, observedTaskId:null };
-  model.statuses[1] = {...model.statuses[1], total:3, percent:0};
   await refresh();
-  expect(within(row).getByRole('img', {name:/论文窗口采样/})).toBeVisible();
-  expect(within(row).getByRole('progressbar', {name:'Read paper · 任务完成度'})).toHaveAttribute('aria-valuetext','0 / 3 步');
   expect(screen.getByText('最近画面未匹配任务')).toBeVisible();
   select('Read paper');
-  const card = screen.getByRole('region', {name:/^大任务进度/});
+  const card = screen.getByRole('region', {name:/^任务详情/});
   fireEvent.click(within(card).getByText('论文访问记录 · 2 篇'));
   expect(within(card).getByText('Methods for Visual Search')).toBeVisible();
   expect(card).not.toHaveTextContent('暂无进度记录');
-  expect(within(screen.getByRole('button', {name:'查看 Prepare slides 进度'}).closest('li')!).queryByRole('img')).not.toBeInTheDocument();
+  expect(within(screen.getByRole('button', {name:'查看 Prepare slides 详情'}).closest('li')!).queryByRole('img')).not.toBeInTheDocument();
+});
+
+test('adds concrete accomplishments in order, preserves a conflict draft, and removes only a manual record', async () => {
+  const model = fixture();
+  model.statuses[0].accomplishments = [];
+  mount(); await act(async () => {});
+  const row = screen.getByRole('button', {name:'查看 Prepare slides 详情'}).closest('li')!;
+  const inside = within(row);
+  const first = '看完第一章课件并和 GPT 讨论';
+  const second = '完成 Exercise 1';
+  async function start(text: string) {
+    fireEvent.click(inside.getByRole('button', {name:/记录已完成事项/}));
+    const input = inside.getByRole('textbox');
+    fireEvent.change(input, {target:{value:text}});
+    return input;
+  }
+  const input = await start(first);
+  fireEvent.keyDown(input,{key:'Enter',keyCode:229,isComposing:true});
+  expect(model.writes).toHaveLength(0);
+  await act(async () => {fireEvent.keyDown(input,{key:'Enter'});});
+  expect(inside.getByRole('listitem')).toHaveTextContent(first);
+  const another = await start(second);
+  model.conflict = true; model.revision = 'elsewhere';
+  await act(async () => {fireEvent.click(inside.getByRole('button',{name:'保存'}));});
+  expect(inside.getByRole('alert')).toHaveTextContent('已变化');
+  expect(another).toHaveValue(second);
+  model.conflict = false;
+  await act(async () => {fireEvent.click(inside.getByRole('button',{name:'保存'}));});
+  await refresh();
+  expect(inside.getAllByRole('listitem').map(item => item.querySelector('span')?.textContent)).toEqual([first,second]);
+  await act(async () => {fireEvent.click(inside.getByRole('button',{name:'移除已完成事项「'+first+'」'}));});
+  expect(inside.getAllByRole('listitem')).toHaveLength(1);
+  expect(inside.getByRole('listitem')).toHaveTextContent(second);
+  expect(inside.queryByRole('progressbar')).not.toBeInTheDocument();
 });

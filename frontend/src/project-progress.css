@@ -1,13 +1,9 @@
 .project-progress { min-width:0; background:#fff; border:1px solid var(--line); border-radius:13px; padding:clamp(18px,2.5vw,25px); color:var(--ink); }
-.project-progress header,.project-meter-label,.project-actions {display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;}
-.project-progress header,.project-meter-label {justify-content:space-between;}
+.project-progress header,.project-actions {display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;}
+.project-progress header {justify-content:space-between;}
 .project-progress h2 {margin:0;font-size:21px;letter-spacing:-.04em;}
-.project-progress p,.project-progress small,.project-meter-label span {margin:7px 0;color:var(--muted);font-size:13px;line-height:1.65;}
+.project-progress p,.project-progress small span {margin:7px 0;color:var(--muted);font-size:13px;line-height:1.65;}
 .project-progress select,.project-progress textarea {max-width:100%;border:1px solid #c8c4d1;border-radius:7px;background:#fff;font:inherit;color:inherit;padding:8px;}
-.project-meter-label {margin:18px 0 8px;}
-.project-meter-label strong {font-size:26px;font-variant-numeric:tabular-nums;letter-spacing:-.04em;}
-.project-meter {height:12px;background:#ece8f2;border-radius:8px;overflow:hidden;}
-.project-meter > span {display:block;background:#7960b4;height:100%;}
 .project-progress h3 {margin:16px 0 8px;font-size:14px;}
 .project-progress ul {display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 14px;list-style:none;padding:0;}
 .project-progress li {padding:4px 10px;background:#f2eef8;border-radius:5px;font-size:13px;overflow-wrap:anywhere;}
@@ -39,15 +35,10 @@
 .project-selection button, .project-reading button { font-size: 12px; }
 .project-target { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; }
 .project-target button { border: 0; color: var(--accent); text-decoration: underline; }
-.project-progress .project-meter-label { margin: 3px 0 6px; gap: 5px; }
-.project-progress .project-meter-label strong, .project-progress .project-reading-section { font-size: clamp(18px, 2vw, 23px); line-height: 1.35; }
-.project-meter-label b { font-size: 19px; font-variant-numeric: tabular-nums; }
-.project-reading h3, .project-completion h3 { margin: 12px 0 4px; color: var(--muted); font-size: 12px; font-weight: 550; }
+.project-progress .project-reading-section { font-size: clamp(18px, 2vw, 23px); line-height: 1.35; }
+.project-reading h3 { margin: 12px 0 4px; color: var(--muted); font-size: 12px; font-weight: 550; }
 .project-reading .project-document { font-size: 12px; }
 .project-reading button { margin-top: 4px; }
-.project-reading + .project-completion .project-meter-label strong { font-size: 15px; }
-.project-reading + .project-completion .project-meter-label b { font-size: 15px; }
-.project-reading + .project-completion .project-meter { height: 5px; }
 .project-observation { margin: 12px 0; padding: 6px 11px; border-left: 3px solid #ab97c3; background: #f7f5f9; }
 .project-observation p, .project-observation small { margin: 0; }
 .project-observation p { color: var(--ink); }
@@ -76,7 +67,6 @@
 .desk-task-panel .checkpoint-workspace + .task-editor { margin-top: 12px; }
 @media (max-width: 440px) {
   .desk-task-panel .desk-section-head { gap: 5px 8px; }
-  .desk-task-panel .desk-completion .desk-progress { display: none; }
 }
 
 .project-steps { margin:10px 0; padding-left:1.6em; }

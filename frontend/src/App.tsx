@@ -69,6 +69,14 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
   const recording = recorder.status?.state === 'recording' && !recorder.readError;
   const [progress, setProgress] = useState<ProgressResponse | null>(null);
   const pinned = progress?.statuses.find(status => status.taskId === progress.config.pinned);
+  async function saveAccomplishment(taskId: string, action: 'add-accomplishment' | 'remove-accomplishment', text: string) {
+    if (!progress) throw new Error('正在读取任务记录，请稍后重试。');
+    try {
+      setProgress(await updateProject({ revision:progress.config.revision, taskId, action, text }));
+    } finally {
+      checkpointsChanged();
+    }
+  }
   async function restoreOverview() {
     if (!pinned || !progress) return;
     try {
@@ -245,7 +253,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
       {source.localWorkspace && overview && <div className="today-insights">
         <ActivityTimeline recorder={recorder} review={activity.review} tasks={tasks} revealApp={revealApp?.date === activity.review?.date ? revealApp : null} error={activity.error} onRetry={activity.refresh}/>
         <div className="today-brief">
-          <NextTask overview={overview} next={next} saving={saving} onStart={source.updateFocus ? startRecommended : undefined} onInspect={inspectTask} onApp={inspectApp} onHistory={inspectHistory}/>
+          <NextTask overview={overview} next={next} saving={saving} onStart={source.updateFocus ? startRecommended : undefined} onInspect={task => inspectTask(task.id)} onApp={inspectApp} onHistory={inspectHistory}/>
           {activity.review && (activity.review.observations.length > 0 || activity.review.sessions.length > 0 || !!activity.review.appSessions?.length) &&
             <DailySynthesis active={view === 'today'} review={activity.review}/>}
         </div>
@@ -259,13 +267,13 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
                 aria-valuemin={0} aria-valuemax={Math.max(1, count)} aria-valuenow={completed}
                 aria-valuetext={`${completed} 项已完成，共 ${count} 项`}>
                 <span aria-hidden="true">{completed} / {count} 已完成</span>
-                <span className="desk-progress" aria-hidden="true"><i style={{ width: `${count ? completed / count * 100 : 0}%` }} /></span>
               </div>}
               {source.localWorkspace && <RecorderButton recorder={recorder} />}
             </div>
             {overview && <TaskEditor overview={overview} saving={saving} onSave={source.updateTasks ? saveTasks : undefined}
               onDraftChange={setTaskDraft} active={view === 'today' && !navOpen}
               selectedId={selected?.id} observedId={observed?.id} manual={!!manual} statuses={source.localWorkspace ? progress?.statuses : undefined}
+              onAccomplishment={source.localWorkspace ? saveAccomplishment : undefined}
               onSelect={source.localWorkspace ? inspectTask : source.updateFocus ? chooseTask : undefined} />}
             {source.localWorkspace && showRecorderDetails && <div className="task-recorder-state">
               <RecorderStatusLine recorder={recorder} timezone={overview?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone} />

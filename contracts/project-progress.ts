@@ -4,6 +4,7 @@ import { validReadingDocument, validReadingPosition, type CheckpointSource, type
 export interface ProjectPlan {
   taskId: string;
   sections: string[];
+  notes?: string[];
   stepEdits?: {section:string; done:boolean}[];
 }
 
@@ -22,7 +23,28 @@ export interface ReadingLocation {
   capturedAt: string;
 }
 
+/** A user-entered note or an explicit completion recorded for this task. */
+export interface Accomplishment {
+  text: string;
+  source: CheckpointSource;
+  removable: boolean;
+}
+
+export const MAX_ACCOMPLISHMENTS = 64;
+export const MAX_ACCOMPLISHMENT_LENGTH = 160;
+
+export function validAccomplishment(value: unknown): value is string {
+  return typeof value === 'string' && !!value.trim() && [...value].length <= MAX_ACCOMPLISHMENT_LENGTH &&
+    !/[\p{Cc}\p{Zl}\p{Zp}]/u.test(value);
+}
+
+export function accomplishmentKey(text: string): string {
+  const normalized = text.normalize('NFKC').trim().replace(/\s+/gu, ' ').toLowerCase();
+  return (translations.get(normalized) ?? normalized).toLowerCase();
+}
+
 export interface ProjectStatus {
+  accomplishments?: Accomplishment[];
   /** First unfinished scheduled task to show alongside the pinned project. */
   calendarReminder?: { title: string; count: number };
   taskId: string;
@@ -43,11 +65,11 @@ export interface ProjectStatus {
   latestObservation?: { summary: string; capturedAt: string; source?: CheckpointSource };
 }
 
-const translations: Record<string, string> = {
+const translations = new Map(Object.entries({
   '摘要': 'Abstract', '引言': 'Introduction', '绪论': 'Introduction', '相关工作': 'Related Work',
   '方法': 'Method', '实验': 'Experiments', '结果': 'Results', '讨论': 'Discussion', '结论': 'Conclusion',
   methods: 'Method', methodology: 'Method', introductions: 'Introduction', conclusions: 'Conclusion',
-};
+}));
 
 const sectionNumber = /^(?:section\s+)?(\d+(?:\.\d+)*)[\s.):、-]+/iu;
 
@@ -55,7 +77,7 @@ export function devicePart(value: string, planSections: readonly string[] = []):
   const name = value.split('|').at(-1)!.trim();
   if (/^[\x20-\x7e]+$/.test(name)) return name;
   const number = name.match(sectionNumber);
-  const english = translations[name.replace(sectionNumber, '')];
+  const english = translations.get(name.replace(sectionNumber, ''));
   if (english) return number ? number[1] + '. ' + english : english;
   const alias = planSections.find(entry => entry.split('|').some(label => sectionKey(label) === sectionKey(name)));
   const shortName = alias?.split('|')[1]?.trim();
@@ -64,7 +86,7 @@ export function devicePart(value: string, planSections: readonly string[] = []):
 
 function sectionKey(value: string): string {
   const name = value.trim().replace(sectionNumber, '').toLowerCase();
-  return (translations[name] ?? name).toLowerCase().replace(/\s+/g, ' ').trim();
+  return (translations.get(name) ?? name).toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
 export function validSections(value: unknown): value is string[] {
@@ -140,16 +162,31 @@ export function projectStatus(task: Task, plan: ProjectPlan | undefined, records
   const observed = new Map<string, string>();
   const reviewed = new Set<string>();
   const sections = plan?.sections ?? [];
+  const entries = new Map<string, Accomplishment>();
+  function add(text:string, source:CheckpointSource, removable = false, key = accomplishmentKey(text)) {
+    const existing = entries.get(key);
+    if (!existing || (source === 'manual' && existing.source === 'automatic')) {
+      entries.set(key, {text, source, removable});
+    }
+  }
+  for (const text of plan?.notes ?? []) add(text, 'manual', true);
+  const planned = new Set(sections.flatMap(section => section.split('|').map(sectionKey)));
   for (const row of rows) {
+    if (row.detailSource === 'window-title') continue;
     if (row.readingConfirmed && row.readingSection) {
       const key = sectionKey(row.readingSection);
       observed.set(key, row.readingSection);
       reviewed.add(key);
+      if (!planned.has(key)) {
+        const document = row.readingDocument ? '《' + row.readingDocument + '》' : '';
+        add('读完' + document + ' ' + row.readingSection, 'manual');
+      }
     }
     for (const part of row.completedParts ?? []) {
       const key = sectionKey(part);
       observed.set(key, part);
       if (row.source !== 'automatic') reviewed.add(key);
+      if (!planned.has(key)) add(part, row.source ?? 'manual', false, key);
     }
   }
 
@@ -163,17 +200,19 @@ export function projectStatus(task: Task, plan: ProjectPlan | undefined, records
       const found = plan?.stepEdits?.find(edit => edit.section === section)?.done ?? section.split('|').some(name => observed.has(sectionKey(name)));
       (found ? completed : remaining).push(section);
     }
+    const automaticParts = completed.filter(s => !plan?.stepEdits?.some(edit => edit.section === s) && !s.split('|').some(name => reviewed.has(sectionKey(name))));
+    for (const section of completed) add(section.split('|')[0].trim(), automaticParts.includes(section) ? 'automatic' : 'manual');
     return {
-      ...identity, percent: Math.round(100 * completed.length / sections.length),
+      ...identity, accomplishments:[...entries.values()], percent: Math.round(100 * completed.length / sections.length),
       total: sections.length, completed, remaining, evidence: null,
-      automaticParts: completed.filter(s => !plan?.stepEdits?.some(edit => edit.section === s) && !s.split('|').some(name => reviewed.has(sectionKey(name)))),
+      automaticParts,
     };
   }
 
   const latest = rows.filter(row => row.progress !== null).at(-1);
   const progress = latest?.progress;
   return {
-    ...identity, percent: progress?.percent ?? null, total: null,
+    ...identity, accomplishments:[...entries.values()], percent: progress?.percent ?? null, total: null,
     completed: [...observed.values()], remaining: [], evidence: progress?.evidence ?? null,
     ...(progress ? { evidenceSource: latest?.source ?? 'manual' } : {}),
     automaticParts: [...observed].filter(([key]) => !reviewed.has(key)).map(([, name]) => name),

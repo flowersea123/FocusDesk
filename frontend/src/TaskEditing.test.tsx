@@ -245,8 +245,8 @@ describe('task rows', () => {
     const data = initial(); const save = saving(data); const select = vi.fn(); const row = data.tasks[0];
     const view = render(<TaskEditor overview={data} saving={false} onSelect={select} observedId={row.id} selectedId={row.id} />);
     expect(screen.queryByRole('button', { name: '添加任务' })).toBeNull(); expect(screen.queryByRole('checkbox')).toBeNull();
-    await click(button('查看 ' + row.title + ' 进度')); expect(select).toHaveBeenCalledWith(row.id);
-    expect(within(button('查看 ' + row.title + ' 进度').closest('li')!).getByText('截图识别')).toBeVisible();
+    await click(button('查看 ' + row.title + ' 详情')); expect(select).toHaveBeenCalledWith(row.id);
+    expect(within(button('查看 ' + row.title + ' 详情').closest('li')!).getByText('截图识别')).toBeVisible();
     const tasks = Array.from({ length: MAX_TASKS }, (_, i): Task => ({ id: 'row-' + i, title: 'Task ' + i, status: 'todo', due_at: null }));
     view.rerender(<TaskEditor overview={{ ...data, tasks }} saving={false} onSave={save} />);
     expect(button('添加任务')).toBeDisabled(); expect(button('在 Task 0 后添加任务')).toBeDisabled();

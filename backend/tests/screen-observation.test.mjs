@@ -436,3 +436,66 @@ test('a checklist mislabeled as a paper body still uses its explicit completion 
   assert.equal(checked.progress.percent,40); assert.deepEqual(checked.completedParts,['Introduction','Method']);
   assert.equal(checked.readingSection,undefined); assert.equal(checked.readingPosition,undefined);
 });
+
+test('a matching course checklist records specific completed work with no total or predeclared steps', async () => {
+  const task = { id:'statistics', title:'复习 Applied Statistics', status:'todo' };
+  let taskLabel = task.title;
+  let verifyCount = 0;
+  const candidates = [
+    {name:'Exercise 1',line:'Exercise 1'},
+    {name:'Exercise 2',line:'✓ Exercise 20'},
+    {name:'第 1 章课件',line:'1. 已完成：第 1 章课件'},
+    {name:'与 GPT 讨论第一章',line:'与 GPT 讨论第一章'},
+    {name:'Exercise 3',line:'Exercise 3 almost completed'},
+  ];
+  const service = createScreenObservationService({getTasks: async () => [task], fetcher: async (_url,init) => {
+    const schema = JSON.parse(init.body).response_format.json_schema.name;
+    if (schema === 'observation') return completion({...output,taskLabel,evidence:'',completedParts:candidates});
+    assert.equal(schema,'row_marks');
+    verifyCount++;
+    return completion({rows:[{name:'Exercise 1',mark:'[x]'}, {name:'与 GPT 讨论第一章',mark:''}]});
+  }});
+  const capture = () => service.foreground(image,new AbortController().signal);
+  const first = await capture();
+  assert.equal(first.taskId,task.id);
+  assert.equal(first.progress,null);
+  assert.deepEqual(first.completedParts,['第 1 章课件','Exercise 1']);
+  taskLabel = 'Other course';
+  assert.deepEqual((await capture()).completedParts,[]);
+  assert.equal(verifyCount,1);
+});
+
+test('a course status page credits only independently verified rows to one matching study task', async () => {
+  let tasks = [{id:'stats',title:'复习 Applied Statistics'}];
+  let surfaceKind = 'work', readingPage = 'other', bodyQuote = '', taskLabel = 'Applied Statistics';
+  let candidates = [{name:'Exercise 1',line:'Exercise 1 — completed'}, {name:'Chapter 2',line:'✓ Chapter 2'}];
+  let verifyCount = 0;
+  const service = createScreenObservationService({getTasks:async()=>tasks, fetcher:async (_url,init) => {
+    const schema = JSON.parse(init.body).response_format.json_schema.name;
+    if (schema==='observation') return completion({...output,taskLabel,surfaceKind,readingPage,bodyQuote,
+      workLine:'Course assignments',completedParts:candidates,summary:'The course is finished.'});
+    if (schema==='work_matches') return completion({matches:[]});
+    verifyCount++;
+    return completion({rows:[{name:'Exercise 1',mark:'completed'}, {name:'Chapter 2',mark:'[ ]'}]});
+  }});
+  const capture = () => service.foreground(image,new AbortController().signal);
+  const first = await capture();
+  assert.equal(first.taskId,'stats');
+  assert.deepEqual(first.completedParts,['Exercise 1']);
+  assert.equal(first.progress,null);
+  assert.doesNotMatch(first.summary,/Chapter 2|course is finished/);
+  readingPage='body'; bodyQuote='Exercise 1 Completed';
+  assert.deepEqual((await capture()).completedParts,['Exercise 1']);
+  bodyQuote='The assignment in this chapter explores six different learning techniques.';
+  assert.deepEqual((await capture()).completedParts,[]);
+  readingPage='other'; bodyQuote='';
+  surfaceKind='other'; // e.g. a GPT discussion transcript quoting a checklist
+  assert.deepEqual((await capture()).completedParts,[]);
+  surfaceKind='work';taskLabel='Advanced Applied Statistics';
+  assert.deepEqual((await capture()).completedParts,[]);
+  taskLabel='Applied Statistics'; tasks=[...tasks,{id:'second',title:'Study Applied Statistics'}];
+  assert.deepEqual((await capture()).completedParts,[]);
+  tasks=tasks.slice(0,1);candidates=[];
+  assert.deepEqual((await capture()).completedParts,[]);
+  assert.equal(verifyCount,2);
+});

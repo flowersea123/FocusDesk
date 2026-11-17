@@ -235,7 +235,7 @@ Display schema display-1, layout goal-1, 4096-byte transport, 64 commands and dr
 
 ### 大任务进度与设备画面
 
-本机 GET /api/v1/project-progress 返回逐个任务的百分比、已完成部分和步骤清单。PUT 使用 revision、taskId 和 plan/pin/unpin 更新清单或选择设备内容。set-step 接收清单中原样的 section 和布尔值 done；人工设定覆盖该步的观察结论，恢复到观察结论时清除覆盖。配置的可选 stepEdits 随未改名的步骤保留。有清单时根据已记录的步骤计数，无清单时仅采用可核对的比例。GET /api/v1/display-snapshot 继续提供标准 400×300 display-1 绘制指令。固定后设备显示大任务完整进度及完成部分，取消固定后恢复今日总览。当前设备字库支持 ASCII，可为自定义步骤提供英文短名。
+本机 GET /api/v1/project-progress 返回逐个任务的百分比、已完成部分和步骤清单。PUT 使用 revision、taskId 和 plan/pin/unpin 更新清单或选择设备内容。set-step 接收清单中原样的 section 和布尔值 done；人工设定覆盖该步的观察结论，恢复到观察结论时清除覆盖。配置的可选 stepEdits 随未改名的步骤保留。有清单时根据已记录的步骤计数，无清单时仅采用可核对的比例。GET /api/v1/display-snapshot 继续提供标准 400×300 display-1 绘制指令。固定后设备按序展示具体成果和可见的阅读位置，取消固定后恢复今日总览。当前设备字库支持 ASCII，可为自定义步骤提供英文短名。
 
 ### 每日回顾与专注时段
 
@@ -270,3 +270,5 @@ Display schema display-1, layout goal-1, 4096-byte transport, 64 commands and dr
 开始仅 AI 模式的请求体为 `{"action":"start-ai"}`，状态中的 `mode` 为 `ai`；常规录制为 `screen`。扩展源码在 `extensions/chatgpt-activity`，运行 `python3 extensions/package-chatgpt.py` 更新工作台的离线下载包。
 
 本机每日回顾的 observation 可含前台窗口原文 pageTitle。任务进度返回的每个 status 可含 paperVisits，按工作台时区的当天提供日期 date、采样次数 count、不同论文标题数 documents、有采样的分钟索引 minutes（0–1439）和最近五个不同标题及最后观察时间 recent。阅读观察和记录的完成度分别计算。
+
+本机任务状态的 accomplishments 按序返回 text、source、removable。手工登记使用 add-accomplishment 或 remove-accomplishment，附当前 revision、taskId 和 text。每条上限 160 个字符，每项任务最多 64 条自由登记。旧配置无需迁移。读取时合并可核对的完成步骤、已确认读完的章节和手工登记；标题访问只用于活动详情。

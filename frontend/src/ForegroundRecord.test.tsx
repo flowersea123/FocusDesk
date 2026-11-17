@@ -115,7 +115,7 @@ test('a direct record link restores the running indicator, reloads the timeline 
   window.history.replaceState(null, '', '/#record');
   render(<App source={{ kind: 'http', localWorkspace: true, read: async () => data }} />); await flush();
   expect(screen.getByText('屏幕记录中')).toBeVisible();
-  expect(screen.getByRole('region', { name: /^大任务进度/ })).toBeVisible();
+  expect(screen.getByRole('region', { name: /^任务详情/ })).toBeVisible();
   expect(screen.queryByRole('button', { name: '屏幕记录' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '今天任务' })).not.toBeInTheDocument();
   const timeline = screen.getByRole('region', { name: '记录时间线' });

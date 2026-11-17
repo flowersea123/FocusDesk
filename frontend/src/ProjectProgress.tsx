@@ -21,15 +21,10 @@ type Props = {
   onChange: () => void;
 };
 
-export function updateProject(input: {revision:string; taskId:string; action:string; sections?:string[]; section?:string; done?:boolean}) {
+export function updateProject(input: {revision:string; taskId:string; action:string; sections?:string[]; section?:string; done?:boolean; text?:string}) {
   return checkpointRequest<ProgressResponse>('/api/v1/project-progress', {
     method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(input),
   });
-}
-
-function ProgressMeter({ name, value, text }: { name: string; value: number; text: string }) {
-  return <div className="project-meter" role="progressbar" aria-label={name} aria-valuemin={0} aria-valuemax={100}
-    aria-valuenow={value} aria-valuetext={text}><span style={{ width: value + '%' }} /></div>;
 }
 
 export default function ProjectProgress({ overview, selected, manual, onFollow, refreshKey, recorder, data, onData, onChange }: Props) {
@@ -78,7 +73,6 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
   }
   const bookmark = status?.readingBookmark;
   const position = status?.readingPosition;
-  const readingPercent = position ? Math.round(100 * position.page / position.total) : null;
   const section = position?.section || bookmark?.current.section;
   const confirm = bookmark?.previous && !bookmark.previous.confirmed ? bookmark.previous :
     bookmark?.current && !bookmark.current.confirmed ? bookmark.current : null;
@@ -91,7 +85,7 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
   if (!tasks.length && !error) return null;
 
   return <section className="project-progress" id="project-progress" tabIndex={-1} aria-labelledby="project-progress-title">
-    <header><h3 id="project-progress-title">大任务进度{selected && <span> · {selected.title}</span>}</h3>
+    <header><h3 id="project-progress-title">任务详情{selected && <span> · {selected.title}</span>}</h3>
       {manual && <button type="button" className="project-follow" onClick={onFollow}>跟随识别结果</button>}
     </header>
     {(canTarget || (active && target)) && <div className="project-selection">
@@ -100,14 +94,13 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
       {active && target && <div className="project-target"><small>正用「{target.title}」核对截图</small>
         <button type="button" disabled={!!recorder.pending} onClick={() => void recorder.change('target', null)}>恢复自动识别</button></div>}
     </div>}
-    {!current && tasks.length > 0 && <p>点击上方任务名称可查看已有进度。</p>}
-    {current && !status && !error && <p role="status">正在读取任务进度…</p>}
+    {!current && tasks.length > 0 && <p>点击上方任务名称可查看任务详情。</p>}
+    {current && !status && !error && <p role="status">正在读取任务记录…</p>}
     {status && <>
       {(position || section) && <div className="project-reading">
         <h3>阅读位置</h3>
-        {position && readingPercent !== null ? <>
-          <div className="project-meter-label"><strong>第 {position.page} / {position.total} 页</strong><b>{readingPercent}%</b></div>
-          <ProgressMeter name={status.title + '阅读位置'} value={readingPercent} text={`第 ${position.page} 页，共 ${position.total} 页，${readingPercent}%`} />
+        {position ? <>
+          <strong>第 {position.page} / {position.total} 页</strong>
           {section && <p>{position.section ? '读到 ' : '最近章节书签　'}<strong>{section}</strong></p>}
         </> : <div className="project-reading-section">读到 <strong>{section}</strong></div>}
         {(position?.document || bookmark?.current.document) && <p className="project-document">{position?.document || bookmark?.current.document}</p>}
@@ -123,16 +116,6 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
       </details>}
       {latest && <div className="project-observation"><small>最近截图依据 · <time dateTime={latest.capturedAt}>{time(latest.capturedAt)}</time> · {checkpointSourceLabel(latest.source)}</small>
         <p>{latest.summary}</p></div>}
-      {status.percent !== null && <div className="project-completion">
-        <h3>{status.total !== null ? '步骤完成度' : '整体完成度'}</h3>
-        <div className="project-meter-label">
-          <strong>{status.total !== null ? `${status.completed.length} / ${status.total} 个步骤已完成` : '截图中的完成比例'}</strong>
-          <b>{status.percent}%</b>
-        </div>
-        <ProgressMeter name={status.title + '整体进度'} value={status.percent} text={status.percent + '% 已完成'} />
-        {status.evidence && <p>{checkpointSourceLabel(status.evidenceSource)} · {status.evidence}</p>}
-      </div>}
-      {!position && !section && status.percent === null && !latest && !status.paperVisits && <p>暂无进度记录。识别到页码、章节或明确的完成标记后会自动更新。</p>}
       {plan.length > 0 && <ol className="project-steps" aria-label="完成步骤">{plan.map(part => {
         const done = status.completed.includes(part);
         const next = part === status.remaining[0];
@@ -143,14 +126,11 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
           <small>{edited?.done ? '已完成 · 手动勾选' : done ? '已完成 · ' + checkpointSourceLabel(status.automaticParts?.includes(part) ? 'automatic' : 'manual') : next ? '下一步' : '待完成'}</small>
         </li>;
       })}</ol>}
-      {!plan.length && status.completed.length > 0 && <><h3>已完成的部分</h3>
-        <ul>{status.completed.map(part => <li key={part}><span aria-hidden="true">✓</span> {part.split('|')[0].trim()}
-          <small> {checkpointSourceLabel(status.automaticParts?.includes(part) ? 'automatic' : 'manual')}</small></li>)}</ul></>}
       <div className="project-actions"><button type="button" disabled={busy} onClick={()=>change(pinned?'unpin':'pin')}>{pinned?'恢复电子屏总览':'在电子屏显示此任务'}</button>
         <button type="button" disabled={busy} onClick={()=>setDraft({id:current,revision:data!.config.revision,text:plan.join('\n')})}>{plan.length?'编辑步骤清单':'定义完成步骤'}</button></div>
       {pinned && <small>已选为电子屏内容 · <a href="/simulator" target="_blank" rel="noreferrer">查看模拟屏 ↗</a></small>}
       {draft?.id===current && <div className="project-plan"><label htmlFor="project-plan-list">完成这个任务需要哪些步骤？</label>
-        <p>每行一个等权步骤，最多 24 个。中文可加设备短名，例如「实验设计 | Experiment design」。留空时采用截图中的明确比例。</p>
+        <p>每行一个步骤，最多 24 个。中文可加设备短名，例如「实验设计 | Experiment design」。</p>
         <textarea id="project-plan-list" rows={5} value={draft.text} onChange={e=>setDraft({...draft,text:e.target.value})}/>
         <div className="project-actions"><button type="button" onClick={()=>setDraft({...draft,text:paper.join('\n')})}>使用论文章节示例</button>
           <button type="button" onClick={()=>change('plan')} disabled={busy}>保存步骤</button><button type="button" onClick={()=>setDraft(null)}>取消</button></div></div>}

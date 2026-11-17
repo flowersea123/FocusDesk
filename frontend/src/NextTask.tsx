@@ -69,7 +69,7 @@ export default function NextTask({ overview, next, saving, onStart, onInspect, o
       {task && next.action && <p className="next-task-description">{next.action}</p>}
       <small className="next-task-reason">{next.reason}</small>
       {task ? <button type="button" className="next-task-action" disabled={saving}
-        onClick={() => canStart ? void start() : onInspect(task)}>{canStart ? '专注这项任务 · 25 分钟' : '查看任务进度'}</button> :
+        onClick={() => canStart ? void start() : onInspect(task)}>{canStart ? '专注这项任务 · 25 分钟' : '查看任务详情'}</button> :
         <button type="button" className="next-task-action" onClick={() => next.appName ? onApp(next.appName) : onHistory()}>{next.appName ? '查看应用活动' : '打开记录时间线'}</button>}
     </> : <p className="next-task-description">{overview.tasks.length ? '清单里的任务都已完成。' : '添加一项待办，或开始记录当前工作，下一步会显示在这里。'}</p>}
     {failure && <p role="alert">{failure}</p>}
