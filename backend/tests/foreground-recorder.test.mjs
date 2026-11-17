@@ -114,10 +114,14 @@ test('a settled page turn within the same PDF skips the animation backoff, movin
 
 test('model downtime leaves a labeled title record for each new page, without task credit', async t => {
   let current = frame('First page');
+  let available = false;
   const saved = [];
   const recorder = createForegroundRecorder({ platform: 'linux', support: supported, pollMs: 3, samePageMs: 5,
     open: async () => ({ capture: async () => current, close() {} }),
-    analyze: async () => { throw new WriteRequestError(503, 'MODEL_UNAVAILABLE', 'offline'); },
+    analyze: async () => {
+      if (!available) throw new WriteRequestError(503, 'MODEL_UNAVAILABLE', 'offline');
+      return { taskId: null, summary: 'A page is visible.', nextStep: '', progress: null };
+    },
     save: async row => { saved.push(row); } });
   t.after(() => recorder.close());
   recorder.start();
@@ -130,6 +134,11 @@ test('model downtime leaves a labeled title record for each new page, without ta
   assert.deepEqual(saved.map(r => r.pageTitle), ['First page', 'Second page']);
   assert.match(saved[0].summary, /前台页面标题为「First page」/);
   assert.ok(saved.every(r => r.detailSource === 'window-title' && !r.progress && r.taskId === null));
+  assert.match((await recorder.readStatus()).message, /只记录窗口标题/);
+  available = true;
+  current = frame('Third page');
+  await until(() => saved.length === 3);
+  assert.equal((await recorder.readStatus()).message, '');
 });
 
 test('unsupported desktops and permission errors stay stopped; cancelling startup disposes its late helper', async () => {

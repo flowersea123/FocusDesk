@@ -5,9 +5,50 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { CalendarSnapshot } from '../../contracts/calendar.ts';
 import type { DailyOverview } from '../../contracts/daily-overview.ts';
 import { validSections, projectStatus, type ProjectPlan, type ProgressConfig, type ProjectStatus } from '../../contracts/project-progress.ts';
+import type { ScreenCheckpoint } from '../../contracts/screen-checkpoint.ts';
+import { paperVisitOwner } from './reading-attribution.ts';
 import { CheckpointError, createCheckpointStore } from './checkpoint-store.ts';
 import { privateJson, privateInput, checkPrivateRequest } from './checkpoint-http.ts';
 import { WriteRequestError } from './write-policy.ts';
+
+// Recognize article-like titles on paper hosts. Author, discovery and search pages are too broad.
+function paperWindowTitle(row: ScreenCheckpoint): string | undefined {
+  if (row.source !== 'automatic' || !row.pageTitle) return;
+  const match = /^(.+?)\s+[|｜–—-]\s+(?:alphaXiv|arXiv(?:\.org)?)$/iu.exec(row.pageTitle.trim());
+  if (!match) return;
+  const title = match[1].trim();
+  if (/^(?:search|browse|explore|authors?|搜索|探索|首页|热门|作者)(?:\b|[\s:：]|$)/iu.test(title)) return;
+  const words = title.match(/\p{L}+/gu) ?? [];
+  if (/\[\d{4}\.\d{4,5}(?:v\d+)?\]/u.test(title) || words.length >= 5 ||
+      (/[:：]/u.test(title) && words.length >= 3) || /\p{Script=Han}{10}/u.test(title)) return title;
+}
+
+function addPaperVisits(statuses: ProjectStatus[], overview: DailyOverview, rows: ScreenCheckpoint[], now: number) {
+  const clock = new Intl.DateTimeFormat('sv-SE', { timeZone: overview.timezone, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23' });
+  const date = clock.format(now).slice(0, 10);
+  const visits = new Map<string, { minutes:Set<number>; documents:Map<string,string>; count:number }>();
+  for (const row of rows) {
+    const captured = Date.parse(row.capturedAt);
+    if (captured > now) continue;
+    const title = paperWindowTitle(row);
+    if (!title) continue;
+    const at = clock.format(captured);
+    if (at.slice(0, 10) !== date) continue;
+    const owner = row.taskId ? overview.tasks.find(task => task.id === row.taskId) : paperVisitOwner(title, overview.tasks);
+    if (!owner) continue;
+    const visit = visits.get(owner.id) ?? { minutes:new Set<number>(), documents:new Map<string,string>(), count:0 };
+    visit.minutes.add(Number(at.slice(11, 13)) * 60 + Number(at.slice(14, 16)));
+    visit.count++;
+    if ((visit.documents.get(title) ?? '') < row.capturedAt) visit.documents.set(title,row.capturedAt);
+    visits.set(owner.id, visit);
+  }
+  for (const status of statuses) {
+    const visit = visits.get(status.taskId);
+    if (!visit) continue;
+    const recent = [...visit.documents].sort((a,b) => b[1].localeCompare(a[1])).slice(0,5).map(([title,at]) => ({title,at}));
+    status.paperVisits = { date, count:visit.count, documents:visit.documents.size, minutes:[...visit.minutes].sort((a,b)=>a-b), recent };
+  }
+}
 
 function validPlan(plan: ProjectPlan) {
   if (typeof plan?.taskId !== 'string' || !validSections(plan.sections)) return false;
@@ -18,7 +59,7 @@ function validPlan(plan: ProjectPlan) {
 }
 
 export function createProjectProgress(dataPath: string, checkpoints: ReturnType<typeof createCheckpointStore>, load: () => Promise<DailyOverview>,
-  loadCalendar?: () => Promise<CalendarSnapshot>) {
+  loadCalendar?: () => Promise<CalendarSnapshot>, now = Date.now) {
   const filePath = dataPath + '.progress.json';
   let writes: Promise<unknown> = Promise.resolve();
   async function read(): Promise<ProgressConfig> {
@@ -95,6 +136,7 @@ export function createProjectProgress(dataPath: string, checkpoints: ReturnType<
         const config = await read();
         const { records } = await checkpoints.read();
         const statuses = overview.tasks.map(task => projectStatus(task,config.plans.find(p=>p.taskId===task.id),records));
+        addPaperVisits(statuses, overview, records, now());
         const pinned = statuses.findIndex(status => status.taskId === config.pinned);
         if (pinned >= 0) statuses[pinned] = await withCalendarReminder(statuses[pinned], overview);
         privateJson(response,200,{ config, statuses });

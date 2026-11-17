@@ -46,7 +46,11 @@ function readingTarget(title: string) {
   const clean = normalize(title).replace(/[《》<>"“”‘’]/gu, '').trim();
   const action = /^(?:read(?:ing)?|review|study)\s+(.+)$|^(?:阅读|精读|研读|读|看)\s*(.+)$/u.exec(clean);
   if (!action) return;
-  const object = (action[1] ?? action[2]).replace(/^(?:a|an|the|one|this|my)\s+|^(?:一篇|这篇|一份)/u, '').trim();
+  // A second deliverable may follow a generic reading action in a compound task.
+  const clauses = (action[1] ?? action[2]).split(/[,，;；、]/u);
+  const extraDeliverable = /^(?:整理|梳理|总结|制作|绘制|写|做|输出|prepare\b|summari[sz]e\b|make\b|create\b)/iu;
+  const readingClause = clauses.length > 1 && extraDeliverable.test(clauses[1].trim()) ? clauses[0] : (action[1] ?? action[2]);
+  const object = readingClause.replace(/^(?:a|an|the|one|this|my)\s+|^(?:一篇|这篇|一份)/u, '').trim();
   const paper = '(?:(?:(?:research|academic|scientific|journal|conference)\\s+)*(?:papers?|articles?)|(?:学术|研究|科研)?(?:论文|文献))';
   if (new RegExp('^' + paper + '$', 'u').test(object)) return { generic: true, name: '' };
   const name = object.replace(new RegExp('^' + paper + '(?:\\s*[:：—-]\\s*|\\s+)|(?:\\s+|(?=[论文学术]))' + paper + '$', 'u'), '');
@@ -60,6 +64,18 @@ function documentNamesMatch(name: string, document: string): boolean {
   // Single abbreviated names must be whole words ("BERT" cannot match "RoBERTa").
   if (/[\p{Script=Han}]/u.test(name)) return name.length >= 3 && full.includes(name);
   return name.length >= 3 && (' ' + full + ' ').includes(' ' + name + ' ');
+}
+
+/** Window titles provide a browsing clue only. Multiple matching tasks leave it unassigned. */
+export function paperVisitOwner(document: string, tasks: readonly ObservationTask[]): ObservationTask | undefined {
+  const named: ObservationTask[] = [], generic: ObservationTask[] = [];
+  for (const task of tasks) {
+    const target = readingTarget(task.title);
+    if (target?.generic) generic.push(task);
+    else if (target && documentNamesMatch(target.name, document)) named.push(task);
+  }
+  const matches = named.length ? named : generic;
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 const codeKind: Record<string,string> = { '类':'class', '函数':'function', '接口':'interface', '结构体':'struct', '枚举':'enum' };

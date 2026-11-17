@@ -4,9 +4,10 @@ import { validSections, type ProgressConfig, type ProjectStatus, type ReadingLoc
 import { checkpointSourceLabel } from '../../contracts/screen-checkpoint';
 import { checkpointRequest, confirmReadingBookmark } from './CheckpointWorkspace';
 import type { RecorderControls } from './ForegroundRecord';
+import { workspaceClock } from './data/workspace-clock';
 import './project-progress.css';
 
-type ProgressResponse = { config:ProgressConfig; statuses:ProjectStatus[] };
+export type ProgressResponse = { config:ProgressConfig; statuses:ProjectStatus[] };
 const paper = ['Introduction','Related Work','Method','Results','Discussion'];
 type Props = {
   overview: DailyOverview | null;
@@ -15,7 +16,8 @@ type Props = {
   onFollow: () => void;
   refreshKey: number;
   recorder: RecorderControls;
-  onPinned: (status: ProjectStatus | null, revision:string) => void;
+  data: ProgressResponse | null;
+  onData: (value: ProgressResponse) => void;
   onChange: () => void;
 };
 
@@ -30,8 +32,7 @@ function ProgressMeter({ name, value, text }: { name: string; value: number; tex
     aria-valuenow={value} aria-valuetext={text}><span style={{ width: value + '%' }} /></div>;
 }
 
-export default function ProjectProgress({ overview, selected, manual, onFollow, refreshKey, recorder, onPinned, onChange }: Props) {
-  const [data,setData]=useState<ProgressResponse|null>(null);
+export default function ProjectProgress({ overview, selected, manual, onFollow, refreshKey, recorder, data, onData, onChange }: Props) {
   const [draft,setDraft]=useState<{id:string; revision:string; text:string}|null>(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
@@ -48,8 +49,8 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
   const plan = currentPlan?.sections ?? [];
   const accept=useCallback((value:ProgressResponse)=>{
     if (!Array.isArray(value.statuses) || !value.config || !Array.isArray(value.config.plans)) throw new Error('本机 Hub 的进度接口不可用。');
-    setData(value);onPinned(value.statuses.find(s=>s.taskId===value.config.pinned) ?? null, value.config.revision);
-  },[onPinned]);
+    onData(value);
+  },[onData]);
   const load=useCallback(async()=>{
     const request=++requests.current;
     try {const value=await checkpointRequest<ProgressResponse>('/api/v1/project-progress');
@@ -112,6 +113,14 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
         {(position?.document || bookmark?.current.document) && <p className="project-document">{position?.document || bookmark?.current.document}</p>}
         {confirm && <button type="button" disabled={busy} onClick={() => void confirmRead(confirm)}>确认已读 {confirm.section}</button>}
       </div>}
+      {status.paperVisits && <details className="project-paper-visits">
+        <summary>论文访问记录 · {status.paperVisits.documents} 篇</summary>
+        <p>{status.paperVisits.date} · {status.paperVisits.count} 次窗口记录{!position && ' · 未记录页码'}</p>
+        <ul aria-label="最近访问的论文">{status.paperVisits.recent.map(visit => <li key={visit.title}>
+          <time dateTime={visit.at}>{workspaceClock(timezone).format(new Date(visit.at))}</time>
+          <span>{visit.title}</span>
+        </li>)}</ul>
+      </details>}
       {latest && <div className="project-observation"><small>最近截图依据 · <time dateTime={latest.capturedAt}>{time(latest.capturedAt)}</time> · {checkpointSourceLabel(latest.source)}</small>
         <p>{latest.summary}</p></div>}
       {status.percent !== null && <div className="project-completion">
@@ -123,7 +132,7 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
         <ProgressMeter name={status.title + '整体进度'} value={status.percent} text={status.percent + '% 已完成'} />
         {status.evidence && <p>{checkpointSourceLabel(status.evidenceSource)} · {status.evidence}</p>}
       </div>}
-      {!position && !section && status.percent === null && !latest && <p>暂无进度记录。识别到页码、章节或明确的完成标记后会自动更新。</p>}
+      {!position && !section && status.percent === null && !latest && !status.paperVisits && <p>暂无进度记录。识别到页码、章节或明确的完成标记后会自动更新。</p>}
       {plan.length > 0 && <ol className="project-steps" aria-label="完成步骤">{plan.map(part => {
         const done = status.completed.includes(part);
         const next = part === status.remaining[0];

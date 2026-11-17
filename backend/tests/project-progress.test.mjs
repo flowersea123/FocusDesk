@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -83,4 +83,58 @@ test('checkpoint evidence drives a pinned device view and unpin restores the dai
   const sections = Array.from({ length: 24 }, (_, i) => '文'.repeat(60) + i);
   assert.ok(Buffer.byteLength(JSON.stringify(sections)) > 4096);
   assert.equal((await write(endpoint, 'PUT', { ...plan, sections, revision: config.revision })).status, 200);
+});
+
+test('replays paper-window visits for a matching reading task without inventing completion or time spent', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'focusdesk-paper-visits-'));
+  const dataPath = path.join(dir, 'tasks.json');
+  const reading = { id:'papers', title:'读论文，整理出一个脉络，思维导图，ppt', status:'todo', due_at:null };
+  const saveTasks = tasks => writeFile(dataPath, JSON.stringify({date:'2026-11-13', timezone:'Asia/Shanghai', tasks}));
+  await saveTasks([reading]);
+  const paper = 'Revisiting How People Resume Interrupted Tasks';
+  const capture = (when, title) => ({
+    id:randomUUID(), source:'automatic', taskId:null, appName:'Google Chrome', detailSource:'window-title',
+    capturedAt:when, pageTitle:title + ' | alphaXiv', summary:'窗口标题', nextStep:'', progress:null,
+  });
+  const evidence = JSON.stringify({version:1, records:[
+    capture('2026-11-16T15:59:00.000Z', paper), // Yesterday in Shanghai.
+    capture('2026-11-16T16:01:00.000Z', paper), // Today in Shanghai.
+    capture('2026-11-17T02:43:05.000Z', paper),
+    capture('2026-11-17T02:43:55.000Z', paper),
+    capture('2026-11-17T02:44:00.000Z', '搜索'),
+    capture('2026-11-17T02:44:10.000Z', 'Author Profile'),
+    capture('2026-11-17T03:00:00.000Z', 'Search results for a paper on activity'),
+    capture('2026-11-17T09:00:00.000Z', paper), // Future record relative to the Hub clock.
+  ]});
+  const history = dataPath + '.checkpoints.json';
+  await writeFile(history, evidence);
+  const server = createDemoServer({dataPath, distPath:dir, now:()=>Date.parse('2026-11-17T06:00:00Z')});
+  server.listen(0,'127.0.0.1');
+  await once(server,'listening');
+  t.after(async () => {
+    server.closeAllConnections();
+    await new Promise(resolve=>server.close(resolve));
+    await rm(dir,{recursive:true,force:true});
+  });
+  const endpoint = 'http://127.0.0.1:' + server.address().port + '/api/v1/project-progress';
+  const statuses = async () => {
+    const result = await fetch(endpoint);
+    assert.equal(result.status,200);
+    return (await result.json()).statuses;
+  };
+  const [status] = await statuses();
+  assert.deepEqual(status.paperVisits, {date:'2026-11-17',count:3,documents:1,minutes:[1,643],
+    recent:[{title:paper,at:'2026-11-17T02:43:55.000Z'}]});
+  assert.equal(status.percent,null);
+  assert.equal(status.readingPosition,undefined);
+  assert.deepEqual(status.completed,[]);
+  // Ambiguous generic matches have no owner. A named match takes priority.
+  const other = {...reading,id:'other',title:'Read academic papers'};
+  await saveTasks([reading,other]);
+  assert.ok((await statuses()).every(item=>!item.paperVisits));
+  await saveTasks([reading,{...other,title:'Read Interrupted Tasks'}]);
+  const [generic,named] = await statuses();
+  assert.equal(generic.paperVisits,undefined);
+  assert.deepEqual(named.paperVisits,status.paperVisits);
+  assert.equal(await readFile(history,'utf8'),evidence);
 });

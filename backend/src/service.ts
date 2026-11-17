@@ -92,7 +92,7 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
       reviewUnavailable = true;
     }
   }
-  const projects = createProjectProgress(dataPath, checkpoints, () => loader.load(), () => loader.readCalendar());
+  const projects = createProjectProgress(dataPath, checkpoints, () => loader.load(), () => loader.readCalendar(), now);
   const normalizeTitle = (title: string) => title.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
   const screenObservation = createScreenObservationService({
     getTasks: async () => (await loader.load()).tasks,

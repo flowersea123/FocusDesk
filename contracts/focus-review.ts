@@ -2,6 +2,7 @@ import { checkpointSourceLabel, type CheckpointSource } from './screen-checkpoin
 
 export interface ReviewObservation {
   source?: CheckpointSource;
+  pageTitle?: string;
   appName?: string;
   taskId?: string | null;
   id: string;

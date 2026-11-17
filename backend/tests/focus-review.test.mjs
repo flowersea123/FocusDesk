@@ -175,10 +175,11 @@ test('foreground samples persist separately from timers, clip to the requested d
   await review.flushAppSpans();
   const next = make();
   const result = await next.read(undefined, 'Asia/Shanghai', [{ id: 'old', at: new Date(localMidnight + 20000).toISOString(),
-    taskId: 'lab', appName: 'Reader', summary: 'A single screen observation.' }]);
+    taskId: 'lab', appName: 'Reader', pageTitle: 'Example | alphaXiv', summary: 'A single screen observation.' }]);
   assert.deepEqual(result.appSessions.map(s => [s.appName, s.seconds]), [['Editor', 5], ['Browser', 8]]);
   assert.match(result.summary, /Browser.*8 秒/);
   assert.equal(result.observations[0].appName, 'Reader');
+  assert.equal(result.observations[0].pageTitle, 'Example | alphaXiv');
   assert.equal(result.observations[0].taskId, 'lab');
   assert.equal(result.totalSeconds, 0);
   const previous = await next.read('2026-11-16');

@@ -4,6 +4,7 @@ import type { Task } from '../../contracts/daily-overview';
 import type { FocusReview } from '../../contracts/focus-review';
 import { groupAiConversations, type AiConversation } from '../../contracts/ai-conversations';
 import { checkpointSourceLabel } from '../../contracts/screen-checkpoint';
+import ActivityOverview from './ActivityOverview';
 import './activity-timeline.css';
 
 interface Props {
@@ -16,8 +17,10 @@ interface Props {
   onRetry?: () => void;
 }
 
-type Entry = { id: string; kind: 'focus' | 'app' | 'ai' | 'observation'; start: number; end: number; seconds: number; detail: string; source?: string; observationGroup?: string; taskId?: string | null };
-type Track = { id: string; name: string; kind: 'focus' | 'app' | 'ai'; entries: Entry[]; seconds: number; conversation?: AiConversation };
+export type TimelineEntry = { id: string; kind: 'focus' | 'app' | 'ai' | 'observation'; start: number; end: number; seconds: number; detail: string; source?: string; pageTitle?:string; observationGroup?: string; taskId?: string | null };
+type Entry = TimelineEntry;
+export type TimelineTrack = { id: string; name: string; kind: 'focus' | 'app' | 'ai'; entries: Entry[]; seconds: number; conversation?: AiConversation };
+type Track = TimelineTrack;
 const aiLabels = {running:'进行中', finished:'已结束', interrupted:'观测中断'};
 const measureLabels = {focus:'计时', app:'前台', ai:'AI 活动'} as const;
 const HOUR = 3_600_000;
@@ -107,7 +110,7 @@ function buildTracks(review: FocusReview, day: ReturnType<typeof dayBounds>) {
       previous = {at, name, group, task:o.taskId};
     } else previous = undefined;
     add(name ? 'app:' + name : 'observations', name || '屏幕观察', 'app', {id:'o' + o.id, kind:'observation',
-      start:at, end:at, seconds:0, observationGroup:group, detail:o.summary, source:checkpointSourceLabel(o.source), taskId:o.taskId});
+      start:at, end:at, seconds:0, pageTitle:o.pageTitle, observationGroup:group, detail:o.summary, source:checkpointSourceLabel(o.source), taskId:o.taskId});
   }
   const rows = [...tracks.values()];
   for (const row of rows) row.entries.sort((a,b) => a.start - b.start || a.id.localeCompare(b.id));
@@ -185,11 +188,12 @@ function Chart({review, tasks, revealApp, handled, historical}: {
     minute:'2-digit', second:'2-digit', hourCycle:'h23'}), [review.timezone]);
   const subsecond = useMemo(() => new Intl.DateTimeFormat('zh-CN', {timeZone:review.timezone, hour:'2-digit',
     minute:'2-digit', second:'2-digit', fractionalSecondDigits:3, hourCycle:'h23'}), [review.timezone]);
+  const [detailed, setDetailed] = useState(false);
   const [all, setAll] = useState(false);
   const [zoom, setZoom] = useState<{from:number; to:number} | null>(null);
   const resetZoom = useRef<HTMLButtonElement | null>(null);
   const [limit, setLimit] = useState(12);
-  const [selection, setSelection] = useState<{rowId:string; ids?:string[]; excerpts?:boolean} | null>(null);
+  const [selection, setSelection] = useState<{rowId:string; ids?:string[]; excerpts?:boolean; range?:{start:number;end:number}; heading?:string} | null>(null);
   const opener = useRef<HTMLButtonElement | null>(null);
   const detailHeading = useRef<HTMLHeadingElement | null>(null);
   const ruler = useRef<HTMLDivElement | null>(null);
@@ -224,7 +228,7 @@ function Chart({review, tasks, revealApp, handled, historical}: {
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [hasRows]);
+  }, [hasRows, detailed]);
   if (!hasRows) return <p className="activity-empty">{historical ? '这一天没有活动记录。' : '今天还没有活动记录。开启记录或开始一次专注计时后，时间轴会出现在这里。'}</p>;
 
   let earliest = day.end, latest = day.begin;
@@ -256,9 +260,13 @@ function Chart({review, tasks, revealApp, handled, historical}: {
       evidence:placeMarks(windows, start, span, plotWidth), stamps:placeMarks(instants, start, span, plotWidth)};
   });
   const enlarged = plots.some(p => [...p.durations, ...p.evidence].some(g => g.marks.some(m => m.enlarged)));
-  const current = visibleRows.find(row => row.id === selection?.rowId);
+  const current = rows.find(row => row.id === selection?.rowId);
   const selectedIds = selection?.ids && new Set(selection.ids);
-  const details = current?.entries.filter(entry => !selectedIds || selectedIds.has(entry.id)) ?? [];
+  const details = current?.entries.filter(entry => !selectedIds || selectedIds.has(entry.id)).map(entry => {
+    if (!selection?.range || entry.kind !== 'app') return entry;
+    const {start,end}=selection.range;
+    return {...entry,start,end,seconds:Math.min(entry.seconds,(end-start)/1000)};
+  }) ?? [];
   const selectedRanges = selection?.ids ? observationRanges(details.filter(e => e.kind === 'observation')) : [];
   const selectedFrom = details.length ? Math.min(...details.map(e => e.start)) : 0;
   const selectedTo = details.length ? Math.max(...details.map(e => e.end)) : 0;
@@ -272,25 +280,29 @@ function Chart({review, tasks, revealApp, handled, historical}: {
     const left = Math.max(day.begin, Math.min(day.end - zoomLength, Math.floor((selectedFrom + selectedTo - zoomLength) / 2)));
     setZoom({from:left, to:left + zoomLength});
   }
-  function select(button: HTMLButtonElement, rowId: string, entries?: Entry[], excerpts = false) {
+  function select(button: HTMLButtonElement, rowId: string, entries?: Entry[], excerpts = false, range?:{start:number;end:number}, heading?:string) {
     opener.current = button;
     setLimit(12);
-    setSelection({rowId, excerpts, ids:entries?.map(e => e.id)});
+    setSelection({rowId, excerpts, range, heading, ids:entries?.map(e => e.id)});
   }
   function close() {
     setSelection(null);
     opener.current?.focus({preventScroll:true});
   }
   return <>
-    <div className="activity-legend">
+    <div className="timeline-mode" role="group" aria-label="时间轴视图">
+      <button type="button" aria-pressed={!detailed} onClick={()=>{setDetailed(false);setSelection(null);}}>活动总览</button>
+      <button type="button" aria-pressed={detailed} onClick={()=>{setDetailed(true);setSelection(null);}}>详细轨道</button>
+    </div>
+    {detailed && <div className="activity-legend">
       <span><i className="activity-key-focus" />任务计时</span><span><i className="activity-key-app" />应用前台</span>
       {ai.length > 0 && <span><i className="activity-key-ai" />AI 并行活动</span>}
       {review.observations.length > 0 && <span><i className="activity-key-shot" />截图观察范围</span>}
       <span className="activity-latest-label"><i/>最近记录 <time dateTime={new Date(latest).toISOString()}>{time(latest)}</time></span>
-    </div>
+    </div>}
     {zoom && <div className="activity-zoom"><span>局部时间轴 {time(start,true)}–{time(end,true)} · 行内时长为全天累计</span>
       <button className="activity-more" ref={resetZoom} onClick={() => { setZoom(null); detailHeading.current?.focus({preventScroll:true}); }}>返回全天</button></div>}
-    <div className="activity-grid">
+    {detailed ? <><div className="activity-grid">
       <span className="activity-axis-heading">时间</span>
       <div className="activity-axis" ref={ruler} aria-label="时间刻度">
         {(plotWidth < 180 ? [0,1] : plotWidth < 400 ? [0,.5,1] : [0,.25,.5,.75,1]).map(fraction => <span key={fraction} style={{left:(100 * fraction) + '%'}}>{time(start + fraction * span)}</span>)}
@@ -330,7 +342,9 @@ function Chart({review, tasks, revealApp, handled, historical}: {
                 key={entries[0].id} aria-label={label} title={label} aria-controls={detailsId}
                 style={{'--lane':(isEvidence && durations.length ? 1 : 0) + (onlyBadges && evidence.length ? 1 : 0),
                   left:(100 * left / plotWidth) + '%', width:(100 * (right - left) / plotWidth) + '%'} as CSSProperties}
-                onClick={e => select(e.currentTarget, row.id, entries)}>
+                onClick={e => select(e.currentTarget, row.id, row.kind === 'app' && !isEvidence
+                  ? [...entries, ...points.filter(point => marks.some(mark => point.start >= mark.from && point.start <= mark.to))]
+                  : entries)}>
                 {chat?.linked ? <>
                   <i className="activity-chat-envelope" aria-hidden="true" />
                   {chat.windows.map(window => {
@@ -362,10 +376,12 @@ function Chart({review, tasks, revealApp, handled, historical}: {
     {enlarged && <p className="activity-scale-note">短时段已加宽显示，点选可查看准确起止时间。</p>}
     {rows.length > shownTracks && <button type="button" className="activity-more" aria-expanded={all} onClick={() => setAll(!all)}>
       {all ? '收起活动行' : '显示另外 ' + (rows.length - shownTracks) + ' 行'}</button>}
+    </> : <ActivityOverview rows={rows} tasks={tasks} start={start} end={end} latest={latest} time={time} ruler={ruler} plotWidth={plotWidth}
+        duration={formatActivityDuration} select={select} detailsId={detailsId}/>}
     <div id={detailsId} className={details.length ? 'activity-details' : undefined}
       onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); close(); } }}>
       {current && details.length > 0 && <>
-        <header><h3 tabIndex={-1} ref={detailHeading}>{current.name} · {selectedChat?.linked ? selectedChat.turns.length + ' 轮对话' : details.length + ' 条记录'}</h3>
+        <header><h3 tabIndex={-1} ref={detailHeading}>{selection?.heading ?? current.name} · {selectedChat?.linked ? selectedChat.turns.length + ' 轮对话' : details.length + ' 条记录'}</h3>
           <button type="button" className="activity-more" onClick={close}>收起明细</button></header>
         {selection?.ids && !zoom && zoomLength < span && <button type="button" className="activity-more"
           onClick={zoomToSelection}>放大这个时段</button>}
@@ -418,7 +434,7 @@ export default function ActivityTimeline({review, tasks, revealApp, error, onRet
       disabled={!!recorder.pending || !!recorder.readError || state === 'stopping'}
       onClick={() => void recorder.change(aiOnly ? 'stop' : 'start-ai')}>{aiOnly ? '停止 AI 状态记录' : '仅记录 AI 状态'}</button>}
     {!historical && <details className="activity-setup"><summary>如何记录并行的 AI 活动</summary>
-      <p>「开始记录」会记录前台画面和 AI 状态。「仅记录 AI 状态」只读取轮次和生成信号，整个过程不截图。同一对话的多轮请求归在一行。对话主题和本机小结会随记录更新。</p>
+      <p>「开始记录」会记录前台画面和 AI 状态。「仅记录 AI 状态」只读取轮次和生成信号，整个过程不截图。总览按应用显示，详细轨道可逐个查看对话。对话主题和本机小结会随记录更新。</p>
       <p>ChatGPT 网页可通过 Chrome 或 Edge 扩展接入。<a href="/focusdesk-chatgpt.zip" download>下载扩展</a>，解压后在浏览器的扩展管理页打开开发者模式，选择「加载已解压的扩展程序」，再刷新 ChatGPT 标签页。Hub 使用自定义端口时，可在扩展选项中填写。</p>
       <p>扩展在记录期间读取当前对话的主题和简短消息摘录。本机模型据此生成小结；标签休眠或断连时，活动停在最后一次确认处。</p>
     </details>}

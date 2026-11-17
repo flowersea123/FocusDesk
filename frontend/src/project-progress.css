@@ -87,3 +87,10 @@
 .project-steps [data-state="done"] small { color:#386846; }
 .project-steps label { cursor:pointer; }
 .project-steps input { margin:0 7px 0 1px; vertical-align:middle; accent-color:var(--accent); }
+
+.project-paper-visits { margin: 12px 0; }
+.project-paper-visits summary { font-size: 13px; font-weight: 600; cursor: pointer; }
+.project-paper-visits p { font-size: 12px; color: var(--muted); }
+.project-paper-visits ul { display: grid; }
+.project-paper-visits li { display: grid; grid-template-columns: max-content 1fr; gap: 9px; padding: 3px 0; background: none; }
+.project-paper-visits time { font-variant-numeric: tabular-nums; color: var(--muted); }

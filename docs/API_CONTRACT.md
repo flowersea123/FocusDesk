@@ -268,3 +268,5 @@ Display schema display-1, layout goal-1, 4096-byte transport, 64 commands and dr
 `POST /api/v1/recorder` 支持 `start-ai` 开始仅 AI 模式、`start` 开始常规模式、`stop` 停止。`/api/v1/ai-browser` 仅接受本机扩展来源，并核对当前状态会话。旧扩展的三字段事件仍可用；新版可提交哈希对话与轮次标识、标题和简短消息摘录。设备及局域网接口不提供这些内容。
 
 开始仅 AI 模式的请求体为 `{"action":"start-ai"}`，状态中的 `mode` 为 `ai`；常规录制为 `screen`。扩展源码在 `extensions/chatgpt-activity`，运行 `python3 extensions/package-chatgpt.py` 更新工作台的离线下载包。
+
+本机每日回顾的 observation 可含前台窗口原文 pageTitle。任务进度返回的每个 status 可含 paperVisits，按工作台时区的当天提供日期 date、采样次数 count、不同论文标题数 documents、有采样的分钟索引 minutes（0–1439）和最近五个不同标题及最后观察时间 recent。阅读观察和记录的完成度分别计算。

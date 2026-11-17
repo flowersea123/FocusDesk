@@ -87,6 +87,7 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
     let retryTitleAt = 0;
     let retryStorageAt = 0;
     const storageNotice = '检查点已满，新的画面观察暂停保存。前台时长和已接入的 AI 记录继续；腾出空间后将在一分钟内重试。';
+    const titleNotice = '当前只记录窗口标题。读图恢复后，可识别画面里的论文页码。';
     const modelIssues = new Set(['MODEL_CONFIG', 'MODEL_UNAVAILABLE', 'MODEL_TIMEOUT', 'INVALID_OBSERVATION', 'INCOMPLETE_OBSERVATION', 'OBSERVATION_BUSY']);
 
     async function record({ frame, capturedAt, targetTaskId, generation }: Sample) {
@@ -126,6 +127,7 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
         status.savedCount++;
         status.lastSavedAt = capturedAt;
       }
+      if (!status.message || status.message === titleNotice) status.message = titleOnly ? titleNotice : '';
       if (generation === targetGeneration) {
         status.observedTaskId = row.taskId;
         status.observedAt = capturedAt;

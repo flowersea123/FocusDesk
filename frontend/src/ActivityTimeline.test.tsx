@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -12,10 +12,20 @@ const empty: FocusReview = {
 const paper = {taskId:'paper', title:'Read paper', from:'2026-11-16T01:00:00Z', to:'2026-11-16T01:25:00Z', seconds:1500, end:'expired' as const};
 const at = (minute: string) => '2026-11-16T01:' + minute + ':00.000Z';
 
+function renderDetailed(element: React.ReactElement) {
+  const view = render(element);
+  const switchView = () => {
+    const button = screen.queryByRole('button',{name:'详细轨道'});
+    if (button?.getAttribute('aria-pressed') === 'false') fireEvent.click(button);
+  };
+  switchView();
+  return {...view, rerender(next:React.ReactElement) { view.rerender(next); switchView(); }};
+}
+
 describe('ActivityTimeline', () => {
   it('plots both kinds of intervals on one time scale, keeps their time separate, and exposes co-timed screenshots', async () => {
     const user = userEvent.setup();
-    render(<ActivityTimeline tasks={[{id:'paper',title:'Read paper'}]} review={{ ...empty,
+    renderDetailed(<ActivityTimeline tasks={[{id:'paper',title:'Read paper'}]} review={{ ...empty,
       totalSeconds:1500, sessions:[paper], appSessions:[{appName:'Reader',from:at('10'),to:at('20'),seconds:600}],
       observations:[{id:'one',appName:'Reader',source:'automatic',at:at('10'),summary:'First page',taskId:'paper'},
         {id:'two',appName:'Reader',at:at('10'),summary:'Second image'},
@@ -43,7 +53,7 @@ describe('ActivityTimeline', () => {
   it('clips intervals to the Shanghai calendar day and omits neighbouring dates including the next midnight', async () => {
     const user = userEvent.setup();
     const begin = '2026-11-15T16:00:00Z', end = '2026-11-16T16:00:00Z';
-    render(<ActivityTimeline review={{...empty, sessions:[{...paper,from:'2026-11-15T15:55:00Z',to:'2026-11-15T16:10:00Z',seconds:900}],
+    renderDetailed(<ActivityTimeline review={{...empty, sessions:[{...paper,from:'2026-11-15T15:55:00Z',to:'2026-11-15T16:10:00Z',seconds:900}],
       appSessions:[{appName:'Editor',from:'2026-11-16T15:58:00Z',to:'2026-11-16T16:10:00Z',seconds:720}],
       observations:[{id:'past',at:'2026-11-15T15:59:59Z',summary:'Yesterday',appName:'Invisible'},
         {id:'begin',at:begin,summary:'First point'}, {id:'end',at:end,summary:'Tomorrow',appName:'Invisible'}]}} />);
@@ -61,7 +71,7 @@ describe('ActivityTimeline', () => {
     const user = userEvent.setup();
     const points = Array.from({length:36}, (_,i) => ({id:'p'+i,at:at('10'),summary:'Item ' + (i+1)}));
     const apps = Array.from({length:7}, (_,i) => ({id:'app'+i,at:at('10'),appName:'App '+i,summary:'Sample '+i}));
-    render(<ActivityTimeline review={{...empty,observations:[...points,...apps]}}/>);
+    renderDetailed(<ActivityTimeline review={{...empty,observations:[...points,...apps]}}/>);
     expect(screen.getAllByRole('group', {name:/时间轨道/})).toHaveLength(5);
     const rowButton = screen.getByRole('button',{name:'查看 屏幕观察 的全部记录'});
     expect(rowButton).toHaveTextContent('36 条观察'); expect(rowButton).not.toHaveTextContent(/小时|秒|前台/);
@@ -76,7 +86,7 @@ describe('ActivityTimeline', () => {
   it('adds fractional frontmost intervals before formatting time, while ignoring gaps between samples', async () => {
     const user = userEvent.setup();
     const appName = 'Reader';
-    render(<ActivityTimeline review={{...empty, appSessions:[
+    renderDetailed(<ActivityTimeline review={{...empty, appSessions:[
       {appName,from:'2026-11-16T06:00:00.000Z',to:'2026-11-16T06:00:00.730Z',seconds:.73},
       {appName,from:'2026-11-16T06:10:00.000Z',to:'2026-11-16T06:10:00.730Z',seconds:.73},
     ],observations:[{appName,id:'p',at:'2026-11-16T07:30:00Z',summary:'Single later sample'}]}} />);
@@ -98,7 +108,7 @@ describe('ActivityTimeline', () => {
       return <><ActivityTimeline review={review} revealApp={request ? {name:'Preview',request} : null}/>
         <button type="button" onClick={() => update(i => i + 1)}>回看 Preview</button></>;
     }
-    render(<Page/>);
+    renderDetailed(<Page/>);
     expect(screen.queryByRole('group',{name:'Preview 时间轨道'})).not.toBeInTheDocument();
     const open = screen.getByRole('button',{name:'回看 Preview'});
     await user.click(open);
@@ -116,7 +126,7 @@ describe('ActivityTimeline', () => {
 
   it('distinguishes loading, error and an empty day and keeps available evidence visible on refresh errors', async () => {
     const user = userEvent.setup(); const retry = vi.fn();
-    const view = render(<ActivityTimeline review={null}/>);
+    const view = renderDetailed(<ActivityTimeline review={null}/>);
     expect(screen.getByRole('status')).toHaveTextContent('正在读取');
     view.rerender(<ActivityTimeline review={null} error="offline" onRetry={retry}/>);
     expect(screen.getByRole('alert')).toHaveTextContent('offline');
@@ -132,7 +142,7 @@ describe('ActivityTimeline', () => {
 
 it('shows simultaneous AI runs independently of the person and preserves the end state of each run', async () => {
   const user = userEvent.setup();
-  render(<ActivityTimeline review={{...empty, sessions:[paper], appSessions:[{appName:'Editor',from:at('05'),to:at('20'),seconds:900}],
+  renderDetailed(<ActivityTimeline review={{...empty, sessions:[paper], appSessions:[{appName:'Editor',from:at('05'),to:at('20'),seconds:900}],
     aiSessions:[{appName:'Codex',title:'轮次 A',runId:'a',from:at('06'),to:at('16'),state:'finished'},
       {appName:'ChatGPT',title:'网页生成 B',runId:'b',from:at('06'),to:at('16'),state:'running'}]}}/>);
   const first = within(screen.getByRole('group',{name:'Codex · 轮次 A 时间轨道'})).getByRole('button');
@@ -150,7 +160,7 @@ it('groups consecutive automatic screenshots into evidence windows without filli
   const user = userEvent.setup();
   const shot = (id:string, sec:number, appName = 'Reader', source:'automatic'|'manual' = 'automatic') => ({id, appName, source,
     at:new Date(Date.parse(at('00')) + sec * 1000).toISOString(), summary:'Screenshot ' + id});
-  render(<ActivityTimeline review={{...empty, observations:[
+  renderDetailed(<ActivityTimeline review={{...empty, observations:[
     shot('a',0), shot('b',45), shot('c',90), shot('other',92,'Editor'), shot('d',95), shot('e',100),
     shot('manual',102,'Reader','manual'), shot('f',110), shot('g',115), shot('h',180), shot('i',183),
   ], appSessions:[{appName:'Editor',from:'2026-11-16T01:01:36Z',to:'2026-11-16T01:01:37Z',seconds:1}]}}/>);
@@ -166,7 +176,7 @@ it('groups consecutive automatic screenshots into evidence windows without filli
 it('magnifies a short measured interval on a long day with parallel rows on the same scale', async () => {
   const user = userEvent.setup();
   const from = '2026-11-16T09:00:00Z', to = '2026-11-16T09:00:08Z';
-  render(<ActivityTimeline review={{...empty, sessions:[paper],appSessions:[{appName:'Editor',from,to,seconds:8}],
+  renderDetailed(<ActivityTimeline review={{...empty, sessions:[paper],appSessions:[{appName:'Editor',from,to,seconds:8}],
     aiSessions:[{appName:'Codex',title:'A',runId:'x',from,to,state:'finished'}]}}/>);
   const track = screen.getByRole('group',{name:'Editor 时间轨道'});
   const bar = within(track).getByRole('button');
@@ -186,7 +196,7 @@ it('magnifies a short measured interval on a long day with parallel rows on the 
 it('shows one named conversation and one summary for overlapping worker activity and two user turns', async () => {
   const user = userEvent.setup();
   const flags={appName:'Codex',title:'轮次 c0eb5d',conversationTitle:'阅读进展',conversationId:'paper-chat',state:'finished' as const};
-  const {container}=render(<ActivityTimeline review={{...empty, aiSessions:[
+  const {container}=renderDetailed(<ActivityTimeline review={{...empty, aiSessions:[
     {...flags,runId:'p',conversationTurnId:'q1',from:at('01'),to:at('04'),userExcerpt:'从哪一章继续？'},
     {...flags,runId:'helper',conversationTurnId:'q1',from:at('03'),to:at('05'),assistantExcerpt:'接着看方法章节。'},
     {...flags,runId:'p2',conversationTurnId:'q2',from:at('08'),to:at('09'),userExcerpt:'对照第二个实验。'},
@@ -205,4 +215,63 @@ it('shows one named conversation and one summary for overlapping worker activity
   expect(screen.getByText('接着看方法章节。')).toBeVisible();
   await user.click(screen.getByRole('button',{name:'收起对话摘录'}));
   expect(screen.queryByText('接着看方法章节。')).toBeNull();
+});
+
+it('opens with a compact activity overview, splits verified site visits from the browser, and keeps search and source details available', async () => {
+  const user = userEvent.setup();
+  const appName='Google Chrome';
+  const minute=(sec:number)=>new Date(Date.parse(at('00'))+sec*1000).toISOString();
+  const observation=(id:string,sec:number,pageTitle:string)=>({id,at:minute(sec),appName,pageTitle,source:'automatic' as const,summary:'屏幕观察 '+id});
+  render(<ActivityTimeline review={{...empty,appSessions:[{from:minute(0),to:minute(120),appName,seconds:120}],
+    observations:[observation('one',15,'Section One | alphaXiv'),observation('two',55,'Section Two | alphaXiv'),
+      observation('editor',70,'Notebook'),observation('solo',90,'Section Three | alphaXiv')],
+    aiSessions:[{appName:'Codex',runId:'c1',conversationId:'one',conversationTitle:'核对方法',title:'方法',from:minute(0),to:minute(80),state:'finished'},
+      {appName:'Codex',runId:'c2',conversationId:'two',conversationTitle:'整理文献',title:'文献',from:minute(80),to:minute(120),state:'finished'}]
+  }}/>);
+  expect(screen.getByRole('button',{name:'活动总览'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.queryByRole('button',{name:'查看对话摘录'})).toBeNull();
+  expect(screen.getAllByRole('group',{name:/^Codex 活动$/})).toHaveLength(1);
+  expect(screen.getByRole('button',{name:'浏览 Google Chrome 活动'})).toHaveTextContent('1 分 20 秒');
+  expect(screen.getByRole('button',{name:'浏览 alphaxiv.org 活动'})).toHaveTextContent('观察跨度 40 秒');
+  const chromeTrack=within(screen.getByRole('group',{name:'Google Chrome 活动'}));
+  await user.click(chromeTrack.getByRole('button',{name:/09:00:00–09:00:15/}));
+  expect(screen.getByText('09:00:00–09:00:15')).toBeVisible();
+  const site=within(screen.getByRole('group',{name:'alphaxiv.org 活动'}));
+  const block=site.getByRole('button',{name:/09:00:15–09:00:55.*Section One/});
+  expect(block).toHaveTextContent('Section One');
+  expect(site.getAllByRole('button')).toHaveLength(2);
+  await user.click(block);
+  expect(screen.getByText('屏幕观察 two')).toBeVisible();
+  expect(screen.getByRole('heading',{name:'alphaxiv.org · 2 条记录'})).toBeVisible();
+  await user.click(screen.getByRole('button',{name:'查找活动'}));
+  await user.type(screen.getByRole('searchbox',{name:'搜索活动'}),'整理文献');
+  const hit=screen.getByRole('button',{name:/09:01:20–09:02:00 整理文献/});
+  await user.click(hit);
+  expect(screen.getByRole('heading',{name:'Codex · 整理文献 · 1 轮对话'})).toHaveFocus();
+});
+
+it('shows a standalone browser-title observation as an instant and avoids deriving sites from arbitrary summaries', () => {
+  render(<ActivityTimeline review={{...empty, observations:[
+    {id:'a',appName:'Safari',at:at('10'),summary:'Safari 的前台页面标题为「Paper | alphaXiv」。'},
+    {id:'b',appName:'Safari',at:at('11'),summary:'正在讨论 example.com 和 alphaXiv'}]}}/>);
+  expect(screen.getByRole('button',{name:'浏览 alphaxiv.org 活动'})).toHaveTextContent('仅有采样时刻');
+  expect(screen.queryByRole('button',{name:'浏览 example.com 活动'})).toBeNull();
+  expect(screen.getByRole('button',{name:'浏览 Safari 活动'})).toBeVisible();
+});
+
+it('keeps a short website reading visible on a busy day and lets the time cursor inspect unobserved gaps', async () => {
+  const user=userEvent.setup();
+  const apps=['Editor','Notes','Terminal','Mail','Preview','Google Chrome'];
+  const appSessions=apps.map((appName,index)=>({appName,from:at(String(index*5).padStart(2,'0')),to:at(String(index*5+4).padStart(2,'0')),seconds:240}));
+  const observation=(id:string,at:string)=>({id,appName:'Google Chrome',at,summary:'查看论文',pageTitle:'Reading methods | alphaXiv',source:'manual' as const});
+  render(<ActivityTimeline review={{...empty,appSessions,observations:[
+    observation('first',at('26')),observation('second',at('27'))]}}/>);
+  const site=screen.getByRole('group',{name:'alphaxiv.org 活动'});
+  expect(screen.getByRole('button',{name:'浏览 alphaxiv.org 活动'})).toHaveTextContent('仅有采样时刻');
+  expect(within(site).getByRole('button',{name:'09:27 Reading methods'})).toBeVisible();
+  const cursor=screen.getByRole('slider',{name:'浏览时间轴时刻'});
+  fireEvent.change(cursor,{target:{value:String(Date.parse(at('04'))+30000)}});
+  expect(screen.getByText('这段时间没有记录')).toBeVisible();
+  await user.click(screen.getByRole('button',{name:'下一时段'}));
+  expect(cursor).toHaveAttribute('aria-valuetext','09:05:00');
 });

@@ -5,6 +5,8 @@ import { deviceTaskLabel } from '../../contracts/device-task-label';
 import { validCalendarId } from '../../contracts/calendar';
 import { isDeviceTaskTitle, type TaskUpdateRequest } from '../../contracts/task-update';
 import { OverviewRequestError } from './data/overview-source';
+import type { ProjectStatus } from '../../contracts/project-progress';
+import TaskProgressLine from './TaskProgressLine';
 import './task-list.css';
 
 interface Props {
@@ -12,6 +14,7 @@ interface Props {
   saving: boolean;
   onSave?(input: TaskUpdateRequest): Promise<DailyOverview>;
   onDraftChange?(tasks: Task[] | null): void;
+  statuses?: ProjectStatus[];
   selectedId?: string;
   observedId?: string;
   manual?: boolean;
@@ -55,7 +58,7 @@ function TaskIcon({ action }: { action: keyof typeof iconPath }) {
   </svg>;
 }
 
-export default function TaskEditor({ overview, saving, onSave, onDraftChange, selectedId, observedId, manual, onSelect, active = true }: Props) {
+export default function TaskEditor({ overview, saving, onSave, onDraftChange, statuses, selectedId, observedId, manual, onSelect, active = true }: Props) {
   const formId = useId();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [ack, setAck] = useState<{ parent: DailyOverview; value: DailyOverview } | null>(null);
@@ -276,6 +279,7 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
   return <div className="task-list-control" ref={group} aria-busy={busy}>
     {tasks.length === 0 && !draft && <p className="desk-empty">今天没有安排的任务</p>}
     <ul className="desk-tasks task-items">{tasks.map(task => {
+      const status = statuses?.find(item => item.taskId === task.id);
       const done = task.status === 'done';
       const selected = !!onSelect && selectedId === task.id;
       const editing = draft?.kind === 'edit' && draft.id === task.id;
@@ -305,6 +309,7 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, se
               title={current.focus?.task_id === task.id ? '删除此任务会结束当前专注计时' : '删除任务'}
               onClick={() => void remove(task)}><TaskIcon action="remove" /></button>
           </div>}
+          {status && <TaskProgressLine status={status} />}
         </>}
       </li>
       {draft?.kind === 'add' && draft.after === task.id && <li className="task-compose-row">{compose()}</li>}

@@ -262,9 +262,9 @@ export function createFocusReview(dataPath: string, { now = Date.now }: { now?: 
         }
         const dailyObservations = observations.filter(o => typeof o.summary === 'string' && o.summary.trim() &&
           Date.parse(o.at) >= begin && Date.parse(o.at) < end && Date.parse(o.at) <= at)
-          .map(({ id, at, summary, nextStep, source = 'manual', appName, taskId }) => ({
+          .map(({ id, at, summary, nextStep, source = 'manual', appName, pageTitle, taskId }) => ({
             id, at, summary, source, ...(nextStep ? { nextStep } : {}), ...(appName ? { appName } : {}),
-            ...(taskId !== undefined ? { taskId } : {}),
+            ...(pageTitle ? { pageTitle } : {}), ...(taskId !== undefined ? { taskId } : {}),
           }))
           .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
         const appSessions = (data.appSpans ?? []).flatMap(s => {

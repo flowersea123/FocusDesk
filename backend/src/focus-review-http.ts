@@ -46,7 +46,7 @@ export function createReviewHttp(
       }
 
       const { records } = await checkpoints.read();
-      const observations = records.map(r => ({ id: r.id, at: r.capturedAt, summary: r.summary, nextStep: r.nextStep, source: r.source, appName: r.appName, taskId: r.taskId }));
+      const observations = records.map(r => ({ id: r.id, at: r.capturedAt, summary: r.summary, nextStep: r.nextStep, source: r.source, appName: r.appName, pageTitle: r.pageTitle, taskId: r.taskId }));
       const result = await reviews.read(date, overview.timezone, observations);
       if (!synthesis && result.aiSessions?.length) {
         const sessions = await resolveCodexConversations(result.aiSessions);

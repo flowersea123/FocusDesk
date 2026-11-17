@@ -52,6 +52,8 @@ test('default start has no task hint, auto-follows the observed task, and distin
   await refresh();
   const card = screen.getByRole('region', { name: /^大任务进度/ });
   expect(screen.getByRole('region', { name: '今日任务' })).toHaveTextContent('最近识别的任务 Read paper');
+  const readingRow = screen.getByRole('button', {name:'查看 Read paper 进度'}).closest('li')!;
+  expect(within(readingRow).getByRole('progressbar', {name:'Read paper · 阅读位置'})).toHaveAttribute('aria-valuetext','第 6 / 12 页');
   expect(within(card).getByRole('progressbar', { name: 'Read paper阅读位置' })).toHaveAttribute('aria-valuenow', '50');
   expect(within(card).getByRole('progressbar', { name: 'Read paper整体进度' })).toHaveAttribute('aria-valuenow', '20');
   expect(card).toHaveTextContent('第 6 / 12 页'); expect(card).toHaveTextContent('1 / 5 个步骤已完成');
@@ -89,4 +91,33 @@ test('a section alone has no numerical completion and unquantified work shows th
   await refresh();
   expect(screen.getByRole('region', { name: '今日任务' })).toHaveTextContent('最近识别的任务 Read paper');
   expect(card).toHaveTextContent('正在编辑第 3 张幻灯片的标题。');
+});
+
+
+test('paper window sightings remain visible on the task row without a percentage or selected task', async () => {
+  const model = fixture();
+  model.statuses = [{...base}, {...base, taskId:'read', title:'Read paper', paperVisits:{
+    date:'2026-11-16', documents:2, count:4, minutes:[642,665,717],
+    recent:[{title:'Methods for Visual Search',at:'2026-11-16T03:57:00Z'}],
+  }}];
+  mount(); await act(async () => {});
+  const row = screen.getByRole('button', {name:'查看 Read paper 进度'}).closest('li')!;
+  expect(row).toHaveTextContent('论文访问 · 2 个标题');
+  expect(row).toHaveTextContent('页码未知');
+  expect(within(row).getByRole('img', {name:/10:42 至 11:57 有 4 次记录/})).toBeVisible();
+  expect(row.querySelectorAll('.paper-visit-ticks i')).toHaveLength(3);
+  expect(within(row).queryByRole('progressbar')).not.toBeInTheDocument();
+  expect(row).not.toHaveTextContent('%');
+  model.recorder = { ...idle, state:'recording', observedAt:at, observedTaskId:null };
+  model.statuses[1] = {...model.statuses[1], total:3, percent:0};
+  await refresh();
+  expect(within(row).getByRole('img', {name:/论文窗口采样/})).toBeVisible();
+  expect(within(row).getByRole('progressbar', {name:'Read paper · 任务完成度'})).toHaveAttribute('aria-valuetext','0 / 3 步');
+  expect(screen.getByText('最近画面未匹配任务')).toBeVisible();
+  select('Read paper');
+  const card = screen.getByRole('region', {name:/^大任务进度/});
+  fireEvent.click(within(card).getByText('论文访问记录 · 2 篇'));
+  expect(within(card).getByText('Methods for Visual Search')).toBeVisible();
+  expect(card).not.toHaveTextContent('暂无进度记录');
+  expect(within(screen.getByRole('button', {name:'查看 Prepare slides 进度'}).closest('li')!).queryByRole('img')).not.toBeInTheDocument();
 });

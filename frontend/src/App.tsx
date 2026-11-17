@@ -10,8 +10,7 @@ import DailySynthesis from './DailySynthesis';
 import ActivityTimeline, { formatActivityDuration } from './ActivityTimeline';
 import NextTask, { nextAction } from './NextTask';
 import { useFocusReview } from './data/use-focus-review';
-import ProjectProgress, { updateProject } from './ProjectProgress';
-import type { ProjectStatus } from '../../contracts/project-progress';
+import ProjectProgress, { updateProject, type ProgressResponse } from './ProjectProgress';
 import TaskEditor from './TaskEditor';
 import FocusPanel from './FocusPanel';
 import EpaperPreview from './EpaperPreview';
@@ -68,15 +67,12 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
   const checkpointsChanged = useCallback(() => setCheckpointVersion(value => value + 1), []);
   const recorder = useForegroundRecorder(!!source.localWorkspace, checkpointsChanged);
   const recording = recorder.status?.state === 'recording' && !recorder.readError;
-  const [pinned, setPinned] = useState<{project:ProjectStatus; revision:string} | null>(null);
-  const acceptPinned = useCallback((project:ProjectStatus | null, revision:string) => {
-    setPinned(project ? {project, revision} : null);
-  }, []);
+  const [progress, setProgress] = useState<ProgressResponse | null>(null);
+  const pinned = progress?.statuses.find(status => status.taskId === progress.config.pinned);
   async function restoreOverview() {
-    if (!pinned) return;
+    if (!pinned || !progress) return;
     try {
-      await updateProject({action:'unpin', taskId:pinned.project.taskId, revision:pinned.revision});
-      setPinned(null);
+      setProgress(await updateProject({action:'unpin', taskId:pinned.taskId, revision:progress.config.revision}));
     } finally {
       checkpointsChanged();
     }
@@ -114,8 +110,8 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
     const history = document.querySelector<HTMLDetailsElement>('details#record');
     if (history) { history.open = true; history.querySelector('summary')?.focus(); }
   }
-  function inspectTask(task: Task) {
-    chooseTask(task.id);
+  function inspectTask(taskId: string) {
+    chooseTask(taskId);
     requestAnimationFrame(() => document.getElementById('project-progress')?.focus());
   }
   async function startRecommended(task: Task) {
@@ -269,8 +265,8 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
             </div>
             {overview && <TaskEditor overview={overview} saving={saving} onSave={source.updateTasks ? saveTasks : undefined}
               onDraftChange={setTaskDraft} active={view === 'today' && !navOpen}
-              selectedId={selected?.id} observedId={observed?.id} manual={!!manual}
-              onSelect={source.localWorkspace || source.updateFocus ? chooseTask : undefined} />}
+              selectedId={selected?.id} observedId={observed?.id} manual={!!manual} statuses={source.localWorkspace ? progress?.statuses : undefined}
+              onSelect={source.localWorkspace ? inspectTask : source.updateFocus ? chooseTask : undefined} />}
             {source.localWorkspace && showRecorderDetails && <div className="task-recorder-state">
               <RecorderStatusLine recorder={recorder} timezone={overview?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone} />
               <RecorderFeedback recorder={recorder} />
@@ -280,7 +276,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
             </div>}
             {source.localWorkspace && <>
               <ProjectProgress overview={overview} selected={selected} manual={!!manual} onFollow={() => chooseTask('')}
-                recorder={recorder} refreshKey={checkpointVersion} onPinned={acceptPinned} onChange={checkpointsChanged} />
+                recorder={recorder} refreshKey={checkpointVersion} data={progress} onData={setProgress} onChange={checkpointsChanged} />
               <CheckpointWorkspace overview={overview} recorder={recorder} active={view === 'today'} refreshKey={checkpointVersion} onChange={checkpointsChanged} />
             </>}
             {!mock && !source.updateTasks && <p className="readonly-note">请在本机打开 FocusDesk 编辑任务。</p>}
@@ -290,7 +286,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
         </div>
         <aside className="desk-side" aria-label="专注与设备">
           {focusPanel}
-          <EpaperPreview overview={previewOverview} project={pinned?.project} onUnpin={restoreOverview} draft={taskDraft !== null || suggestionDraft !== null} />
+          <EpaperPreview overview={previewOverview} project={pinned} onUnpin={restoreOverview} draft={taskDraft !== null || suggestionDraft !== null} />
         </aside>
       </div>
       <details className="desk-details" open={mock}>
