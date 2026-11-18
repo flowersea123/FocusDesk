@@ -5,6 +5,7 @@ import { checkpointSourceLabel } from '../../contracts/screen-checkpoint';
 import { checkpointRequest, confirmReadingBookmark } from './CheckpointWorkspace';
 import type { RecorderControls } from './ForegroundRecord';
 import { workspaceClock } from './data/workspace-clock';
+import { readingLocation } from './data/reading-location';
 import './project-progress.css';
 
 export type ProgressResponse = { config:ProgressConfig; statuses:ProjectStatus[] };
@@ -71,9 +72,8 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
     catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }
-  const bookmark = status?.readingBookmark;
-  const position = status?.readingPosition;
-  const section = position?.section || bookmark?.current.section;
+  const { title: documentTitle, position, bookmark, pageSection } = readingLocation(status);
+  const section = pageSection || bookmark?.current.section;
   const confirm = bookmark?.previous && !bookmark.previous.confirmed ? bookmark.previous :
     bookmark?.current && !bookmark.current.confirmed ? bookmark.current : null;
   const latest = status?.latestObservation;
@@ -97,13 +97,13 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
     {!current && tasks.length > 0 && <p>点击上方任务名称可查看任务详情。</p>}
     {current && !status && !error && <p role="status">正在读取任务记录…</p>}
     {status && <>
-      {(position || section) && <div className="project-reading">
+      {(documentTitle || position || section) && <div className="project-reading">
         <h3>阅读位置</h3>
         {position ? <>
           <strong>第 {position.page} / {position.total} 页</strong>
-          {section && <p>{position.section ? '读到 ' : '最近章节书签　'}<strong>{section}</strong></p>}
-        </> : <div className="project-reading-section">读到 <strong>{section}</strong></div>}
-        {(position?.document || bookmark?.current.document) && <p className="project-document">{position?.document || bookmark?.current.document}</p>}
+          {section && <p>{pageSection ? '读到 ' : '最近章节书签　'}<strong>{section}</strong></p>}
+        </> : section && <div className="project-reading-section">读到 <strong>{section}</strong></div>}
+        {documentTitle && <p className="project-document">{documentTitle}</p>}
         {confirm && <button type="button" disabled={busy} onClick={() => void confirmRead(confirm)}>确认已读 {confirm.section}</button>}
       </div>}
       {status.paperVisits && <details className="project-paper-visits">

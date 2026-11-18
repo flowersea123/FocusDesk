@@ -1,9 +1,10 @@
+import type { ArxivPaper } from '../../../contracts/screen-checkpoint.ts';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdtemp, chmod, writeFile, rm } from 'node:fs/promises';
 import { createServer, type Socket } from 'node:net';
 import { join } from 'node:path';
 
-export interface ForegroundFrame { image: string; app: string; pageKey: string; pageTitle?: string }
+export interface ForegroundFrame { image: string; app: string; pageKey: string; pageTitle?: string; paper?: ArxivPaper }
 export interface ForegroundCapture {
   capture(signal?: AbortSignal): Promise<ForegroundFrame | null>;
   close(): Promise<void>;

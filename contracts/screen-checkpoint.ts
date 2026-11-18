@@ -1,6 +1,25 @@
 export type CheckpointSource = 'manual' | 'automatic';
 
 export interface ReadingPosition { page: number; total: number }
+/** Only document identity and viewer location are retained from a paper frame. */
+export interface ArxivPaper {
+  id: string;
+  view: 'abstract' | 'pdf';
+  title?: string;
+  position?: ReadingPosition;
+}
+export function validArxivId(value: unknown): value is string {
+  return typeof value === 'string' &&
+    /^(?:\d{2}(?:0[1-9]|1[0-2])\.\d{4,5}|[a-z][a-z.-]{1,30}\/\d{2}(?:0[1-9]|1[0-2])\d{3})(?:v[1-9]\d{0,3})?$/iu.test(value);
+}
+export function validArxivPaper(value: unknown): value is ArxivPaper {
+  if (!value || typeof value !== 'object') return false;
+  const paper = value as ArxivPaper;
+  return validArxivId(paper.id) && (paper.view === 'abstract' || paper.view === 'pdf') &&
+    (paper.title === undefined || (typeof paper.title === 'string' && !!paper.title.trim() &&
+      [...paper.title].length <= 400 && !/[\p{Cc}\p{Zl}\p{Zp}]/u.test(paper.title))) &&
+    (paper.position === undefined || (paper.view === 'pdf' && validReadingPosition(paper.position)));
+}
 export function validReadingPosition(value: unknown): value is ReadingPosition {
   if (!value || typeof value !== 'object') return false;
   const { page, total } = value as ReadingPosition;
@@ -19,6 +38,7 @@ export interface ScreenCheckpoint {
   appName?: string;
   /** Page title reported by the foreground application at capture time. */
   pageTitle?: string;
+  paper?: ArxivPaper;
   /** The system supplied the page title while local image analysis was unavailable. */
   detailSource?: 'window-title';
   capturedAt: string;

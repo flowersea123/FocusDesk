@@ -25,6 +25,8 @@ import { CalendarError } from '../../contracts/calendar.ts';
 import { createScreenObservationService } from './screen-observation.ts';
 import { createForegroundRecorder, type RecorderOptions } from './foreground-recorder.ts';
 import { createRecorderHttp } from './recorder-http.ts';
+import { knownPaperTitle } from './arxiv-paper.ts';
+import { paperVisitOwner } from './reading-attribution.ts';
 
 /** Older firmware reads the task DTO directly and can only draw ASCII. */
 function deviceOverview(overview: DailyOverview) {
@@ -115,6 +117,13 @@ export function createDemoServer({ dataPath, distPath, writeTimeoutMs = 5_000, n
     monitorAi: signal => monitorAiActivity(aiSourceFactory ? aiSourceFactory(signal) : aiSources.open(signal), reviews.aiActivity, signal, now, aiPollMs),
     now, recordAppSpan: reviews.recordAppSpan, flushAppSpans: reviews.flushAppSpans,
     analyze: screenObservation.foreground,
+    identifyPaper: async (paper, preferredTask) => {
+      const title = paper.title ?? knownPaperTitle((await checkpoints.read()).records, paper.id);
+      const overview = await loader.load();
+      const owner = paperVisitOwner([title, paper.id].filter(Boolean).join(' '), overview.tasks.filter(task => task.status === 'todo'),
+        preferredTask ?? overview.focus?.task_id ?? undefined);
+      return {title, taskId:owner?.id ?? null};
+    },
     save: async (record, signal) => {
       if (record.taskId && !(await loader.load()).tasks.some(task => task.id === record.taskId && task.status === 'todo')) {
         record.taskId = null;

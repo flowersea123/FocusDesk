@@ -215,3 +215,65 @@ test('a full checkpoint store keeps app and AI tracking live and retries the sam
   assert.deepEqual(saved, ['First', 'Second']);
   assert.equal((await recorder.readStatus()).message, '');
 });
+
+test('saves verified paper/page changes while another capture awaits the model, then adds a visible section', async t => {
+  let current = frame('Unrelated app'), release, attempt = 0;
+  const rows = [];
+  const recorder = createForegroundRecorder({platform:'darwin', support:supported, pollMs:3,
+    open:async () => ({capture:async () => current, close() {}}),
+    analyze:async image => {
+      if (image === 'Unrelated app') await new Promise(resolve => { release = resolve; });
+      if (image === 'PDF2') return {...result('PDF'),taskId:'read',readingSection:'Background'};
+      return result(image);
+    },
+    identifyPaper:async () => ({title:'Attention Is All You Need',taskId:'read'}),
+    save:async row => {rows.push(row);},
+    now:() => Date.UTC(2026,10,17,0,0,attempt++) });
+  t.after(() => {release?.();return recorder.close();});
+  recorder.start(); await until(() => !!release);
+  const id='1706.03762';
+  const show = (paper, image) => {
+    current = {...frame('Chrome window',image,'Google Chrome'),paper};
+  };
+  show({id,view:'abstract',title:'Attention Is All You Need'},'abstract');
+  await until(() => rows.length >= 1);
+  show({id,view:'pdf',position:{page:1,total:15}},'PDF1');
+  await until(() => rows.length >= 2);
+  show({id,view:'pdf',position:{page:2,total:15}},'PDF2');
+  await until(() => rows.length >= 3);
+  assert.deepEqual(rows.map(row => [row.taskId,row.paper.id,row.paper.position?.page]),[
+    ['read',id,undefined],['read',id,1],['read',id,2]]);
+  const latest=(await recorder.readStatus()).lastSavedAt;
+  release();
+  await until(() => rows.some(row => row.readingSection === 'Background'));
+  const status=await recorder.readStatus();
+  assert.ok(status.lastSavedAt >= latest);
+  assert.equal(status.observedTaskId,'read');
+  assert.ok(rows.every(row => !row.completedParts?.length));
+});
+
+test('offline paper metadata survives unreadable frames and terminal titles do not become paper visits', async t => {
+  const id='1706.03762';
+  let current = frame(id + '.pdf','terminal-pdf','Terminal');
+  const rows = [];
+  const recorder = createForegroundRecorder({platform:'darwin',support:supported,pollMs:3,
+    open:async () => ({capture:async()=>current, close() {}}),
+    analyze:async () => {throw new WriteRequestError(503,'MODEL_UNAVAILABLE','offline');},
+    identifyPaper:async () => ({title:'Attention Is All You Need',taskId:'read'}),
+    save:async row => {rows.push(row);} });
+  t.after(() => recorder.close());
+  recorder.start(); await until(() => rows.length === 1);
+  assert.equal(rows[0].paper,undefined);
+  assert.equal(rows[0].taskId,null);
+  current = {...frame(id + '.pdf','page2','Google Chrome'),paper:{id,view:'pdf',position:{page:2,total:15}}};
+  await until(() => rows.length === 2);
+  await delay(20);
+  assert.equal(rows.length,2);
+  assert.deepEqual(rows[1].readingPosition,{page:2,total:15});
+  assert.equal(rows[1].readingDocument,'Attention Is All You Need');
+  const other='1810.04805';
+  current = {...current, paper:{id:other,view:'pdf',title:'Second paper',position:{page:2,total:15}}};
+  await until(() => rows.length === 3);
+  assert.equal(rows[2].paper.id,other);
+  assert.equal(rows[2].readingDocument,'Second paper');
+});

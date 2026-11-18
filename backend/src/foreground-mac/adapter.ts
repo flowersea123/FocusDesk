@@ -1,3 +1,4 @@
+import { createPaperReader } from './paper-reader.ts';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { access, chmod, copyFile, lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
@@ -93,10 +94,15 @@ export async function prepareForegroundHelper(): Promise<string> {
 export async function openForegroundCapture(options: ForegroundOptions = {}): Promise<ForegroundCapture> {
   if (options.signal?.aborted) throw new ForegroundError('ABORTED', '已停止本次前台记录。');
   const helper = await prepareForegroundHelper();
-  return connectForegroundHelper(options, async socket => {
+  const device = await connectForegroundHelper(options, async socket => {
     try { await run('/usr/bin/open',['-g','-n','-a',helper,'--args','--session',socket],{timeout:10_000}); }
     catch { throw new ForegroundError('LAUNCH','macOS 未能打开 FocusDesk Capture。请检查本机应用权限后重试。'); }
   });
+  const readPaperHeader = createPaperReader();
+  return { close:device.close, async capture(signal) {
+    const frame = await device.capture(signal);
+    return frame ? readPaperHeader(frame,signal) : null;
+  }};
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv[2] === '--build-locked') await buildLocked();

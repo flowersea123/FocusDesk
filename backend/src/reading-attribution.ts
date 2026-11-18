@@ -67,7 +67,7 @@ function documentNamesMatch(name: string, document: string): boolean {
 }
 
 /** Window titles provide a browsing clue only. Multiple matching tasks leave it unassigned. */
-export function paperVisitOwner(document: string, tasks: readonly ObservationTask[]): ObservationTask | undefined {
+export function paperVisitOwner(document: string, tasks: readonly ObservationTask[], preferredId?: string): ObservationTask | undefined {
   const named: ObservationTask[] = [], generic: ObservationTask[] = [];
   for (const task of tasks) {
     const target = readingTarget(task.title);
@@ -75,7 +75,7 @@ export function paperVisitOwner(document: string, tasks: readonly ObservationTas
     else if (target && documentNamesMatch(target.name, document)) named.push(task);
   }
   const matches = named.length ? named : generic;
-  return matches.length === 1 ? matches[0] : undefined;
+  return matches.length === 1 ? matches[0] : matches.find(task => task.id === preferredId);
 }
 
 const codeKind: Record<string,string> = { '类':'class', '函数':'function', '接口':'interface', '结构体':'struct', '枚举':'enum' };

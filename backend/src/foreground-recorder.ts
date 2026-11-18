@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { RecorderStatus } from '../../contracts/foreground-recorder.ts';
-import type { ScreenCheckpoint } from '../../contracts/screen-checkpoint.ts';
+import { validArxivPaper, validReadingDocument, type ArxivPaper, type ScreenCheckpoint } from '../../contracts/screen-checkpoint.ts';
+import { paperInWindow } from './arxiv-paper.ts';
 import { CheckpointCapacityError } from './checkpoint-store.ts';
 import { WriteRequestError } from './write-policy.ts';
 
@@ -10,6 +11,7 @@ export interface ForegroundFrame {
   app: string;
   pageKey: string;
   pageTitle?: string;
+  paper?: ArxivPaper;
 }
 type ObservedPage = Pick<ScreenCheckpoint, 'taskId' | 'summary' | 'nextStep' | 'progress' | 'completedParts' | 'readingDocument' | 'readingSection' | 'readingPosition'>;
 export interface CaptureSession {
@@ -22,6 +24,7 @@ export interface RecorderOptions {
   support(): Promise<Support>;
   open(options: { signal: AbortSignal; onStop: (reason?: string) => void }): Promise<CaptureSession>;
   analyze(image: string, signal: AbortSignal, targetTaskId?: string): Promise<ObservedPage>;
+  identifyPaper?(paper: ArxivPaper, preferredTask?: string): Promise<{title?:string; taskId:string | null}>;
   save(record: ScreenCheckpoint, signal: AbortSignal): Promise<void>;
   recordAppSpan?(appName: string, from: number, to: number): Promise<void>;
   flushAppSpans?(): Promise<void>;
@@ -30,7 +33,7 @@ export interface RecorderOptions {
   pollMs?: number;
   samePageMs?: number;
 }
-type Sample = { frame: ForegroundFrame; capturedAt: string; targetTaskId: string | null; generation: number };
+type Sample = { frame: ForegroundFrame; capturedAt: string; targetTaskId: string | null; generation: number; previousPaper?: ArxivPaper };
 
 function clean(value: string | undefined, limit: number) {
   return Array.from((value ?? '').replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ').trim()).slice(0, limit).join('');
@@ -39,7 +42,7 @@ function messageOf(error: unknown) {
   return error instanceof Error ? error.message : '前台页面记录暂时不可用，请重新开始。';
 }
 
-export function createForegroundRecorder({ platform, support, open, analyze, save, recordAppSpan, flushAppSpans, monitorAi, now = Date.now, pollMs = 4_000, samePageMs = 45_000 }: RecorderOptions) {
+export function createForegroundRecorder({ platform, support, open, analyze, identifyPaper, save, recordAppSpan, flushAppSpans, monitorAi, now = Date.now, pollMs = 4_000, samePageMs = 45_000 }: RecorderOptions) {
   const status: RecorderStatus = { platform, state: 'idle', supported: true, message: '',
     savedCount: 0, lastSavedAt: null, sessionStartedAt: null, targetTaskId: null, observedTaskId: null, observedAt: null };
   let current: AbortController | undefined;
@@ -81,21 +84,26 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
     let monitoring: Promise<void> | undefined;
     // Keep at most three pending samples while the local model reads an earlier page.
     const queue: Sample[] = [];
-    let lastSample: { page: string; digest: string; at: number; generation: number } | undefined;
+    let lastSample: { page: string; digest: string; paper?: string; at: number; generation: number } | undefined;
     let changingImage: string | undefined;
-    let lastSaved: { page: string; facts: string; titleOnly: boolean } | undefined;
+    let pendingDetail: ArxivPaper | undefined;
+    let lastSaved: { at: string; page: string; facts: string; titleOnly: boolean; retryVision: boolean } | undefined;
     let retryTitleAt = 0;
     let retryStorageAt = 0;
     const storageNotice = '检查点已满，新的画面观察暂停保存。前台时长和已接入的 AI 记录继续；腾出空间后将在一分钟内重试。';
     const titleNotice = '当前只记录窗口标题。读图恢复后，可识别画面里的论文页码。';
     const modelIssues = new Set(['MODEL_CONFIG', 'MODEL_UNAVAILABLE', 'MODEL_TIMEOUT', 'INVALID_OBSERVATION', 'INCOMPLETE_OBSERVATION', 'OBSERVATION_BUSY']);
 
-    async function record({ frame, capturedAt, targetTaskId, generation }: Sample) {
+    async function record({ frame, capturedAt, targetTaskId, generation, previousPaper }: Sample, immediatePaper?: ArxivPaper) {
       let observation: ObservedPage;
       let titleOnly = false;
       const appName = clean(frame.app, 60) || '桌面应用';
       const pageTitle = clean(frame.pageTitle, 160);
-      try {
+      const titlePaper = paperInWindow(appName, pageTitle);
+      let paper = validArxivPaper(frame.paper) ? frame.paper : titlePaper;
+      if (immediatePaper) {
+        observation = {taskId:null, summary:'', nextStep:'', progress:null};
+      } else try {
         observation = await analyze(frame.image, signal, targetTaskId ?? undefined);
       } catch (error) {
         signal.throwIfAborted();
@@ -104,12 +112,38 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
         observation = { taskId: null, summary: pageTitle ? appName + ' 的前台页面标题为「' + pageTitle + '」。' : appName + ' 位于前台。',
           nextStep: '', progress: null, completedParts: [] };
       }
+      const retryVision = titleOnly && (!paper || (paper.view === 'pdf' && !paper.position));
+      if (paper) {
+        if (!paper.title && titlePaper?.id === paper.id && titlePaper.title) paper = {...paper, title:titlePaper.title};
+        const identity = await identifyPaper?.(paper, targetTaskId ?? observation.taskId ?? undefined);
+        const title = paper.title ?? identity?.title;
+        const position = paper.view === 'pdf' ? paper.position ?? observation.readingPosition : undefined;
+        paper = {...paper, ...(title ? {title} : {}), ...(position ? {position} : {})};
+        const document = title || 'arXiv:' + paper.id;
+        const taskId = identity ? identity.taskId : observation.taskId;
+        const section = observation.taskId === taskId && taskId ? observation.readingSection : undefined;
+        // The preceding capture already saved the header. An independent follow-up
+        // frame is worth recording only if it reveals an additional section or page.
+        if (previousPaper && !section && (previousPaper.position || !position)) {
+          if (retryVision && lastSaved?.page === frame.pageKey && capturedAt >= lastSaved.at) {
+            retryTitleAt = now() + 60_000;
+            lastSaved.retryVision = true;
+          }
+          return;
+        }
+        observation = {taskId, nextStep:'', progress:null, completedParts:[],
+          summary:'正在查看《' + document + '》' + (position ? '（第 ' + position.page + ' 页，共 ' + position.total + ' 页）' :
+            paper.view === 'abstract' ? '的摘要页' : '的 PDF') + '。',
+          ...(taskId && (section || position) && validReadingDocument(document) ? {readingDocument:document,
+            ...(section ? {readingSection:section} : {}), ...(position ? {readingPosition:position} : {})} : {})};
+        titleOnly = false;
+      }
       signal.throwIfAborted();
-      if (titleOnly) retryTitleAt = now() + 60_000;
-      const facts = JSON.stringify([observation.taskId, observation.summary, observation.readingDocument, observation.readingSection,
+      if (retryVision) retryTitleAt = now() + 60_000;
+      const facts = JSON.stringify([paper, observation.taskId, observation.summary, observation.readingDocument, observation.readingSection,
         observation.readingPosition?.page, observation.readingPosition?.total, observation.progress?.percent, [...(observation.completedParts ?? [])].sort()]);
       const row: ScreenCheckpoint = { id: randomUUID(), source: 'automatic', appName, capturedAt,
-        ...(pageTitle ? { pageTitle } : {}), ...(titleOnly ? { detailSource: 'window-title' as const } : {}), ...observation };
+        ...(pageTitle ? { pageTitle } : {}), ...(paper ? {paper} : {}), ...(titleOnly ? { detailSource: 'window-title' as const } : {}), ...observation };
       if (retryStorageAt || lastSaved?.page !== frame.pageKey || lastSaved.facts !== facts || lastSaved.titleOnly !== titleOnly) {
         try {
           await save(row, signal);
@@ -123,12 +157,14 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
         }
         retryStorageAt = 0;
         if (status.message === storageNotice) status.message = '';
-        lastSaved = { page: frame.pageKey, facts, titleOnly };
+        if (!lastSaved || capturedAt >= lastSaved.at) {
+          lastSaved = { at:capturedAt, page:frame.pageKey, facts, titleOnly, retryVision };
+          status.lastSavedAt = capturedAt;
+        }
         status.savedCount++;
-        status.lastSavedAt = capturedAt;
       }
-      if (!status.message || status.message === titleNotice) status.message = titleOnly ? titleNotice : '';
-      if (generation === targetGeneration) {
+      if (generation === targetGeneration && (!status.observedAt || capturedAt >= status.observedAt)) {
+        if (!status.message || status.message === titleNotice) status.message = titleOnly ? titleNotice : '';
         status.observedTaskId = row.taskId;
         status.observedAt = capturedAt;
       }
@@ -177,27 +213,40 @@ export function createForegroundRecorder({ platform, support, open, analyze, sav
         }
         previousApp = name ? { name, at } : undefined;
         if (frame && generation === targetGeneration && at >= retryStorageAt) {
-          const changedPage = lastSample?.page !== frame.pageKey || lastSample?.generation !== generation;
+          const header = validArxivPaper(frame.paper) ? frame.paper : paperInWindow(frame.app, frame.pageTitle);
+          const paper = JSON.stringify(header);
+          const changedPage = lastSample?.page !== frame.pageKey || lastSample?.generation !== generation || paper !== lastSample?.paper;
           const digest = createHash('sha256').update(frame.image).digest('hex');
           const newPixels = digest !== lastSample?.digest;
           const intervalElapsed = !lastSample || at - lastSample.at >= samePageMs;
-          const retry = lastSaved?.page === frame.pageKey && lastSaved.titleOnly && at >= retryTitleAt;
+          const retry = lastSaved?.page === frame.pageKey && lastSaved.retryVision && at >= retryTitleAt;
           // A settled PDF page is worth reading promptly. A video can change on every sample.
-          if (changedPage || (newPixels && (changingImage === digest || intervalElapsed)) || (retry && intervalElapsed)) {
-            lastSample = { page: frame.pageKey, digest, at, generation };
+          if (changedPage || pendingDetail || (newPixels && (changingImage === digest || intervalElapsed)) || (retry && intervalElapsed)) {
+            lastSample = { page: frame.pageKey, digest, paper, at, generation };
             changingImage = undefined;
-            const sample = { frame, capturedAt: new Date(at).toISOString(), targetTaskId, generation };
-            if (queue.at(-1)?.frame.pageKey === frame.pageKey && queue.at(-1)?.generation === generation) queue[queue.length - 1] = sample;
-            else {
-              if (queue.length === 3) queue.shift();
-              queue.push(sample);
+            const sample: Sample = { frame, capturedAt: new Date(at).toISOString(), targetTaskId, generation };
+            if (header && changedPage) {
+              // Save a verified transition on the capture loop. Slow model work for
+              // other apps cannot delay it or evict it from the bounded image queue.
+              await record(sample, header);
+              pendingDetail = header;
+            } else {
+              if (pendingDetail && !changedPage) sample.previousPaper = pendingDetail;
+              pendingDetail = undefined;
+              const queued = queue.at(-1);
+              if (queued?.frame.pageKey === frame.pageKey && queued.generation === generation && JSON.stringify(queued.frame.paper) === JSON.stringify(frame.paper)) queue[queue.length - 1] = sample;
+              else {
+                if (queue.length === 3) queue.shift();
+                queue.push(sample);
+              }
+              draining ??= drain();
             }
-            draining ??= drain();
           } else changingImage = newPixels ? digest : undefined;
         } else {
           // An ineligible foreground (e.g. the lock screen) breaks continuity.
           lastSample = undefined;
           changingImage = undefined;
+          pendingDetail = undefined;
         }
         await delay(pollMs, undefined, { signal });
       }

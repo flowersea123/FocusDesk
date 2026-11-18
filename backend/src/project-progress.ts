@@ -6,6 +6,7 @@ import type { CalendarSnapshot } from '../../contracts/calendar.ts';
 import type { DailyOverview } from '../../contracts/daily-overview.ts';
 import { MAX_ACCOMPLISHMENTS, accomplishmentKey, validAccomplishment, validSections, projectStatus, type ProjectPlan, type ProgressConfig, type ProjectStatus } from '../../contracts/project-progress.ts';
 import type { ScreenCheckpoint } from '../../contracts/screen-checkpoint.ts';
+import { paperBrowser, paperIdKey, recordedPaper } from './arxiv-paper.ts';
 import { paperVisitOwner } from './reading-attribution.ts';
 import { CheckpointError, createCheckpointStore } from './checkpoint-store.ts';
 import { privateJson, privateInput, checkPrivateRequest } from './checkpoint-http.ts';
@@ -13,7 +14,7 @@ import { WriteRequestError } from './write-policy.ts';
 
 // Recognize article-like titles on paper hosts. Author, discovery and search pages are too broad.
 function paperWindowTitle(row: ScreenCheckpoint): string | undefined {
-  if (row.source !== 'automatic' || !row.pageTitle) return;
+  if (row.source !== 'automatic' || !paperBrowser(row.appName) || !row.pageTitle) return;
   const match = /^(.+?)\s+[|｜–—-]\s+(?:alphaXiv|arXiv(?:\.org)?)$/iu.exec(row.pageTitle.trim());
   if (!match) return;
   const title = match[1].trim();
@@ -26,26 +27,63 @@ function paperWindowTitle(row: ScreenCheckpoint): string | undefined {
 function addPaperVisits(statuses: ProjectStatus[], overview: DailyOverview, rows: ScreenCheckpoint[], now: number) {
   const clock = new Intl.DateTimeFormat('sv-SE', { timeZone: overview.timezone, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23' });
   const date = clock.format(now).slice(0, 10);
-  const visits = new Map<string, { minutes:Set<number>; documents:Map<string,string>; count:number }>();
-  for (const row of rows) {
-    const captured = Date.parse(row.capturedAt);
-    if (captured > now) continue;
-    const title = paperWindowTitle(row);
-    if (!title) continue;
-    const at = clock.format(captured);
-    if (at.slice(0, 10) !== date) continue;
-    const owner = row.taskId ? overview.tasks.find(task => task.id === row.taskId) : paperVisitOwner(title, overview.tasks);
+  const samples = rows.filter(row => Date.parse(row.capturedAt) <= now)
+    .sort((a,b) => a.capturedAt.localeCompare(b.capturedAt));
+  const titles = new Map<string,string>();
+  for (const row of samples) {
+    const paper = recordedPaper(row);
+    if (paper?.title) titles.set(paperIdKey(paper.id), paper.title);
+  }
+
+  type Paper = NonNullable<ProjectStatus['latestPaper']>;
+  const byTask = new Map<string,Map<string,Paper>>();
+  const latest = new Map<string,Paper>();
+  const visits = new Map<string, { minutes:Set<number>; documents:Map<string,{title:string;at:string}>; count:number }>();
+  for (const row of samples) {
+    const paper = recordedPaper(row);
+    const key = paper && paperIdKey(paper.id);
+    const title = key ? titles.get(key) || 'arXiv:' + paper!.id : paperWindowTitle(row);
+    if (!title) {
+      // Positive evidence of opening a different, named document takes precedence.
+      // A missing title or a model's generic PDF label supplies no new identity.
+      const current = row.taskId && latest.get(row.taskId);
+      if (current && row.readingDocument && (row.readingSection || row.readingPosition)) {
+        const doc = row.readingDocument.trim().toLowerCase();
+        if (![current.title.toLowerCase(), 'arxiv:' + current.id, current.id].includes(doc) &&
+            !/^(?:untitled|unknown|document|paper|pdf(?: viewer| document)?|未命名|未知|文档|论文)(?:\.pdf)?$/iu.test(doc)) latest.delete(row.taskId!);
+      }
+      continue;
+    }
+    const owner = row.taskId ? overview.tasks.find(task => task.id === row.taskId) : paperVisitOwner([title,key].filter(Boolean).join(' '), overview.tasks);
     if (!owner) continue;
-    const visit = visits.get(owner.id) ?? { minutes:new Set<number>(), documents:new Map<string,string>(), count:0 };
+    if (paper && key) {
+      const documents = byTask.get(owner.id) ?? new Map<string,Paper>();
+      byTask.set(owner.id, documents);
+      const previous = documents.get(key);
+      const previousVersion = previous?.id.match(/v\d+$/iu)?.[0];
+      const version = paper.id.match(/v\d+$/iu)?.[0];
+      // Different published revisions can have different pagination.
+      const changedVersion = version && previousVersion && version !== previousVersion;
+      const page = paper.view === 'pdf' ? paper.position ?? row.readingPosition : undefined;
+      const position = page ?? (changedVersion ? undefined : previous?.position);
+      const item = {id:!version && previousVersion ? previous!.id : paper.id, title, at:row.capturedAt, ...(position ? {position} : {})};
+      documents.set(key, item);
+      latest.set(owner.id, item);
+    }
+    const at = clock.format(Date.parse(row.capturedAt));
+    if (at.slice(0, 10) !== date) continue;
+    const visit = visits.get(owner.id) ?? { minutes:new Set<number>(), documents:new Map<string,{title:string;at:string}>(), count:0 };
     visit.minutes.add(Number(at.slice(11, 13)) * 60 + Number(at.slice(14, 16)));
     visit.count++;
-    if ((visit.documents.get(title) ?? '') < row.capturedAt) visit.documents.set(title,row.capturedAt);
+    visit.documents.set(key || title, {title,at:row.capturedAt});
     visits.set(owner.id, visit);
   }
   for (const status of statuses) {
+    const paper = latest.get(status.taskId);
+    if (paper) status.latestPaper = paper;
     const visit = visits.get(status.taskId);
     if (!visit) continue;
-    const recent = [...visit.documents].sort((a,b) => b[1].localeCompare(a[1])).slice(0,5).map(([title,at]) => ({title,at}));
+    const recent = [...visit.documents.values()].sort((a,b) => b.at.localeCompare(a.at)).slice(0,5);
     status.paperVisits = { date, count:visit.count, documents:visit.documents.size, minutes:[...visit.minutes].sort((a,b)=>a-b), recent };
   }
 }

@@ -66,6 +66,8 @@ test('default start has no task hint, auto-follows the observed task, and distin
   expect(screen.getByRole('region', { name: '今日任务' })).toHaveTextContent('最近识别的任务 Read paper');
   const readingRow = screen.getByRole('button', {name:'查看 Read paper 详情'}).closest('li')!;
   expect(within(readingRow).getByRole('list', {name:'Read paper 已完成事项'})).toHaveTextContent('Introduction');
+  expect(readingRow).toHaveTextContent('《Sample Paper》');
+  expect(readingRow).toHaveTextContent('第 6 / 12 页');
   expect(readingRow).not.toHaveTextContent('Method');
   expect(within(readingRow).queryByRole('progressbar')).not.toBeInTheDocument();
   expect(within(card).queryByRole('progressbar')).not.toBeInTheDocument();
@@ -95,6 +97,9 @@ test('a section alone has no numerical completion and unquantified work shows th
   model.recorder = { ...idle, state: 'recording', observedTaskId: 'read', observedAt: at };
   mount(); await act(async () => {});
   const card = screen.getByRole('region', { name: /^任务详情/ });
+  const row = screen.getByRole('button', {name:'查看 Read paper 详情'}).closest('li')!;
+  expect(row).toHaveTextContent('《Sample Paper》');
+  expect(row).not.toHaveTextContent(/第 \d/);
   expect(card).toHaveTextContent('读到 Method'); expect(card).not.toHaveTextContent('%');
   expect(within(card).queryByRole('progressbar')).not.toBeInTheDocument();
   select('Prepare slides');
@@ -127,6 +132,34 @@ test('paper window sightings remain in the task details and do not create accomp
   expect(within(card).getByText('Methods for Visual Search')).toBeVisible();
   expect(card).not.toHaveTextContent('暂无进度记录');
   expect(within(screen.getByRole('button', {name:'查看 Prepare slides 详情'}).closest('li')!).queryByRole('img')).not.toBeInTheDocument();
+});
+
+test('shows the latest paper and its observed page inside its own task row, including backward navigation and title-only visits', async () => {
+  const model = fixture();
+  const latestPaper = {id:'1706.03762', title:'Attention Is All You Need', at, position:{page:2, total:15}};
+  model.statuses[1] = {...paper, completed:[], latestPaper};
+  mount(); await act(async () => {});
+  const row = screen.getByRole('button', {name:'查看 Read paper 详情'}).closest('li')!;
+  expect(row).toHaveTextContent('《Attention Is All You Need》');
+  expect(row).toHaveTextContent('第 2 / 15 页');
+  expect(row).not.toHaveTextContent('Sample Paper');
+  expect(within(row).queryByRole('list')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', {name:'查看 Prepare slides 详情'}).closest('li')).not.toHaveTextContent(latestPaper.title);
+  select('Read paper');
+  const card = screen.getByRole('region', {name:/^任务详情/});
+  expect(card).toHaveTextContent('第 2 / 15 页');
+  expect(within(card).queryByRole('button', {name:'确认已读 Method'})).not.toBeInTheDocument();
+
+  model.statuses[1].latestPaper = {...latestPaper, position:{page:1, total:15}};
+  await refresh();
+  expect(row).toHaveTextContent('第 1 / 15 页');
+
+  model.statuses[1].latestPaper = {id:'2001.00001', title:'Another paper', at};
+  await refresh();
+  expect(row).toHaveTextContent('《Another paper》');
+  expect(row).not.toHaveTextContent(/第 \d/);
+  expect(card).toHaveTextContent('Another paper');
+  expect(card).not.toHaveTextContent(/第 \d/);
 });
 
 test('adds concrete accomplishments in order, preserves a conflict draft, and removes only a manual record', async () => {

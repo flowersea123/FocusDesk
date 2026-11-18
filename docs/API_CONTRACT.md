@@ -6,6 +6,8 @@
 
 检查点的可选 `readingPosition:{page,total}` 与 `readingDocument` 配套保存。两数为实际页面计数器中的正整数，page 不超过 total，total 最多 100000。项目状态单独返回阅读位置、章节书签与完成项。阅读位置的百分比表示所在页在文档中的位置。
 
+自动检查点可保存 `paper:{id,view,title?,position?}`。其中 id 为 arXiv 编号，view 为 abstract 或 pdf，position 取自该 PDF 的页面计数器。项目状态的可选 `latestPaper:{id,title,at,position?}` 按任务和论文编号汇总最近一次观察。只有编号时可用编号识别文档，后续同篇观察可补足题名和页码。记录跨天保留，阅读位置不会自动勾选任务步骤。
+
 `GET /api/v1/recorder` 只查询能力和状态，不打开屏幕录制权限。对同一路径发送同源 JSON `{"action":"start"}` 或 `{"action":"stop"}` 启停本次本地会话。启动与停止均可重复请求，页面关闭或刷新不改变会话；Hub 退出或系统录制控制停止时结束。Hub 重启回到待机。状态字段为 `state`（idle、starting、recording、stopping、error、unavailable）、`supported`、`message`、`platform`、`sessionStartedAt`、`savedCount` 和 `lastSavedAt`。时间为 UTC ISO 字符串，尚无相应事件时为 null。本机回环与同源写入限制同下。
 
 前台记录沿用检查点和每日回顾。记录源为 automatic，含前台应用的 `appName` 和可选 `pageTitle`。画面可唯一对应任务时填写 `taskId`。未匹配时为 null，不写任务进度或完成项。模型不可用时，`detailSource:"window-title"` 表示内容仅来自系统提供的应用/页面标题。截图只在内存中处理。

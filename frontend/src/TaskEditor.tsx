@@ -1,4 +1,5 @@
 import { workspaceClock } from './data/workspace-clock';
+import { readingLocation } from './data/reading-location';
 import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { isTaskTitle, MAX_TASKS, type DailyOverview, type Task } from '../../contracts/daily-overview';
 import { deviceTaskLabel } from '../../contracts/device-task-label';
@@ -281,6 +282,7 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, st
     {tasks.length === 0 && !draft && <p className="desk-empty">今天没有安排的任务</p>}
     <ul className="desk-tasks task-items">{tasks.map(task => {
       const status = statuses?.find(item => item.taskId === task.id);
+      const reading = readingLocation(status);
       const done = task.status === 'done';
       const selected = !!onSelect && selectedId === task.id;
       const editing = draft?.kind === 'edit' && draft.id === task.id;
@@ -310,6 +312,10 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, st
               title={current.focus?.task_id === task.id ? '删除此任务会结束当前专注计时' : '删除任务'}
               onClick={() => void remove(task)}><TaskIcon action="remove" /></button>
           </div>}
+          {(reading.title || reading.position) && <p className="task-reading-location">
+            {reading.title && <span>《{reading.title}》</span>}
+            {reading.position && <span>第 {reading.position.page} / {reading.position.total} 页</span>}
+          </p>}
           {status && <TaskAccomplishments status={status} onSave={onAccomplishment} />}
         </>}
       </li>

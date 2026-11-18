@@ -60,6 +60,7 @@ export interface ProjectStatus {
   readingBookmark?: { current: ReadingLocation; previous?: ReadingLocation };
   /** The open page in a document, independent of task completion. */
   readingPosition?: ReadingPosition & { document?: string; section?: string };
+  latestPaper?: { id: string; title: string; at: string; position?: ReadingPosition };
   /** Today's paper-like window titles. Observations alone provide no completion percentage. */
   paperVisits?: { date: string; count: number; documents: number; minutes: number[]; recent: { title: string; at: string }[] };
   latestObservation?: { summary: string; capturedAt: string; source?: CheckpointSource };

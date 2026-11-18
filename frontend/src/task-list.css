@@ -6,6 +6,8 @@
 .task-row-main > .task-title { min-width: 0; }
 .task-row-meta { display: flex; flex-wrap: wrap; gap: 0 6px; }
 .task-row-meta:empty { display: none; }
+.task-reading-location { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px;
+  min-width: 0; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .task-check-hit { display: inline-grid; place-items: center; min-height: 40px; min-width: 30px; cursor: pointer; }
 .task-check-hit input { width: 17px; height: 17px; margin: 0; accent-color: var(--accent, #6650a5); cursor: pointer; }
 .task-row-actions, .task-compose-actions { display: flex; align-items: center; gap: 2px; }

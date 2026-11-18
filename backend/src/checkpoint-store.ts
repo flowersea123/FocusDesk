@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { open, readFile, rename, rm } from 'node:fs/promises';
-import { validReadingDocument, validReadingPosition, validReadingSection, type ScreenCheckpoint, type CheckpointHistory } from '../../contracts/screen-checkpoint.ts';
+import { validArxivPaper, validReadingDocument, validReadingPosition, validReadingSection, type ScreenCheckpoint, type CheckpointHistory } from '../../contracts/screen-checkpoint.ts';
 
 export const CHECKPOINT_LIMIT = 1000;
 export class CheckpointError extends Error {
@@ -25,6 +25,10 @@ function parseRecord(row: Partial<ScreenCheckpoint>): ScreenCheckpoint {
   const source = row.source === undefined ? 'manual' : row.source;
   const appName = row.appName === undefined ? undefined : text(row.appName, 120);
   const pageTitle = row.pageTitle === undefined ? undefined : text(row.pageTitle, 320);
+  if (row.paper !== undefined && (source !== 'automatic' || !appName || !validArxivPaper(row.paper))) inputError();
+  const paper = row.paper && { id:row.paper.id.toLowerCase(), view:row.paper.view,
+    ...(row.paper.title ? {title:row.paper.title.trim()} : {}),
+    ...(row.paper.position ? {position:{page:row.paper.position.page,total:row.paper.position.total}} : {}) };
   if (pageTitle && (!appName || [...pageTitle].length > 160 || /[\p{Cc}\p{Zl}\p{Zp}]/u.test(pageTitle))) inputError();
   if ((source !== 'manual' && source !== 'automatic') || (appName && (source !== 'automatic' || /\p{Cc}/u.test(appName))) ||
       (source === 'automatic' && !row.taskId && !appName)) inputError();
@@ -45,7 +49,7 @@ function parseRecord(row: Partial<ScreenCheckpoint>): ScreenCheckpoint {
   if (row.readingPosition !== undefined && (!row.taskId || !validReadingDocument(row.readingDocument) || !validReadingPosition(row.readingPosition))) inputError();
   if (row.readingDocument !== undefined && ((!row.readingSection && !row.readingPosition) || !validReadingDocument(row.readingDocument))) inputError();
   if (row.readingConfirmed !== undefined && (row.readingConfirmed !== true || !row.readingSection)) inputError();
-  return { completedParts, source, ...(appName ? {appName} : {}), ...(pageTitle ? {pageTitle} : {}), ...(row.detailSource ? {detailSource:row.detailSource} : {}),
+  return { completedParts, source, ...(appName ? {appName} : {}), ...(pageTitle ? {pageTitle} : {}), ...(paper ? {paper} : {}), ...(row.detailSource ? {detailSource:row.detailSource} : {}),
     ...(row.readingSection ? {readingSection:row.readingSection.trim()} : {}),
     ...(row.readingDocument ? {readingDocument:row.readingDocument.trim()} : {}),
     ...(row.readingPosition ? {readingPosition:{page:row.readingPosition.page,total:row.readingPosition.total}} : {}),

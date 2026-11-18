@@ -213,3 +213,46 @@ test('task accomplishments survive retries, plan changes and restarts, and only 
   assert.ok(!labels(afterRemoval).some(x=>x.text===one));
   assert.ok(labels(afterRemoval).some(x=>x.text===two));
 });
+
+test('carries a verified PDF position across days and keeps paper identities separate on the same page number', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(),'focusdesk-paper-status-'));
+  const dataPath = path.join(dir,'tasks.json');
+  const task = {id:'reading',title:'读论文',status:'todo',due_at:null};
+  await writeFile(dataPath,JSON.stringify({date:'2026-11-18',timezone:'Asia/Shanghai',tasks:[task]}));
+  const id='1706.03762', title='Attention Is All You Need', second='1810.04805';
+  const row = (time,fields) => ({id:randomUUID(),source:'automatic',appName:'Google Chrome',taskId:null,
+    capturedAt:time,summary:'foreground',nextStep:'',progress:null,...fields});
+  const previousDay='2026-11-17T15:59:00.000Z', observed='2026-11-18T01:00:00.000Z';
+  const rows=[
+    row(previousDay,{pageTitle:'['+id+'] '+title}),
+    row(observed,{taskId:'reading',paper:{id,view:'pdf',position:{page:2,total:15}}}),
+    row('2026-11-18T01:01:00.000Z',{appName:'Terminal',pageTitle:'['+second+'] Terminal title'}),
+    row('2026-11-18T01:01:01.000Z',{appName:'Terminal',pageTitle:'An unrelated terminal shell title | alphaXiv'}),
+  ];
+  const save=()=>writeFile(dataPath+'.checkpoints.json',JSON.stringify({version:1,records:rows}));
+  await save();
+  let now=Date.parse('2026-11-18T03:00:00Z');
+  const hub=createDemoServer({dataPath,distPath:dir,now:()=>now});
+  hub.listen(0,'127.0.0.1');await once(hub,'listening');
+  t.after(async()=>{hub.closeAllConnections();await new Promise(resolve=>hub.close(resolve));await rm(dir,{recursive:true,force:true});});
+  const read=async()=>{
+    const response=await fetch('http://127.0.0.1:'+hub.address().port+'/api/v1/project-progress');
+    assert.equal(response.status,200);return (await response.json()).statuses[0];
+  };
+  const first=await read();
+  assert.deepEqual(first.latestPaper,{id,title,at:observed,position:{page:2,total:15}});
+  assert.equal(first.paperVisits.count,1);
+  assert.deepEqual(first.accomplishments,[]);
+  now=Date.parse('2026-11-19T01:00:00Z');
+  const tomorrow=await read();
+  assert.deepEqual(tomorrow.latestPaper,first.latestPaper);
+  assert.equal(tomorrow.paperVisits,undefined);
+  const at='2026-11-19T00:30:00.000Z';
+  rows.push(row(at,{taskId:'reading',paper:{id:second,title:'A new paper',view:'abstract'}}));
+  await save();
+  assert.deepEqual((await read()).latestPaper,{id:second,title:'A new paper',at});
+  const next='2026-11-19T00:31:00.000Z';
+  rows.push(row(next,{taskId:'reading',paper:{id:second,view:'pdf',position:{page:2,total:24}}}));
+  await save();
+  assert.deepEqual((await read()).latestPaper,{id:second,title:'A new paper',at:next,position:{page:2,total:24}});
+});
