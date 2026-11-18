@@ -94,3 +94,26 @@
 @media (max-width: 520px) {
   .daily-synthesis, .daily-review .daily-synthesis { padding: 14px 16px; }
 }
+.review-work-activities { margin: 12px 0; }
+.review-work-group { padding: 13px 0; border-top: 1px solid var(--line, #e1e0e6); }
+.review-work-group h3 { margin: 0; font-size: 16px; font-weight: 650; }
+.work-items { margin-top: 8px; }
+.work-items > small { margin-left: 8px; }
+.work-completion-count { font-size: 13px; color: var(--accent, #6650a5); }
+.work-completed-items { margin: 2px 0 0; font-size: 13px; line-height: 1.6; }
+.work-completed-items div { display: flex; flex-wrap: wrap; column-gap: 10px; }
+.work-completed-items dt { color: var(--muted, #686771); }
+.work-completed-items dd { margin: 0; }
+.daily-synthesis .work-history { list-style: none; padding: 0; margin: 6px 0 0; }
+.daily-synthesis .work-history li { display: block; padding: 0; border: 0; }
+.work-history details > summary {
+  display: grid; grid-template-columns: 5ch max-content minmax(0, 1fr) 12px;
+  align-items: baseline; gap: 8px; width: 100%; padding: 5px 0; line-height: 1.55;
+}
+.work-history summary::after { content: ''; align-self: center; width: 5px; height: 5px; border: solid currentColor; border-width: 0 1px 1px 0; transform: rotate(-45deg); }
+.work-history details[open] summary::after { transform: rotate(45deg); }
+.work-history summary::-webkit-details-marker { display: none; }
+.daily-synthesis .work-event-source { max-width: 8em; overflow-wrap: anywhere; }
+.daily-synthesis .work-history p { margin: 0 0 6px 5ch; padding-left: 8px; border-left: 2px solid var(--line, #e1e0e6); font-size: 12px; }
+.work-history q { quotes: "“" "”"; white-space: pre-wrap; }
+.work-expand { background: none; border: 0; padding: 4px 0; color: var(--accent, #6650a5); font: inherit; font-size: 12px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }

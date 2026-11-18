@@ -1,10 +1,15 @@
-import { checkpointSourceLabel, type CheckpointSource } from './screen-checkpoint.ts';
+import { checkpointSourceLabel, type ActivityEvidence, type ArxivPaper, type ReadingPosition, type CheckpointSource } from './screen-checkpoint.ts';
 
 export interface ReviewObservation {
   source?: CheckpointSource;
   pageTitle?: string;
   appName?: string;
   taskId?: string | null;
+  activityEvidence?: ActivityEvidence;
+  paper?: ArxivPaper;
+  readingDocument?: string;
+  readingSection?: string;
+  readingPosition?: ReadingPosition;
   id: string;
   at: string;
   summary: string;
@@ -54,6 +59,13 @@ export interface AiSession extends AiConversationFields {
   state: 'running' | 'finished' | 'interrupted';
 }
 
+export interface DailyWorkActivity {
+  title: string;
+  completedItems: { document: string; label: string }[];
+  answeredItems?: { document: string; label: string }[];
+  events: { at: string; kind: 'work' | 'reading' | 'discussion'; text: string; source: string; evidence: string }[];
+}
+
 export interface FocusReview {
   date: string;
   today: string;
@@ -66,6 +78,7 @@ export interface FocusReview {
   aiSessions?: AiSession[];
   aiUnavailable?: boolean;
   aiConversationSummaries?: Record<string, string>;
+  workActivities?: DailyWorkActivity[];
   observations: ReviewObservation[];
   summary: string;
   suggestion: { action: string; evidence: string } | null;

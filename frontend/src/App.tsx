@@ -254,7 +254,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
         <ActivityTimeline recorder={recorder} review={activity.review} tasks={tasks} revealApp={revealApp?.date === activity.review?.date ? revealApp : null} error={activity.error} onRetry={activity.refresh}/>
         <div className="today-brief">
           <NextTask overview={overview} next={next} saving={saving} onStart={source.updateFocus ? startRecommended : undefined} onInspect={task => inspectTask(task.id)} onApp={inspectApp} onHistory={inspectHistory}/>
-          {activity.review && (activity.review.observations.length > 0 || activity.review.sessions.length > 0 || !!activity.review.appSessions?.length) &&
+          {activity.review && (activity.review.observations.length > 0 || activity.review.sessions.length > 0 || !!activity.review.appSessions?.length || !!activity.review.aiSessions?.length || !!activity.review.workActivities?.length) &&
             <DailySynthesis active={view === 'today'} review={activity.review}/>}
         </div>
       </div>}

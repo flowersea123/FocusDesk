@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createHash, webcrypto } from 'node:crypto';
 import DailySynthesis from './DailySynthesis';
 import type { FocusReview } from '../../contracts/focus-review';
+import { synthesisEvidence } from '../../contracts/daily-synthesis';
 import DailyReview from './DailyReview';
 
 const today = '2026-11-17';
@@ -269,4 +270,130 @@ it('restores an unsaved experiment in the same tab and isolates it from another 
   await waitFor(() => expect(screen.getByLabelText('下一次尝试')).toHaveValue('复核实验'));
   fireEvent.click(screen.getByRole('button',{name:'放弃草稿'}));
   expect(screen.getByLabelText('下一次尝试')).toHaveValue('');
+});
+
+it('lists unplanned work, counts identified exercises by document and shows the source of each step', async () => {
+  const model = reviewDay('2026-12-07');
+  model.sessions = [];
+  model.observations = [];
+  model.workActivities = [{
+    title:'数学复习',
+    completedItems:[
+      {document:'习题册 A',label:'第 1 题'}, {document:'习题册 A',label:'第 1 题'},
+      {document:'习题册 B',label:'第 1 题'}, {document:'习题册 A',label:'第 3 题'},
+    ],
+    events:[
+      {at:model.date+'T02:00:00Z',kind:'discussion',text:'讨论极限和导数的区别',source:'ChatGPT 对话',evidence:'为什么导数要用极限定义？'},
+      {at:model.date+'T01:00:00Z',kind:'reading',text:'Chapter One.pptx',source:'PowerPoint 窗口',evidence:'Chapter One · 极限'},
+    ],
+  }, {
+    title:'写实验报告',completedItems:[{document:'实验报告',label:'方法部分'}],events:[],
+  }];
+  render(<DailySynthesis active={false} review={model}/>);
+  const math = within(screen.getByRole('article',{name:'数学复习'}));
+  expect(math.getByText('屏幕显示已完成 3 道题')).toBeVisible();
+  expect(math.getByText('习题册 A').parentElement).toHaveTextContent('第 1 题、第 3 题');
+  expect(math.getByText('习题册 B').parentElement).toHaveTextContent('第 1 题');
+  expect(screen.getByText('屏幕显示已完成 1 项')).toBeVisible();
+  const steps = within(math.getByRole('list',{name:'数学复习的活动顺序'})).getAllByRole('listitem');
+  expect(steps[0]).toHaveTextContent('09:00PowerPoint 窗口Chapter One.pptx');
+  expect(steps[1]).toHaveTextContent('10:00ChatGPT 对话讨论极限和导数的区别');
+  fireEvent.click(within(steps[1]).getByText('讨论极限和导数的区别'));
+  expect(within(steps[1]).getByText('为什么导数要用极限定义？')).toBeVisible();
+  expect(screen.queryByText(model.summary)).toBeNull();
+});
+
+it('generates and cites a chat-only day and drops a stale digest when the conversation changes', async () => {
+  const model = reviewDay('2026-12-08');
+  model.observations = [];
+  model.sessions = [];
+  model.workActivities = [{title:'数学复习',completedItems:[],events:[{
+    at:model.date+'T02:00:00Z',kind:'discussion',text:'询问函数极限',source:'ChatGPT 对话',evidence:'函数极限如何定义？',
+  }]}];
+  const rows = synthesisEvidence(model);
+  const revision = createHash('sha256').update(JSON.stringify([model.date,rows])).digest('hex');
+  vi.stubGlobal('crypto',webcrypto);
+  const fetcher = vi.fn(async () => Response.json({
+    observationRevision:revision, used:1, total:1, evidence:rows, summary:'对话涉及函数极限。', suggestion:'',
+  }));
+  vi.stubGlobal('fetch',fetcher);
+  const view = render(<DailySynthesis review={model}/>);
+  expect(await screen.findByText('对话涉及函数极限。')).toBeVisible();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  const evidence = screen.getByText(/1 \/ 1 条记录参与生成/);
+  fireEvent.click(evidence);
+  expect(within(evidence.parentElement!).getByText(/ChatGPT 对话/)).toBeVisible();
+  const changed = structuredClone(model);
+  changed.workActivities![0].events[0].text = '询问导数';
+  view.rerender(<DailySynthesis review={changed}/>);
+  expect(screen.queryByText('对话涉及函数极限。')).toBeNull();
+  expect(screen.getByText('询问导数')).toBeVisible();
+});
+
+it('lists visible answers independently and updates the same exercise when a completion mark appears', () => {
+  const model = reviewDay('2026-12-09');
+  const first = {document:'习题册 A',label:'第 1 题'};
+  const another = {document:'习题册 B',label:'第 1 题'};
+  model.workActivities = [{title:'数学作业',completedItems:[],answeredItems:[first,another],events:[]}];
+  const view = render(<DailySynthesis active={false} review={model}/>);
+  const math = within(screen.getByRole('article',{name:'数学作业'}));
+  const answers = within(math.getByRole('group',{name:'有作答记录 2 道题'}));
+  expect(answers.getByText('未见完成标记')).toBeVisible();
+  expect(answers.getAllByText('第 1 题')).toHaveLength(2);
+  expect(math.queryByText(/屏幕显示已完成/)).toBeNull();
+
+  const updated = {...model,workActivities:[{title:'数学作业',completedItems:[first],answeredItems:[another],events:[]}]};
+  view.rerender(<DailySynthesis active={false} review={updated}/>);
+  const complete = within(math.getByRole('group',{name:'屏幕显示已完成 1 道题'}));
+  expect(complete.getByText('习题册 A')).toBeVisible();
+  expect(complete.queryByText('习题册 B')).toBeNull();
+  const remaining = within(math.getByRole('group',{name:'有作答记录 1 道题'}));
+  expect(remaining.getByText('习题册 B')).toBeVisible();
+  expect(remaining.queryByText('习题册 A')).toBeNull();
+});
+
+it('keeps long chat histories compact and expands them in complete chronological order', () => {
+  const model = reviewDay('2026-12-10');
+  const chats = Array.from({length:100}, (_, i) => ({
+    at:new Date(Date.parse(model.date+'T01:00:00Z') + i * 60_000).toISOString(),
+    kind:'discussion' as const, text:'提问 '+i, source:'ChatGPT', evidence:'问题原文 '+i,
+  }));
+  model.workActivities = Array.from({length:8},(_, i) => ({title:'对话 '+i,completedItems:[],events:[chats[i]]}));
+  model.workActivities.push({title:'数学复习',completedItems:[],events:[
+    ...chats, {at:model.date+'T01:45:30Z',kind:'reading',text:'查看 Chapter One.pptx',source:'屏幕记录',evidence:'Chapter One'},
+  ]});
+  render(<DailySynthesis active={false} review={model}/>);
+  expect(screen.getAllByRole('article')).toHaveLength(6);
+  const math = within(screen.getByRole('article',{name:'数学复习'}));
+  const order = within(math.getByRole('list'));
+  expect(order.getAllByRole('listitem')).toHaveLength(4);
+  expect(order.getByText('查看 Chapter One.pptx')).toBeVisible();
+  expect(order.getByText('提问 99')).toBeVisible();
+  expect(order.queryByText('提问 77')).toBeNull();
+  fireEvent.click(math.getByRole('button',{name:'查看全部 101 条时间记录'}));
+  expect(order.getAllByRole('listitem')).toHaveLength(101);
+  expect(order.getAllByRole('listitem')[46]).toHaveTextContent('Chapter One.pptx');
+  fireEvent.click(math.getByRole('button',{name:'收起时间记录'}));
+  expect(order.queryByText('提问 77')).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'查看全部 9 项活动'}));
+  expect(screen.getAllByRole('article')).toHaveLength(9);
+});
+
+it('labels a summary assembled from recorded items and retains its visible counts and evidence', async () => {
+  const review = reviewDay('2026-12-11');
+  review.workActivities = [{title:'数学作业',completedItems:[{document:'练习册',label:'第 2 题'}],
+    events:[{at:review.observations[0].at,kind:'work',text:'查看《练习册》 · 第 2 题已完成',source:'屏幕记录',evidence:review.observations[0].summary}]}];
+  const evidence = synthesisEvidence(review);
+  vi.stubGlobal('fetch',vi.fn(async () => Response.json({
+    method:'recorded', summary:'练习册中第 2 题显示已完成。', suggestion:'', used:evidence.length,
+    total:evidence.length, evidence,
+  })));
+  render(<DailySynthesis review={review}/>);
+  expect(await screen.findByText('按记录汇总')).toBeVisible();
+  expect(screen.getByRole('heading',{name:'今日工作小结'})).toBeVisible();
+  expect(screen.getByText('练习册中第 2 题显示已完成。')).toBeVisible();
+  expect(screen.getByText('屏幕显示已完成 1 道题')).toBeVisible();
+  expect(screen.queryByText('本机 AI 总结')).toBeNull();
+  expect(screen.queryByRole('status')).toBeNull();
+  expect(screen.getByText('查看依据 · 1 / 1 条记录参与生成')).toBeVisible();
 });

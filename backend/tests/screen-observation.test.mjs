@@ -404,6 +404,7 @@ test('ordinary work uses local semantic comparison of transcribed text, rejects 
       assert.doesNotMatch(request.messages[1].content[0].text,/Orion budget/);
       return completion(observed);
     }
+    if (request.response_format.json_schema.name==='row_marks') return completion({context:'other',fileTitle:'',rows:[]});
     second++;
     const input=JSON.parse(request.messages[1].content);
     assert.deepEqual(input.tasks,[{task:1,title:tasks[0].title}]); assert.ok(input.visibleLines.includes(observed.workLine));
@@ -497,5 +498,78 @@ test('a course status page credits only independently verified rows to one match
   assert.deepEqual((await capture()).completedParts,[]);
   tasks=tasks.slice(0,1);candidates=[];
   assert.deepEqual((await capture()).completedParts,[]);
-  assert.equal(verifyCount,2);
+  assert.equal(verifyCount,6); // Unmatched course screens also verify marks for the daily activity recap.
+});
+
+
+test('unplanned assignment records independently marked items without crediting a task or quoted examples', async () => {
+  let surfaceKind = 'reading', personalWorkspace = true, headerText = 'My assignments';
+  const work = { ...output, taskLabel:'Problem Set 4', subject:'Applied Mathematics', workLine:'Question 10',
+    readingPage:'other', summary:'All questions were completed.', completedParts:[
+      {name:'Question 1',line:'Question 1 – submitted'}, {name:'Question 2',line:'Question 2 – graded'},
+      {name:'Question 3',line:'Question 3'}, {name:'Question 10',line:'Question 10'}] };
+  const service = createScreenObservationService({getTasks:async()=>[], fetcher:async (_url,init)=>{
+    const schema = JSON.parse(init.body).response_format.json_schema.name;
+    if (schema==='observation') return completion({...work,surfaceKind});
+    assert.equal(schema,'row_marks');
+    return completion({headerText,context:personalWorkspace ? 'workspace' : 'other',fileTitle:'', rows:[{name:'Question 1',mark:'submitted'}, {name:'Question 2',mark:'graded'},
+      {name:'Question 3',mark:'[ ]'}, {name:'Question 10',mark:'in progress'}]});
+  }});
+  const capture = () => service.foreground(image,new AbortController().signal);
+  const first = await capture();
+  assert.equal(first.taskId,null);
+  assert.deepEqual(first.completedParts,[]); assert.equal(first.progress,null);
+  assert.deepEqual(first.activityEvidence,{kind:'work',title:work.taskLabel,subject:work.subject,completedItems:['Question 1','Question 2']});
+  assert.doesNotMatch(first.summary,/All questions|Question 3|Question 10/);
+  headerText='ChatGPT | Discussion';
+  assert.equal((await capture()).activityEvidence,undefined);
+  headerText='';
+  personalWorkspace=false;
+  assert.equal((await capture()).activityEvidence,undefined);
+  surfaceKind='other';
+  assert.equal((await capture()).activityEvidence,undefined);
+});
+
+test('unplanned slides record the document, visible course and current slide heading even without prose', async () => {
+  let page = {...output,taskLabel:'Graph terminology',subject:'Discrete Mathematics',workLine:'Edges connect pairs of vertices',
+    readingPage:'other',surfaceKind:'reading',sectionHeading:'Graph terminology',bodyQuote:'Edges connect pairs of vertices'};
+  const service = createScreenObservationService({getTasks:async()=>[],fetcher:async(_url,init)=>JSON.parse(init.body).response_format.json_schema.name === 'row_marks'
+    ? completion({context:'workspace',fileTitle:'Chapter One.pptx',rows:[]}) : completion(page)});
+  const capture=() => service.foreground(image,new AbortController().signal);
+  const slide=await capture();
+  assert.equal(slide.taskId,null);
+  assert.deepEqual(slide.activityEvidence,{kind:'reading',title:'Chapter One.pptx',subject:page.subject,section:page.sectionHeading});
+  assert.equal(slide.readingSection,undefined);assert.deepEqual(slide.completedParts,[]);
+  page={...page,readingPage:'contents'};
+  assert.equal((await capture()).activityEvidence.section,undefined);
+  page={...page,surfaceKind:'other'};
+  assert.equal((await capture()).activityEvidence,undefined);
+});
+
+
+test('matches a personal answer to its question across independent readings without evaluating or submitting it', async () => {
+  const entries = [
+    {name:'Problem 1: Solve the equation.',field:'Your answer',value:'x = 5'},
+    {name:'Problem 2',field:'Your answer',value:'________'},
+    {name:'Problem 3',field:'Your answer',value:'12'},
+    {name:'Problem 4',field:'Example solution',value:'18'},
+    {name:'Problem 5',field:'Your answer',value:'Type your answer here'},
+    {name:'Problem 6',field:'My solution',value:'x = 9'},
+    {name:'Problem 7',field:'Your answer',value:'13'},
+    {name:'Problem 8: Prove the two claims.',field:'Your answer',value:'Prove the two claims.'},
+  ];
+  let headerText='Student workspace / My assignments', context='workspace';
+  const service=createScreenObservationService({getTasks:async()=>[],fetcher:async(_url,init)=>{
+    if (JSON.parse(init.body).response_format.json_schema.name==='observation')
+      return completion({...output,surfaceKind:'work',readingPage:'other',taskLabel:'Practice sheet',workLine:'Problem 1',answers:entries});
+    return completion({context,headerText,fileTitle:'Practice sheet',rows:[],answers:[
+      ...entries.slice(0,4),{...entries[5],value:'x = 7'},entries[6],entries[6],entries[7]]});
+  }});
+  const capture=()=>service.foreground(image,new AbortController().signal);
+  const observed=await capture();
+  assert.deepEqual(observed.activityEvidence,{kind:'work',title:'Practice sheet',answeredItems:['Problem 1','Problem 3']});
+  assert.deepEqual(observed.completedParts,[]);assert.equal(observed.progress,null);
+  assert.doesNotMatch(JSON.stringify(observed),/x = 5|Example solution/);
+  headerText='ChatGPT | A practice problem';assert.equal((await capture()).activityEvidence,undefined);
+  headerText='Course materials';context='other';assert.equal((await capture()).activityEvidence,undefined);
 });

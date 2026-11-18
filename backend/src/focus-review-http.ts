@@ -4,6 +4,7 @@ import { groupAiConversations } from '../../contracts/ai-conversations.ts';
 import { resolveCodexConversations } from './codex-conversations.ts';
 import { createConversationSummaries } from './conversation-summary.ts';
 import { createDailySynthesis } from './daily-synthesis.ts';
+import { dailyWork } from './daily-work.ts';
 import { ReviewInputError, createFocusReview } from './focus-review.ts';
 import { privateJson, privateInput, checkPrivateRequest } from './checkpoint-http.ts';
 import { CheckpointError, createCheckpointStore } from './checkpoint-store.ts';
@@ -46,13 +47,16 @@ export function createReviewHttp(
       }
 
       const { records } = await checkpoints.read();
-      const observations = records.map(r => ({ id: r.id, at: r.capturedAt, summary: r.summary, nextStep: r.nextStep, source: r.source, appName: r.appName, pageTitle: r.pageTitle, taskId: r.taskId }));
+      const observations = records.map(r => ({ id: r.id, at: r.capturedAt, summary: r.summary, nextStep: r.nextStep,
+        source: r.source, appName: r.appName, pageTitle: r.pageTitle, taskId: r.taskId, activityEvidence:r.activityEvidence,
+        paper:r.paper, readingDocument:r.readingDocument, readingSection:r.readingSection, readingPosition:r.readingPosition }));
       const result = await reviews.read(date, overview.timezone, observations);
-      if (!synthesis && result.aiSessions?.length) {
+      if (result.aiSessions?.length) {
         const sessions = await resolveCodexConversations(result.aiSessions);
         result.aiSessions = sessions;
-        result.aiConversationSummaries = summarizeChats(groupAiConversations(sessions));
+        if (!synthesis) result.aiConversationSummaries = summarizeChats(groupAiConversations(sessions));
       }
+      result.workActivities = dailyWork(result.observations, result.aiSessions ?? []);
       privateJson(response, 200, synthesis ? await synthesize(result) : result);
     } catch (error) {
       if (error instanceof ReviewInputError || error instanceof CheckpointError || error instanceof WriteRequestError) {

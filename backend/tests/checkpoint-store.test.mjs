@@ -83,3 +83,21 @@ test('page position survives restart with its document and never counts as compl
   assert.deepEqual(saved.readingPosition, {page:6,total:12}); assert.deepEqual(saved.completedParts, []);
   assert.equal(saved.progress, null); assert.equal(saved.readingConfirmed, undefined);
 });
+
+
+test('unassigned activity evidence survives restart independently of task achievements', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(),'focusdesk-daily-work-'));
+  t.after(()=>rm(dir,{recursive:true,force:true}));
+  const file=path.join(dir,'tasks.json'), store=createCheckpointStore(file);
+  const row={id:randomUUID(),capturedAt:new Date().toISOString(),source:'automatic',appName:'Browser',taskId:null,
+    summary:'作业状态',progress:null,nextStep:'',activityEvidence:{kind:'work',title:'Problem Set 4',subject:'Discrete Mathematics',answeredItems:['Q3'],completedItems:['Q1','Q2']}};
+  await store.add(row);
+  const {records:[saved]}=await createCheckpointStore(file).read();
+  assert.deepEqual(saved.activityEvidence,row.activityEvidence);
+  assert.deepEqual(saved.completedParts,[]);
+  assert.throws(()=>store.add({...row,detailSource:'window-title'}),{status:400});
+  assert.throws(()=>store.add({...row,activityEvidence:{...row.activityEvidence,kind:'reading'}}),{status:400});
+  assert.throws(()=>store.add({...row,activityEvidence:{...row.activityEvidence,completedItems:['']}}),{status:400});
+  assert.throws(()=>store.add({...row,activityEvidence:{...row.activityEvidence,answeredItems:[{value:'not an item'}]}}),{status:400});
+  assert.throws(()=>store.add({...row,activityEvidence:{...row.activityEvidence,extra:'unbounded data'}}),{status:400});
+});

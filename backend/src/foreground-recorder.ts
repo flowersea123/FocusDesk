@@ -13,7 +13,7 @@ export interface ForegroundFrame {
   pageTitle?: string;
   paper?: ArxivPaper;
 }
-type ObservedPage = Pick<ScreenCheckpoint, 'taskId' | 'summary' | 'nextStep' | 'progress' | 'completedParts' | 'readingDocument' | 'readingSection' | 'readingPosition'>;
+type ObservedPage = Pick<ScreenCheckpoint, 'taskId' | 'summary' | 'nextStep' | 'progress' | 'activityEvidence' | 'completedParts' | 'readingDocument' | 'readingSection' | 'readingPosition'>;
 export interface CaptureSession {
   capture(signal: AbortSignal): Promise<ForegroundFrame | null>;
   close(): void | Promise<void>;
@@ -121,10 +121,11 @@ export function createForegroundRecorder({ platform, support, open, analyze, ide
         paper = {...paper, ...(title ? {title} : {}), ...(position ? {position} : {})};
         const document = title || 'arXiv:' + paper.id;
         const taskId = identity ? identity.taskId : observation.taskId;
+        const material = observation.activityEvidence?.kind === 'reading' ? observation.activityEvidence : undefined;
         const section = observation.taskId === taskId && taskId ? observation.readingSection : undefined;
         // The preceding capture already saved the header. An independent follow-up
         // frame is worth recording only if it reveals an additional section or page.
-        if (previousPaper && !section && (previousPaper.position || !position)) {
+        if (previousPaper && !section && !material?.section && (previousPaper.position || !position)) {
           if (retryVision && lastSaved?.page === frame.pageKey && capturedAt >= lastSaved.at) {
             retryTitleAt = now() + 60_000;
             lastSaved.retryVision = true;
@@ -134,13 +135,18 @@ export function createForegroundRecorder({ platform, support, open, analyze, ide
         observation = {taskId, nextStep:'', progress:null, completedParts:[],
           summary:'正在查看《' + document + '》' + (position ? '（第 ' + position.page + ' 页，共 ' + position.total + ' 页）' :
             paper.view === 'abstract' ? '的摘要页' : '的 PDF') + '。',
+          ...(validReadingDocument(document) ? {activityEvidence:{kind:'reading', title:document,
+            ...(material?.subject ? {subject:material.subject} : {}),
+            ...(material?.section || section ? {section:material?.section || section} : {})}} : {}),
           ...(taskId && (section || position) && validReadingDocument(document) ? {readingDocument:document,
             ...(section ? {readingSection:section} : {}), ...(position ? {readingPosition:position} : {})} : {})};
         titleOnly = false;
       }
       signal.throwIfAborted();
       if (retryVision) retryTitleAt = now() + 60_000;
-      const facts = JSON.stringify([paper, observation.taskId, observation.summary, observation.readingDocument, observation.readingSection,
+      const activity = observation.activityEvidence;
+      const facts = JSON.stringify([paper, activity?.kind, activity?.title, activity?.subject, activity?.section,
+        [...(activity?.answeredItems ?? [])].sort(), [...(activity?.completedItems ?? [])].sort(), observation.taskId, observation.summary, observation.readingDocument, observation.readingSection,
         observation.readingPosition?.page, observation.readingPosition?.total, observation.progress?.percent, [...(observation.completedParts ?? [])].sort()]);
       const row: ScreenCheckpoint = { id: randomUUID(), source: 'automatic', appName, capturedAt,
         ...(pageTitle ? { pageTitle } : {}), ...(paper ? {paper} : {}), ...(titleOnly ? { detailSource: 'window-title' as const } : {}), ...observation };

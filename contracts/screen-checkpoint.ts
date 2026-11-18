@@ -1,5 +1,15 @@
 export type CheckpointSource = 'manual' | 'automatic';
 
+/** Visible activity on a working document or reading material, independent of task ownership. */
+export interface ActivityEvidence {
+  kind: 'work' | 'reading';
+  title: string;
+  subject?: string;
+  section?: string;
+  /** Named questions with a visible personal answer; submission is tracked separately. */
+  answeredItems?: string[];
+  completedItems?: string[];
+}
 export interface ReadingPosition { page: number; total: number }
 /** Only document identity and viewer location are retained from a paper frame. */
 export interface ArxivPaper {
@@ -39,6 +49,7 @@ export interface ScreenCheckpoint {
   /** Page title reported by the foreground application at capture time. */
   pageTitle?: string;
   paper?: ArxivPaper;
+  activityEvidence?: ActivityEvidence;
   /** The system supplied the page title while local image analysis was unavailable. */
   detailSource?: 'window-title';
   capturedAt: string;
@@ -60,6 +71,17 @@ export function validReadingSection(value: unknown): value is string {
 
 export function validReadingDocument(value: unknown): value is string {
   return typeof value === 'string' && !!value.trim() && value.length <= 180 && !/[\p{Cc}\p{Zl}\p{Zp}]/u.test(value);
+}
+
+export function validActivityEvidence(value: unknown): value is ActivityEvidence {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const item = value as ActivityEvidence;
+  return Object.keys(item).every(key => ['kind','title','subject','section','answeredItems','completedItems'].includes(key)) &&
+    (item.kind === 'work' || item.kind === 'reading') && validReadingDocument(item.title) &&
+    (item.subject === undefined || validReadingDocument(item.subject)) &&
+    (item.section === undefined || (item.kind === 'reading' && validReadingSection(item.section))) &&
+    [item.answeredItems, item.completedItems].every(items => items === undefined ||
+      (item.kind === 'work' && Array.isArray(items) && items.length > 0 && items.length <= 8 && items.every(validReadingSection)));
 }
 
 export interface CheckpointHistory {

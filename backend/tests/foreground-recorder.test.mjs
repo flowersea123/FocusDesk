@@ -277,3 +277,25 @@ test('offline paper metadata survives unreadable frames and terminal titles do n
   assert.equal(rows[2].paper.id,other);
   assert.equal(rows[2].readingDocument,'Second paper');
 });
+
+
+test('same-window unplanned evidence changes save even if the description is unchanged', async t => {
+  let items=['Question 1'], answered=[];
+  const saved=[];
+  const recorder=createForegroundRecorder({platform:'darwin',support:supported,pollMs:3,samePageMs:5,
+    open:async()=>({capture:async()=>frame('assignment',items.join(',')+answered.join(',')),close(){}}),
+    analyze:async()=>({...result('查看作业'),activityEvidence:{kind:'work',title:'Worksheet',completedItems:[...items],...(answered.length ? {answeredItems:answered} : {})}}),
+    save:async row=>{saved.push(row)}});
+  t.after(()=>recorder.close());
+  recorder.start();
+  await until(()=>saved.length===1);
+  items=['Question 1','Question 2'];
+  await until(()=>saved.length===2);
+  items=['Question 2','Question 1'];
+  await delay(40);
+  assert.equal(saved.length,2);
+  assert.deepEqual(saved[1].activityEvidence.completedItems,['Question 1','Question 2']);
+  assert.equal(saved[1].taskId,null);
+  answered=['Question 5'];
+  await until(()=>saved.length===3);assert.deepEqual(saved[2].activityEvidence.answeredItems,answered);
+});

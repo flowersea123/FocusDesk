@@ -241,11 +241,15 @@ Display schema display-1, layout goal-1, 4096-byte transport, 64 commands and dr
 
 ### 每日回顾与专注时段
 
-本机 GET /api/v1/focus-review?date=YYYY-MM-DD 提供对应日的计时时段、总秒数、观察文字及改进实验。PUT /api/v1/focus-review/experiment 以日期和 revision 保存计划、复查结果。POST /api/v1/focus-review/synthesis 接收日期，调用本机模型总结当日检查点并返回参与生成的数量和引用原文。超过 12 条时沿时间轴取样。原始图像不写入日记，计时仅依据 Hub 记录的专注会话。
+本机 GET /api/v1/focus-review?date=YYYY-MM-DD 提供对应日的计时时段、总秒数、观察文字及改进实验。PUT /api/v1/focus-review/experiment 以日期和 revision 保存计划、复查结果。POST /api/v1/focus-review/synthesis 接收日期，返回当日小结、参与汇总的记录数及引用依据。有具体作答或完成项时，返回 `method: "recorded"`，根据全天记录分别列出每份材料的题号和状态，并从同一活动中选取按时间排列的阅读和对话摘录。其他日期由本机模型总结屏幕观察、具名活动和实际对话摘录，超过 12 条时沿时间轴取样。原始图像不写入日记，计时仅依据 Hub 记录的专注会话。
 
 每日回顾可返回 `appSessions: [{ appName, from, to, seconds }]`。录制期间，对相邻两次有效采样中同一前台应用累计间隔，以 ISO 时间返回指定日期内的起止时间，秒数保留毫秒精度。切换应用、空帧、停止或重启录制，以及超过 12 秒的采样间隔打断连续性。该数组与 `sessions` 的专注计时独立。旧数据仍可读取，旧截图显示为时间点。返回的观察可包含 `appName` 和 `taskId`，沿用当时的任务关联。私有回顾端点沿用本机访问限制。
 
-工作台与每日回顾在有当日观察时自动请求小结。成功响应中的 `observationRevision` 标识生成时的观察集合，以 SHA-256 校验，避免把旧小结显示为新证据的结论。
+自动检查点可带可选的 `activityEvidence`，其中 `kind` 为 `work` 或 `reading`，`title` 为材料名，`subject`、`section` 为画面可辨的学科或章节。工作材料可保留带完成标记的 `completedItems` 或可见本人作答的 `answeredItems`。这些字段独立于待办绑定，未预设任务时允许 `taskId: null`。
+
+每日回顾的 `workActivities` 依材料或可核对的学科汇总。每组返回标题、按材料和题号去重的完成项、可选的已作答项，以及带时间、来源和原文依据的事件。已出现完成标记的同一题归入完成项。观察时间表示看到该状态的时刻。对话仅在材料名、学科或章节能对应时与材料合并，否则单列。旧记录沿用已有阅读位置或手动观察。用户创建的待办、完成勾选和电子纸进度仍通过原有接口维护。
+
+工作台与每日回顾在有当日屏幕或对话依据时自动请求小结。成功响应中的 `observationRevision` 标识生成时的屏幕与对话依据集合，以 SHA-256 校验，避免把旧小结显示为新证据的结论。
 
 ### 论文阅读书签
 

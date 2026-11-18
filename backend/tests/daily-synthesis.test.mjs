@@ -79,3 +79,62 @@ test('the same observations can be retried when inference recovers', async () =>
   offline = false;
   assert.equal((await synthesize(review)).summary, '正在校对。');
 });
+
+test('chat-only evidence includes both speakers and a changed source reply invalidates a cached digest', async () => {
+  const inputs = [];
+  const synthesize = createDailySynthesis({fetcher: async (_url, options) => {
+    inputs.push(JSON.parse(JSON.parse(options.body).messages[1].content));
+    return Response.json({choices:[{message:{content:JSON.stringify({
+      summary:'讨论了极限的定义。', sourceNumbers:[1], suggestion:'',
+    })}}]});
+  }});
+  const review = {date:'2026-11-18', observations:[], workActivities:[{
+    title:'数学复习', completedItems:[], events:[{at:'2026-11-18T02:05:00Z', kind:'discussion',
+      text:'这个怎么理解？', source:'ChatGPT', evidence:'提问：这个怎么理解？\n回复：用极限的定义。'}],
+  }]};
+  const first = await synthesize(review);
+  assert.equal(first.evidence[0].sourceLabel,'ChatGPT');
+  assert.match(inputs[0][0].excerpt,/用极限的定义/);
+  review.workActivities[0].events[0].evidence += ' 先固定 ε。';
+  const second = await synthesize(review);
+  assert.equal(inputs.length,2);
+  assert.notEqual(first.observationRevision,second.observationRevision);
+});
+
+test('same-numbered problems on different worksheets retain their own status and sources in the daily narrative', async () => {
+  const { synthesisEvidence } = await import('../../contracts/daily-synthesis.ts');
+  const { createHash } = await import('node:crypto');
+  const at = minute => new Date(Date.UTC(2026,10,18,2,minute)).toISOString();
+  const event = (i,kind,text,source='屏幕记录') => ({at:at(i),kind,text,source,evidence:text});
+  const completed = ['Problem 1','Problem 3'].map(label=>({document:'Week 3 Homework',label}));
+  const answered = ['Problem 1','Problem 3'].map(label=>({document:'Week 4 Practice',label}));
+  const events = [
+    event(0,'work','查看《Week 3 Homework》 · 有完成标记：Problem 1、Problem 3'),
+    event(15,'work','查看《Week 4 Practice》 · 可见作答：Problem 1、Problem 3'),
+    event(16,'reading','查看《Chapter One.pptx》 · Limits of sequences'),
+    event(17,'discussion','提问「怎样用 ε 和 N 说明数列收敛？」','ChatGPT'),
+  ];
+  const review = {date:'2026-11-18',observations:Array.from({length:14},(_,i)=>({
+    id:'old-'+i,at:at(i+1),summary:'一条其他屏幕观察',source:'automatic',
+  })),workActivities:[{title:'数学',completedItems:completed,answeredItems:answered,events}]};
+  const synthesize = createDailySynthesis({fetcher:()=>assert.fail('a model cannot reassign verified outcome evidence')});
+  const output = await synthesize(review);
+  assert.equal(output.method,'recorded');
+  const sentences = output.summary.split('。');
+  assert.match(sentences[0],/《Week 3 Homework》.*2 项带有完成标记（Problem 1、Problem 3）/);
+  assert.doesNotMatch(sentences[0],/可见作答|Week 4|已提交/);
+  assert.match(sentences[1],/《Week 4 Practice》.*可见 2 项作答（Problem 1、Problem 3）/);
+  assert.doesNotMatch(sentences[1],/完成标记|Week 3|已提交/);
+  assert.match(sentences[2],/先查看《Chapter One.pptx》.*随后是 ChatGPT 对话.*ε 和 N/);
+  assert.equal(output.suggestion,'');
+  assert.equal(output.total,18);
+  assert.equal(output.used,4);
+  assert.deepEqual(output.evidence.map(r=>r.at),events.map(e=>e.at));
+  const revision = createHash('sha256').update(JSON.stringify([review.date,synthesisEvidence(review)])).digest('hex');
+  assert.equal(output.observationRevision,revision);
+  const corrected = structuredClone(review);
+  corrected.workActivities[0].answeredItems.pop();
+  const revised = await synthesize(corrected);
+  assert.notEqual(revised.observationRevision,revision);
+  assert.match(revised.summary,/《Week 4 Practice》.*可见 1 项作答（Problem 1）/);
+});
