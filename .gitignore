@@ -23,3 +23,18 @@ backend/data/*
 *.p12
 Thumbs.db
 .DS_Store
+
+# Local inference weights, private mail exports and Python bytecode
+*.gguf
+*.safetensors
+*.eml
+!experiments/mail-ai/evaluation/portfolio.eml
+__pycache__/
+*.pyc
+*.pyo
+*.json.checkpoints.json
+*.json.focus-review.json
+*.json.calendar.json
+*.json.ai-activity.json
+*.json.progress.json
+outlook-auth.json

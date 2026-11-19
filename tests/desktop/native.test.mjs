@@ -12,6 +12,7 @@ import { collectPayloadSources } from '../../scripts/build-installer.mjs';
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const RUNTIME = path.join(ROOT, '.cache/m1-toolchain/node-v24.16.0-win-x64/node.exe');
 const NATIVE = path.join(ROOT, '.cache/m1-native/launcher/FocusDesk.exe');
+const nativeOnly = { skip: process.platform !== 'win32' && 'Requires the native Windows tray launcher and Job Objects' };
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function waitFor(check, timeout = 20000) {
   const end = Date.now() + timeout;
@@ -47,7 +48,7 @@ async function setup(t) {
   return { app, user, port, launch, command, state };
 }
 
-test('native tray actions, duplicate launch and graceful exit work without a system Node PATH', async t => {
+test('native tray actions, duplicate launch and graceful exit work without a system Node PATH', nativeOnly, async t => {
   const { user, port, launch, command, state } = await setup(t); const first = launch();
   const initial = await waitFor(async () => { const value = await state(); return value.phase === 'ready' && value; });
   assert.equal(initial.pid, first.pid); assert.equal(initial.port, port);
@@ -63,7 +64,7 @@ test('native tray actions, duplicate launch and graceful exit work without a sys
   assert.equal(await command('--shutdown'), 0, 'shutdown when not running is idempotent');
 });
 
-test('native Job Object recovers backend and data lock when launcher is forcibly terminated', async t => {
+test('native Job Object recovers backend and data lock when launcher is forcibly terminated', nativeOnly, async t => {
   const { port, launch, state, command } = await setup(t); const first = launch();
   await waitFor(async () => (await state()).phase === 'ready');
   const exit = once(first, 'exit'); first.kill(); await exit;

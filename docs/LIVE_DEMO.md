@@ -35,7 +35,7 @@ Arduino IDE 沿用原 `ESP32S3 Dev Module` 的板卡、USB、Flash、PSRAM 设�
 
 ## 3. 改任务并核对更新
 
-推荐在本机 `http://127.0.0.1:8787/` 点击“编辑任务”，修改后“保存更改”。仍可编辑 [tasks.json](../backend/data/tasks.json)，无需手改版本；避免网页与外部编辑器同时写。见 [任务编辑](TASK_EDITING.md)。
+推荐在本机 `http://127.0.0.1:8787/` 点击“编辑任务”，修改后“保存更改”。也可编辑首次启动后生成的 `backend/data/tasks.json`，版本由 Hub 管理。请避免网页与外部编辑器同时写入。[任务数据示例](../backend/data/tasks.example.json)。见 [任务编辑](TASK_EDITING.md)。
 
 - 网页下次约 30 秒轮询读取，也可点“重新读取”。
 - 设备也轮询，但新画面受前次显示尝试完成后至少 60 秒间隔约束；完整刷新还需面板时间。网络错误会退避，不能保证固定秒数显示。

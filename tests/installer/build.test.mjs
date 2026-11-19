@@ -21,7 +21,8 @@ async function fixture(t) {
     'docs/WINDOWS_DESKTOP.md'];
   const traps=['backend/data/tasks.json','backend/src/.env','frontend/dist/private_config.h',
     'frontend/dist/.env.production','frontend/dist/assets/app.js.map','frontend/dist/node_modules/secret.txt',
-    'contracts/fixtures/personal.json','firmware/focusdesk_live/private_config.h','config/personal.json'];
+    'backend/src/foreground-platform/__pycache__/helper.pyc','backend/src/loose.pyc','backend/public/notes.eml',
+    'frontend/dist/local.pem','contracts/fixtures/personal.json','firmware/focusdesk_live/private_config.h','config/personal.json'];
   for(const filename of [...required,...traps]) {
     await mkdir(path.dirname(path.join(root,filename)),{recursive:true});
     await writeFile(path.join(root,filename),traps.includes(filename)?'PRIVATE_TEST_SENTINEL':filename);

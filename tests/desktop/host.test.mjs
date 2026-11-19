@@ -10,7 +10,9 @@ import { fileURLToPath } from 'node:url';
 import { collectPayloadSources } from '../../scripts/build-installer.mjs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const RUNTIME = path.join(ROOT, '.cache/m1-toolchain/node-v24.16.0-win-x64/node.exe');
+// Exercise the JavaScript supervisor with this platform's Node 24 in the bundle layout.
+// Windows always uses the pinned release runtime, including its empty-PATH checks.
+const RUNTIME = process.platform === 'win32' ? path.join(ROOT, '.cache/m1-toolchain/node-v24.16.0-win-x64/node.exe') : process.execPath;
 async function availablePort() {
   const socket = createServer(); socket.listen(0, '127.0.0.1'); await once(socket, 'listening');
   const port = socket.address().port; await new Promise(resolve => socket.close(resolve)); return port;

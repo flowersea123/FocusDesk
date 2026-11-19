@@ -10,12 +10,13 @@ const REQUIRED_FILES = [
   'contracts/DISPLAY_FONT_LICENSE.txt',
 ];
 const RUNTIME_TREES = ['backend/src', 'backend/public', 'frontend/dist'];
-const EXCLUDED_DIRECTORIES = new Set(['node_modules', '.cache', '.git', 'firmware', 'tests', 'test', '__tests__', 'coverage']);
+const EXCLUDED_DIRECTORIES = new Set(['node_modules', '.cache', '.git', 'firmware', 'tests', 'test', '__tests__', '__pycache__', 'coverage']);
 
 function excluded(name) {
   const normalized = name.toLowerCase();
   return EXCLUDED_DIRECTORIES.has(normalized) || normalized === 'private_config.h' ||
     normalized === '.env' || normalized.startsWith('.env.') ||
+    /\.(?:pyc|pyo|gguf|safetensors|eml|pem|key|pfx|p12|local|log|map)$/i.test(name) ||
     /\.(?:test|spec)\.[^.]+$/i.test(name);
 }
 

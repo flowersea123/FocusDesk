@@ -9,7 +9,7 @@ const shim = path.join(root, 'tests/firmware/mac-host');
 const cache = path.join(root, '.cache/display-host');
 const dependencyDirectory = path.join(cache, 'dependencies');
 const lock = JSON.parse(await readFile(path.join(shim, 'upstream-gfx.json'), 'utf8'));
-const compiler = process.env.CXX || 'clang++';
+const compiler = process.env.CXX || (process.platform === 'darwin' ? 'clang++' : 'g++');
 const flags = ['-std=c++17', '-Wall', '-Wextra', '-Werror'];
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 let runDirectory;
@@ -30,7 +30,7 @@ function run(label, command, args, { print = true } = {}) {
     stdout: result.stdout || '', stderr: result.stderr || '', error: result.error?.message });
   if (result.error || result.status !== 0) {
     const hint = result.error?.code === 'ENOENT' && command === compiler
-      ? ' Install Apple Command Line Tools (xcode-select --install), or set CXX to an existing C++ compiler path.'
+      ? ' Install a C++17 compiler or set CXX to its executable path.'
       : '';
     throw new Error(`${label} failed.${hint}\n${result.error?.message || result.stderr || result.stdout || `Exit ${result.status}`}`);
   }

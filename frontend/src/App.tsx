@@ -89,6 +89,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
   const [taskDraft, setTaskDraft] = useState<Task[] | null>(null);
   const [suggestionDraft, setSuggestionDraft] = useState<string | null>(null);
   const { overview, loading, error, lastRead, saving, reload, saveTasks, saveFocus, saveAISuggestion } = useOverview(source, scenario);
+  const [digestOpen, setDigestOpen] = useState(false);
   const [chosenTask, chooseTask] = useState('');
   const tasks = overview?.tasks ?? [];
   const manual = tasks.find(task => task.id === chosenTask);
@@ -251,12 +252,15 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
       </div>
       <div hidden={view !== 'today'}>
       {source.localWorkspace && overview && <div className="today-insights">
-        <ActivityTimeline recorder={recorder} review={activity.review} tasks={tasks} revealApp={revealApp?.date === activity.review?.date ? revealApp : null} error={activity.error} onRetry={activity.refresh}/>
-        <div className="today-brief">
+        <div className="today-brief task-first">
           <NextTask overview={overview} next={next} saving={saving} onStart={source.updateFocus ? startRecommended : undefined} onInspect={task => inspectTask(task.id)} onApp={inspectApp} onHistory={inspectHistory}/>
-          {activity.review && (activity.review.observations.length > 0 || activity.review.sessions.length > 0 || !!activity.review.appSessions?.length || !!activity.review.aiSessions?.length || !!activity.review.workActivities?.length) &&
-            <DailySynthesis active={view === 'today'} review={activity.review}/>}
         </div>
+        <ActivityTimeline recorder={recorder} review={activity.review} tasks={tasks} revealApp={revealApp?.date === activity.review?.date ? revealApp : null} error={activity.error} onRetry={activity.refresh}/>
+        {activity.review && (activity.review.observations.length > 0 || activity.review.sessions.length > 0 || !!activity.review.appSessions?.length || !!activity.review.aiSessions?.length || !!activity.review.workActivities?.length) &&
+          <details className="today-digest" onToggle={event => setDigestOpen(event.currentTarget.open)}>
+            <summary>今日小结</summary>
+            {digestOpen && <DailySynthesis active={view === 'today'} review={activity.review}/>}
+          </details>}
       </div>}
       <div className="desk-grid">
         <div className="desk-work">

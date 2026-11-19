@@ -21,6 +21,9 @@
     "test:migration": "node --test tests/migration/*.test.mjs",
     "test:installer": "node --test tests/installer/*.test.mjs",
     "test:development": "node --test tests/development/*.test.mjs",
+    "test:mail": "npm --prefix experiments/mail-ai test",
+    "test:provisioning": "node --test tests/provisioning/*.test.mjs",
+    "verify": "npm run build && npm test && npm run test:frontend && npm run test:integration && npm run test:packaging && npm run test:desktop && npm run test:migration && npm run test:installer && npm run test:development && npm run test:mail && npm run test:provisioning && npm run test:display-host",
     "test:display-host": "node scripts/test-display-host.mjs"
   }
 }

@@ -19,14 +19,14 @@ export function nextAction(overview: DailyOverview, review: FocusReview | null):
       id: o.taskId, at: o.at, kind: '记录', observation: o,
     })),
     ...(review?.sessions ?? []).map(s => ({ id: s.taskId, at: s.to, kind: '计时', observation: undefined })),
-  ].filter(item => !item.id || pending.some(task => task.id === item.id))
+  ].filter(item => item.id ? pending.some(task => task.id === item.id) : pending.length === 0)
     .sort((left, right) => Date.parse(right.at) - Date.parse(left.at))[0];
   const active = pending.find(task => task.id === overview.focus?.task_id);
-  if (!active && recent && !recent.id && recent.observation?.nextStep) {
+  if (!pending.length && recent && !recent.id && recent.observation?.nextStep) {
     const latest = recent.observation;
     return { action: latest.nextStep!, reason: time(latest.at) + ' ' + (latest.appName ?? '屏幕记录') + ' · ' + latest.summary };
   }
-  if (!active && !recent && review) {
+  if (!pending.length && !recent && review) {
     const latestSpan = review.appSessions?.at(-1);
     const latestShot = observations.filter(o => o.appName).at(-1);
     const useSpan = latestSpan && (!latestShot || Date.parse(latestSpan.to) > Date.parse(latestShot.at));
