@@ -44,12 +44,17 @@ struct Link {
   uint32_t clock = 0;
   fc::HubResult hub = fc::HubResult::Ready;
   fc::Config target = {};
+  std::string checkedHub;
   bool connect(const fc::Config& value) { ++connects; target = value; online = false; return beginOk; }
   void disconnect() { online = false; }
-  bool matches(const fc::Config& value) { return online && same(value, target); }
+  bool matches(const fc::Config& value) {
+    return online && std::strcmp(value.ssid, target.ssid) == 0 &&
+        std::strcmp(value.password, target.password) == 0;
+  }
   bool subnetConflict() { return conflict; }
-  fc::HubResult verifyHub(const fc::Config&) {
+  fc::HubResult verifyHub(const fc::Config& value) {
     ++hubChecks;
+    checkedHub = value.hub_url;
     if (dropDuringHub) online = false;
     if (expireDuringHub) open = false;
     return hub;
@@ -94,6 +99,25 @@ int main() {
     check(reboot.attempt.state == poc::State::Disconnected);
     tick(reboot, rebootLink, 10099, false); check(rebootLink.connects == 1);
     tick(reboot, rebootLink, 10100, false); check(rebootLink.connects == 2);
+  }
+  for (const auto outcome : {fc::HubResult::Ready, fc::HubResult::Unreachable}) {
+    Store store; Link link; Session session(store, link); session.begin(0);
+    link.online = true; tick(session, link, 1);
+    const auto newHub = config("original", "original-pass", "http://192.168.1.10:8790");
+    link.hub = outcome;
+    check(session.startTrial(newHub, "hub-only", 2));
+    check(link.connects == 1 && link.online && session.attempt.state == poc::State::Verifying);
+    tick(session, link, 3);
+    check(link.hubChecks == 1 && link.checkedHub == newHub.hub_url && store.writes == 0);
+    tick(session, link, 4);
+    check(link.connects == 1 && link.online);
+    if (outcome == fc::HubResult::Ready) {
+      check(store.writes == 1 && same(store.durable, newHub) && same(session.saved(), newHub));
+      check(std::strcmp(session.result, "saved") == 0);
+    } else {
+      check(store.writes == 0 && same(store.durable, original) && same(session.saved(), original));
+      check(std::strcmp(session.error, "HUB_UNREACHABLE") == 0);
+    }
   }
   {
     Store store; Link link; Session session(store, link); session.begin(0);
