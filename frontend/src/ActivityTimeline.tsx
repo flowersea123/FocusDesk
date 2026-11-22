@@ -422,7 +422,7 @@ export default function ActivityTimeline({review, tasks, revealApp, error, onRet
   const recording = state === 'recording' || state === 'starting' || state === 'stopping';
   const aiOnly = recording && recorder?.status?.mode === 'ai';
   return <section className="activity-timeline" aria-labelledby={heading}>
-    <header className="activity-header"><h2 id={heading}>{historical ? '当日活动时间轴' : '今日活动时间轴'}</h2>
+    <header className="activity-header"><h2 id={heading} lang="en">{historical ? 'Activity Timeline' : 'Today’s Activity'}</h2>
       {review && <span><time dateTime={review.date}>{review.date}</time> · {review.timezone}</span>}
     </header>
     {error && <p role="alert" className="activity-error">活动记录读取失败。{error} {onRetry &&

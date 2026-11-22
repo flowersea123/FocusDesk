@@ -202,7 +202,7 @@
 
 .desk-project .project-progress { padding: 0; border: 0; }
 .desk-project #project-progress-title { font-size: 19px; font-weight: 750; letter-spacing: -.025em; }
-.desk-project #project-progress-title span { font-size: inherit; color: var(--ink); font-weight: 650; }
+.desk-project #project-progress-title span + span { font-size: inherit; color: var(--ink); font-weight: 650; }
 .desk-project .project-step-count { display: flex; justify-content: space-between; margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--line); }
 .project-step-count span { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
 .desk-project .project-steps { display: grid; gap: 3px; margin-block: 12px; }

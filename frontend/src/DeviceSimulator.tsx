@@ -44,10 +44,10 @@ export default function DeviceSimulator({ readSnapshot }: { readSnapshot?: Snaps
 
   return <div className="app-shell simulator-shell">
     <header className="topbar"><a className="brand" href="/">FocusDesk</a>
-      <nav aria-label="Main navigation"><a href="/">任务面板</a><a className="nav-current" href="/simulator">模拟屏</a><a href="/connect">设备连接</a></nav>
+      <nav aria-label="Main navigation" lang="en"><a href="/">Workspace</a><a className="nav-current" href="/simulator">Simulator</a><a href="/connect">Devices</a></nav>
       <span className="source-badge">本机开发</span></header>
     <main className="simulator-main">
-      <div className="page-heading"><div><p className="eyebrow">DEVICE SIMULATOR</p><h1>电子纸模拟屏</h1></div>
+      <div className="page-heading"><h1 lang="en">E-Paper Simulator</h1>
         <a className="simulator-editor-link" href="/" target="_blank" rel="noreferrer">另开任务面板 ↗</a></div>
       <p className="simulator-intro">在任务面板保存修改，这里会读取 Hub 发给设备的绘图指令，使用同一套字形绘制 400 × 300 像素画面。</p>
       <div className="simulator-notice">这里的成功只代表浏览器已绘制，不是电子纸真机的在线状态或同步回执。</div>
@@ -65,7 +65,7 @@ export default function DeviceSimulator({ readSnapshot }: { readSnapshot?: Snaps
       </section>
 
       <section className="simulator-screen-card" aria-labelledby="simulator-screen-title">
-        <div className="section-heading simulator-screen-heading"><h2 id="simulator-screen-title">设备指令画面</h2>
+        <div className="section-heading simulator-screen-heading"><h2 id="simulator-screen-title" lang="en">Device Display</h2>
           <div className="simulator-view-actions"><div className="simulator-segmented" role="group" aria-label="显示倍率">
             <button type="button" aria-pressed={scale === 1} onClick={() => setScale(1)}>1×</button>
             <button type="button" aria-pressed={scale === 2} onClick={() => setScale(2)}>2×</button></div>

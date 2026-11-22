@@ -10,7 +10,8 @@ const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
 const statusLabels = { scheduled: '已安排', waiting: '等待今日清单腾出位置', published: '已加入今日任务', done: '已完成', removed: '已移除' };
 const sourceLabels = { mail: '邮件', canvas: 'Canvas', manual: '手动安排' };
 const fullDate = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
-const monthLabel = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', timeZone: 'UTC' });
+const agendaDateLabel = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+const monthLabel = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', timeZone: 'UTC' });
 const dateOf = (value: string) => new Date(value + 'T00:00:00Z');
 const dayOf = (value: Date | number) => {
   const iso = new Date(value).toISOString();
@@ -114,7 +115,7 @@ export default function TaskCalendar({ active, date, onDate, onChange }: Props) 
     }
   }
   return <section className="task-calendar" aria-labelledby="calendar-title">
-    <header className="desk-masthead"><div><h1 id="calendar-title">任务日历</h1>
+    <header className="desk-masthead"><div><h1 id="calendar-title" lang="en">Task Calendar</h1>
       <p className="desk-date">按计划日期安排待办，到日后同步至今日任务和电子屏。</p></div>
       <a className="calendar-mail" href={import.meta.env.VITE_MAIL_PAGE_URL} target="_blank" rel="noreferrer">从邮件安排 ↗</a>
     </header>
@@ -122,7 +123,7 @@ export default function TaskCalendar({ active, date, onDate, onChange }: Props) 
     {!snapshot && !readError && <p role="status">正在读取日历…</p>}
     {snapshot && selected && <div className="calendar-layout">
       <section className="calendar-month" aria-label="按月查看">
-        <div className="calendar-toolbar"><h2>{monthLabel.format(dateOf(selected))}</h2><div>
+        <div className="calendar-toolbar"><h2 lang="en">{monthLabel.format(dateOf(selected))}</h2><div>
           <button type="button" aria-label="上个月" disabled={saving || !adjacentMonth(selected,-1)} onClick={() => choose(adjacentMonth(selected,-1))}>‹</button>
           <button type="button" disabled={saving} onClick={() => choose(snapshot.today)}>今天</button>
           <button type="button" aria-label="下个月" disabled={saving || !adjacentMonth(selected,1)} onClick={() => choose(adjacentMonth(selected,1))}>›</button>
@@ -143,7 +144,7 @@ export default function TaskCalendar({ active, date, onDate, onChange }: Props) 
             </>}</button>;
         })}</div>
       </section>
-      <section className="calendar-agenda" aria-label="当日安排"><header><h2>{fullDate.format(dateOf(selected))}</h2>
+      <section className="calendar-agenda" aria-label="当日安排"><header><h2 lang="en">{agendaDateLabel.format(dateOf(selected))}</h2>
         <span>{entries.length} 项待办</span></header>
         {edit?.mode === 'create' ? <form onSubmit={event => { event.preventDefault(); void save(); }}>
           <label>新待办名称<input autoFocus value={edit.entry.title} disabled={saving}

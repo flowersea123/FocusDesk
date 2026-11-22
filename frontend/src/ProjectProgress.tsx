@@ -85,7 +85,7 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
   if (!tasks.length && !error) return null;
 
   return <section className="project-progress" id="project-progress" tabIndex={-1} aria-labelledby="project-progress-title">
-    <header><h3 id="project-progress-title">任务详情{selected && <span> · {selected.title}</span>}</h3>
+    <header><h3 id="project-progress-title"><span lang="en">Task Details</span>{selected && <span> · {selected.title}</span>}</h3>
       {manual && <button type="button" className="project-follow" onClick={onFollow}>跟随识别结果</button>}
     </header>
     {(canTarget || (active && target)) && <div className="project-selection">
@@ -98,7 +98,7 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
     {current && !status && !error && <p role="status">正在读取任务记录…</p>}
     {status && <>
       {(documentTitle || position || section) && <div className="project-reading">
-        <h3>阅读位置</h3>
+        <h3 lang="en">Reading Position</h3>
         {position ? <>
           <strong>第 {position.page} / {position.total} 页</strong>
           {section && <p>{pageSection ? '读到 ' : '最近章节书签　'}<strong>{section}</strong></p>}
@@ -116,7 +116,7 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
       </details>}
       {latest && <div className="project-observation"><small>最近截图依据 · <time dateTime={latest.capturedAt}>{time(latest.capturedAt)}</time> · {checkpointSourceLabel(latest.source)}</small>
         <p>{latest.summary}</p></div>}
-      {plan.length > 0 && <><p className="project-step-count"><strong>完成步骤</strong>
+      {plan.length > 0 && <><p className="project-step-count"><strong lang="en">Checklist</strong>
         <span>{plan.filter(part => status.completed.includes(part)).length} / {plan.length}</span>
       </p><ol className="project-steps" aria-label="完成步骤">{plan.map(part => {
         const done = status.completed.includes(part);

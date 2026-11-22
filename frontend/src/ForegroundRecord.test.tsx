@@ -115,10 +115,10 @@ test('a direct record link restores the running indicator, reloads the timeline 
   window.history.replaceState(null, '', '/#record');
   render(<App source={{ kind: 'http', localWorkspace: true, read: async () => data }} />); await flush();
   expect(screen.getByText('屏幕记录中')).toBeVisible();
-  expect(screen.getByRole('region', { name: /^任务详情/ })).toBeVisible();
+  expect(screen.getByRole('region', { name: /^Task Details/ })).toBeVisible();
   expect(screen.queryByRole('button', { name: '屏幕记录' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '今天任务' })).not.toBeInTheDocument();
-  const timeline = screen.getByRole('region', { name: '记录时间线' });
+  const timeline = screen.getByRole('region', { name: 'Recording Timeline' });
   expect(within(timeline).getByRole('heading', { name: '课程讲义' })).toBeVisible();
   expect(within(timeline).getByText('来自窗口标题')).toBeVisible();
   expect(within(timeline).queryByText('Safari · 课程讲义')).not.toBeInTheDocument();
@@ -127,7 +127,7 @@ test('a direct record link restores the running indicator, reloads the timeline 
   await click('显示更早的记录');
   expect(within(timeline).getByText('早期手动记录')).toBeVisible();
   expect(within(timeline).getByText('手动确认')).toBeVisible();
-  await act(async () => { fireEvent.click(screen.getByRole('link', { name: '每日回顾' })); });
+  await act(async () => { fireEvent.click(screen.getByRole('link', { name: 'Daily Review' })); });
   const reviewsBefore = routes.filter(path => path === '/api/v1/focus-review').length;
   const progressBefore = routes.filter(path => path === '/api/v1/project-progress').length;
   records = [analyzed, ...records];
@@ -135,7 +135,7 @@ test('a direct record link restores the running indicator, reloads the timeline 
   await act(async () => { fireEvent(window, new Event('focus')); });
   expect(routes.filter(path => path === '/api/v1/focus-review').length).toBeGreaterThan(reviewsBefore);
   expect(routes.filter(path => path === '/api/v1/project-progress').length).toBeGreaterThan(progressBefore);
-  await act(async () => { fireEvent.click(screen.getByRole('link', { name: '工作台' })); });
+  await act(async () => { fireEvent.click(screen.getByRole('link', { name: 'Workspace' })); });
   expect(within(timeline).getByRole('heading', { name: '研究笔记' })).toBeVisible();
   expect(within(timeline).getByText('整理第二章的问题。')).toBeVisible();
 

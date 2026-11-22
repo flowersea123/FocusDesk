@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>FocusDesk · 设备连接</title>
+  <title>FocusDesk · Device Setup</title>
   <style>
 :root {
       --page:#f7f6f2; --surface:#fff; --ink:#111; --muted:#605e58; --line:#d5d3ce;
@@ -68,27 +68,27 @@
 <body>
   <header class="topbar">
     <a class="brand" href="/" aria-label="FocusDesk 首页">FocusDesk</a>
-    <nav aria-label="主导航"><a href="/">工作台</a><a href="/connect" class="nav-current" aria-current="page">连接设备</a></nav>
+    <nav aria-label="Main navigation" lang="en"><a href="/">Workspace</a><a href="/connect" class="nav-current" aria-current="page">Devices</a></nav>
     <span class="source-badge">本机 Hub</span>
   </header>
 <main>
   <div class="connection-heading">
-    <h1>连接设备</h1>
+    <h1 lang="en">Device Setup</h1>
     <p class="muted page-intro">电脑与电子纸需要连接到可以互相访问的同一局域网。保持 FocusDesk 启动窗口开启。</p>
   </div>
   <div class="connection-grid"><div class="management-column">
-  <section class="card local-card"><h2>本机工作台</h2>
+  <section class="card local-card"><h2 lang="en">Local Workspace</h2>
     <p>在运行 FocusDesk 的电脑浏览器中打开：<br><code id="local">正在读取…</code></p>
     <p class="muted">这里可以编辑任务、开始或结束专注。手机和其他电脑通过局域网地址打开时保持只读。</p>
   </section>
-  <section class="card"><h2>Hub 局域网地址</h2>
+  <section class="card"><h2 lang="en">Hub Network Addresses</h2>
     <p class="muted">如果有多张网卡，请选择与电子纸连接同一路由器的 Wi-Fi 或以太网地址。地址列表不代表设备已连接成功。</p>
     <div id="addresses"></div>
     <p id="status" class="muted" role="status" aria-live="polite">正在识别本机地址…</p>
     <p id="error" role="alert" hidden></p><button id="refresh" type="button">刷新连接地址</button>
   </section>
   </div><aside class="guide-column">
-  <section class="card guide-card"><h2>ESP32 配网</h2>
+  <section class="card guide-card"><h2 lang="en">ESP32 Setup</h2>
     <p class="muted device-validation">设备连接状态 · 在设备配网页确认</p>
     <ol class="steps">
       <li>将电子纸接入与电脑互通的 2.4 GHz Wi-Fi。</li>

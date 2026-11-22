@@ -51,7 +51,7 @@
 
 .desk-task-panel .project-progress { margin-top: 13px; padding: 12px 0 0; border: 0; border-radius: 0; border-top: 1px solid var(--line); }
 .project-progress #project-progress-title { margin: 0; color: var(--ink); font-size: 15px; font-weight: 650; }
-.project-progress #project-progress-title span { color: var(--muted); font-size: 14px; font-weight: 500; }
+.project-progress #project-progress-title span + span { color: var(--muted); font-size: 14px; font-weight: 500; }
 .project-progress .project-follow { border: 0; background: transparent; padding: 3px 0; color: var(--accent); text-decoration: underline; }
 .project-progress .project-selection { border: 0; padding: 0; margin-top: 7px; }
 .task-recorder-state .recorder-status { margin-top: 9px; }

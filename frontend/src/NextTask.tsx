@@ -63,7 +63,7 @@ export default function NextTask({ overview, next, saving, onStart, onInspect, o
     try { await onStart(task); } catch (error) { setFailure(error instanceof Error ? error.message : '专注计时暂时无法开始。'); }
   }
   return <section className="next-task-card" aria-labelledby="next-task-title">
-    <h2 id="next-task-title">接下来做什么</h2>
+    <h2 id="next-task-title" lang="en">Up Next</h2>
     {next ? <>
       <strong className="next-task-name">{task?.title ?? next.action}</strong>
       {task && next.action && <p className="next-task-description">{next.action}</p>}

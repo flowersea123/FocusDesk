@@ -216,23 +216,23 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
       </div>
         <nav id="desk-navigation" className="desk-nav" aria-label="主导航">
           <a href="#workspace" aria-current={view === 'today' ? 'page' : undefined}
-            onClick={event => { event.preventDefault(); navigate('today'); }}><DeskIcon name="today" />工作台</a>
+            onClick={event => { event.preventDefault(); navigate('today'); }}><DeskIcon name="today" /><span lang="en">Workspace</span></a>
           {source.localWorkspace && <a href="#calendar" aria-current={view === 'calendar' ? 'page' : undefined}
-            onClick={event => { event.preventDefault(); navigate('calendar'); }}><DeskIcon name="calendar" />任务日历</a>}
+            onClick={event => { event.preventDefault(); navigate('calendar'); }}><DeskIcon name="calendar" /><span lang="en">Task Calendar</span></a>}
           {source.localWorkspace && <a href="#review" aria-current={view === 'review' ? 'page' : undefined}
-            onClick={event => { event.preventDefault(); navigate('review'); }}><DeskIcon name="review" />每日回顾</a>}
+            onClick={event => { event.preventDefault(); navigate('review'); }}><DeskIcon name="review" /><span lang="en">Daily Review</span></a>}
           {local && <a href={import.meta.env.VITE_MAIL_PAGE_URL} target="_blank" rel="noreferrer" onClick={() => setNavOpen(false)}>
-            <DeskIcon name="mail" />邮件与待办 <span className="desk-external" aria-hidden="true">↗</span></a>}
+            <DeskIcon name="mail" /><span lang="en">Mail</span> <span className="desk-external" aria-hidden="true">↗</span></a>}
           <div className="desk-nav-divider" aria-hidden="true" />
           <a href="/simulator" target="_blank" rel="noreferrer" onClick={() => setNavOpen(false)}>
-            <DeskIcon name="screen" />模拟屏 <span className="desk-external" aria-hidden="true">↗</span></a>
-          <a href="/connect"><DeskIcon name="connect" />连接设备</a>
+            <DeskIcon name="screen" /><span lang="en">Simulator</span> <span className="desk-external" aria-hidden="true">↗</span></a>
+          <a href="/connect"><DeskIcon name="connect" /><span lang="en">Devices</span></a>
         </nav>
     </header>
 
     <main id="workspace" className="desk-main" tabIndex={-1}>
       {view === 'today' && <div className="desk-masthead">
-        <h1>今日工作台</h1>
+        <h1 lang="en">Today’s Workspace</h1>
         {(overview || activity.review) && <dl className="today-totals">
           {activity.review && <div><dt>今日专注</dt><dd>{formatActivityDuration(activity.review.totalSeconds)}</dd></div>}
           {activity.review && <div><dt>已记录前台</dt><dd>{formatActivityDuration((activity.review.appSessions ?? []).reduce((sum, item) => sum + item.seconds, 0))}</dd></div>}
@@ -257,7 +257,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
       <div className="desk-grid" data-local-workspace={Boolean(source.localWorkspace)}>
           <section className="desk-task-panel" aria-labelledby="overview-title" aria-busy={loading}>
             <div className="desk-section-head">
-              <h2 id="overview-title">今日任务</h2>
+              <h2 id="overview-title" lang="en">Today’s Tasks</h2>
               {overview && <div className="desk-completion" role="meter" aria-label={`${completed} 项已完成，共 ${count} 项`}
                 aria-valuemin={0} aria-valuemax={Math.max(1, count)} aria-valuenow={completed}
                 aria-valuetext={`${completed} 项已完成，共 ${count} 项`}>
@@ -294,7 +294,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
               revealApp={revealApp?.date === activity.review?.date ? revealApp : null} error={activity.error} onRetry={activity.refresh} />
             {activity.review && (activity.review.observations.length > 0 || activity.review.sessions.length > 0 || !!activity.review.appSessions?.length || !!activity.review.aiSessions?.length || !!activity.review.workActivities?.length) &&
               <details className="today-digest" onToggle={event => setDigestOpen(event.currentTarget.open)}>
-                <summary>今日小结</summary>
+                <summary lang="en">Daily Summary</summary>
                 {digestOpen && <DailySynthesis active={view === 'today'} review={activity.review} />}
               </details>}
           </div>}

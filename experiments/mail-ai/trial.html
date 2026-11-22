@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>邮件与待办 · FocusDesk</title>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mail &amp; To-Dos · FocusDesk</title>
 <style nonce="{{NONCE}}">
 :root {
   --page:#f7f6f2; --surface:#fff; --ink:#111; --muted:#605e58; --line:#d5d3ce;
@@ -82,10 +82,10 @@ summary { cursor:pointer; }
 @media (max-width:460px) { main { width:calc(100% - 30px); margin-top:20px; } body > header { padding:0 15px; } .plan-fields { grid-template-columns:minmax(0,1fr); } }
 
 </style></head>
-<body><header><strong>FocusDesk</strong><a id="hub-link" href="{{HUB}}" target="_blank" rel="noreferrer">任务面板 ↗</a></header><main>
-<h1>邮件与待办</h1><p class="intro">新邮件由本机模型总结。有明确截止日的事项自动加入日历，也可以提前选择计划日。</p>
+<body><header><strong>FocusDesk</strong><a id="hub-link" href="{{HUB}}" target="_blank" rel="noreferrer" lang="en">Workspace ↗</a></header><main>
+<h1 lang="en">Mail &amp; To-Dos</h1><p class="intro">新邮件由本机模型总结。有明确截止日的事项自动加入日历，也可以提前选择计划日。</p>
 <section class="card" id="outlook" aria-labelledby="outlook-title">
-<div class="account-heading"><h2 id="outlook-title">连接 Outlook 邮箱</h2><span class="hint" id="outlook-state" role="status">正在读取连接状态…</span></div>
+<div class="account-heading"><h2 id="outlook-title" lang="en">Connect Outlook</h2><span class="hint" id="outlook-state" role="status">正在读取连接状态…</span></div>
 <form id="connect-form">
 <p class="hint">登录后，本机邮件服务每分钟检查一次收件箱，关闭本页后也会继续。</p>
 <fieldset class="account-types"><legend>邮箱类型</legend><div class="account-options">
@@ -101,14 +101,14 @@ summary { cursor:pointer; }
 <li>在「API 权限」添加 Microsoft Graph 的委托权限 <code>Mail.Read</code>。<span id="registration-ids">从应用「概述」复制应用程序（客户端）ID，填入上方。</span></li></ol></details>
 <button class="primary" id="outlook-login" type="submit">登录个人 Outlook</button></form>
 <div id="outlook-inbox" hidden><div class="actions"><button id="outlook-sync">立即同步</button><button id="outlook-reconnect" hidden>重新登录</button><button id="outlook-disconnect">断开连接</button></div>
-<h3>最近邮件</h3><div id="outlook-history"></div><button type="button" id="outlook-more" hidden>显示更多邮件</button></div><p id="outlook-notice" role="status"></p></section>
+<h3 lang="en">Recent Mail</h3><div id="outlook-history"></div><button type="button" id="outlook-more" hidden>显示更多邮件</button></div><p id="outlook-notice" role="status"></p></section>
 
-<section class="card"><h2>邮件试读</h2><label for="file">选择一封邮件</label>
+<section class="card"><h2 lang="en">Read an Email</h2><label for="file">选择一封邮件</label>
 <input class="upload" id="file" type="file" accept=".eml,message/rfc822" aria-describedby="size"><p id="size" class="hint">支持 8 MiB 以内的 EML 文件。</p>
 <div class="actions"><button id="analyze" class="primary" disabled>读取邮件</button><button id="sample">试用示例邮件</button></div>
 <p id="status" role="status"></p><p id="error" role="alert"></p></section>
 <section class="card" id="result" hidden aria-label="试读结果"><h2 class="subject" id="subject"></h2><p class="summary" id="summary"></p>
-<h2>截止事项</h2><div id="items"></div><details id="original" hidden><summary>查看邮件正文</summary><p class="summary" id="body"></p></details><details id="attachments" hidden><summary>查看随信图片</summary><div id="images"></div></details></section>
+<h2 lang="en">Deadlines</h2><div id="items"></div><details id="original" hidden><summary>查看邮件正文</summary><p class="summary" id="body"></p></details><details id="attachments" hidden><summary>查看随信图片</summary><div id="images"></div></details></section>
 </main><script nonce="{{NONCE}}" src="/mail-plan-ui.js"></script><script nonce="{{NONCE}}">
 const get = id => document.getElementById(id);
 const el = (tag, text, cls) => { const node = document.createElement(tag); node.textContent = text; if (cls) node.className = cls; return node; };

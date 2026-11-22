@@ -94,7 +94,7 @@ function Experiment({ review, refresh, changeDate }: { review: FocusReview; refr
   }
 
   return <section className="review-experiment" aria-labelledby="review-experiment-title">
-    <h3 id="review-experiment-title">我的改进实验</h3>
+    <h3 id="review-experiment-title" lang="en">Improvement Experiment</h3>
     {review.previousExperimentDate && <button className="review-link" type="button"
       onClick={() => changeDate(review.previousExperimentDate!)}>复查 {review.previousExperimentDate} 的实验 ↗</button>}
     <form onSubmit={e => { e.preventDefault(); void save(); }}>
@@ -142,7 +142,7 @@ export default function DailyReview({ active = true, refreshKey, focus }: { acti
   const clock = workspaceClock(current?.timezone);
   return <section className="daily-review" aria-labelledby="daily-review-title">
     <header className="review-heading">
-      <h1 id="daily-review-title">每日回顾</h1>
+      <h1 id="daily-review-title" lang="en">Daily Review</h1>
       <div className="review-date">
         <label>回顾日期 <input aria-label="回顾日期" type="date" value={date || review?.date || ''}
           max={review?.today} onChange={e => setDate(e.target.value)} /></label>
@@ -168,7 +168,7 @@ export default function DailyReview({ active = true, refreshKey, focus }: { acti
       {current.observations.length > 0 && <details className="review-evidence"><summary>查看屏幕观察</summary>
         <ul>{current.observations.map(o => <li key={o.id}><span className="review-time">{clock!.format(new Date(o.at))}</span>
           <span>{o.summary}<small>{checkpointSourceLabel(o.source)}</small></span></li>)}</ul></details>}
-      {suggestion && <aside className="review-suggestion"><h3>下次可以试试</h3><p>{suggestion.action}</p>
+      {suggestion && <aside className="review-suggestion"><h3 lang="en">Try Next Time</h3><p>{suggestion.action}</p>
         <small>{suggestion.evidence}</small></aside>}
       <Experiment key={current.date} review={{ ...current, suggestion }} refresh={refresh} changeDate={setDate}/>
     </>}
