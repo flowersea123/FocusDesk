@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DailyOverview, Task } from '../../contracts/daily-overview';
 import { deviceTaskLabel } from '../../contracts/device-task-label';
 import type { ProjectStatus } from '../../contracts/project-progress';
-import { buildProjectDisplay, type DisplaySnapshot } from '../../contracts/display-snapshot';
+import { buildProjectDisplay, DISPLAY_TASK_LIMIT, type DisplaySnapshot } from '../../contracts/display-snapshot';
 import { paintDisplaySnapshot } from './simulator/canvas';
 import './epaper-preview.css';
 
@@ -37,7 +37,7 @@ export default function EpaperPreview({ overview, draft, project, onUnpin }: { o
   const focus = sample ? null : overview?.focus;
   const priority = pending.find(task => task.id === focus?.task_id) ?? pending[0];
   const ordered = priority ? [priority, ...pending.filter(task => task.id !== priority.id)] : [];
-  const visible = ordered.slice(0, 5).map(task => ({ ...task, title:deviceTaskLabel(task) }));
+  const visible = ordered.slice(0, DISPLAY_TASK_LIMIT).map(task => ({ ...task, title:deviceTaskLabel(task) }));
   const hidden = Math.max(0, ordered.length - visible.length);
   const date = overview?.date ?? '2026-11-12';
   const dateLabel = overviewDate

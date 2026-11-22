@@ -72,10 +72,10 @@ describe('Dashboard', () => {
     const preview = screen.getByRole('img', { name: '400 × 300 e-paper preview' });
     expect(preview).toHaveAttribute('data-preview-mode', 'sample');
     expect(screen.getByRole('button', { name: '多任务示例' })).toHaveAttribute('aria-pressed', 'true');
-    expect(preview.querySelectorAll('.preview-task-title')).toHaveLength(5);
+    expect(preview.querySelectorAll('.preview-task-title')).toHaveLength(4);
     expect(preview.querySelectorAll('.paper-task.is-current')).toHaveLength(1);
     expect(preview.querySelector('.paper-task.is-current .preview-task-title')).toHaveTextContent('Finish project proposal');
-    expect(document.getElementById('preview-transcript')).toHaveTextContent('+1 more');
+    expect(document.getElementById('preview-transcript')).toHaveTextContent('+2 more');
     expect(preview.querySelector('.paper-recommendation p')).toHaveTextContent('Draft the outline, then focus for 25 min.');
     expect(document.getElementById('preview-transcript')).not.toHaveTextContent('Reply to project feedback');
     expect(updateTasks).not.toHaveBeenCalled(); expect(updateFocus).not.toHaveBeenCalled(); expect(updateWorkState).not.toHaveBeenCalled();
