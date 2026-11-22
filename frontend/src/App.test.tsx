@@ -116,7 +116,8 @@ describe('Dashboard', () => {
     await screen.findAllByText(today.tasks[0].title);
     await user.click(screen.getByRole('button', { name: '次日样例' }));
     await waitFor(() => expect(screen.queryByText(today.revision)).not.toBeInTheDocument());
-    expect(screen.getByText('2026年11月3日星期二')).toBeVisible();
+    expect(screen.getByText('2026-11-03', { selector: 'time' })).toHaveAttribute('datetime', '2026-11-03');
+    expect(screen.getByText('星期二')).toBeVisible();
     expect(screen.getByText(/固定演示日期/)).toBeVisible();
   });
 

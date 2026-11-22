@@ -1,0 +1,146 @@
+.dashboard :is(.activity-timeline, .daily-review, .calendar-month, .calendar-agenda, .checkpoint-workspace) {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: none;
+}
+.dashboard :is(.activity-timeline, .calendar-month, .calendar-agenda) { padding: var(--panel-padding); }
+.dashboard .activity-header h2 { font-size: 19px; font-weight: 750; }
+.dashboard .activity-latest-line, .dashboard .activity-latest-label i, .dashboard .overview-tools time::before { width: 2px; background: var(--red); }
+.dashboard .activity-track, .dashboard .overview-track { border-color: var(--line); }
+.dashboard :is(.activity-details, .timeline-mode, .overview-results) { border-radius: var(--radius); background: var(--quiet); border-color: var(--line); }
+.dashboard .timeline-mode button { border-radius: var(--radius); }
+.dashboard .timeline-mode button[aria-pressed=true] { background: var(--yellow-soft); color: var(--ink); box-shadow: none; }
+.dashboard .activity-key-focus { background: var(--yellow); }
+.dashboard .activity-key-app { background: var(--line-strong); }
+.dashboard .activity-key-ai { background: var(--ink); }
+.dashboard .activity-span > .activity-chat-envelope { background: var(--quiet); border-color: var(--line-strong); }
+.dashboard .activity-span > .activity-chat-active { background: var(--ink); }
+.dashboard :is(.activity-name strong, .overview-caption, .activity-more, .overview-search-button) { color: var(--ink); }
+.dashboard :is(.activity-error, .recorder-error, .suggestion-error) { color: var(--red-ink); }
+
+.dashboard .task-list-footer { margin: 0 0 9px; gap: 6px 10px; }
+.dashboard .task-list-control .task-add:enabled,
+.dashboard .task-list-control .task-compose-actions .task-save:enabled {
+  min-height: 36px;
+  background: var(--yellow);
+  color: var(--ink);
+  border-color: var(--ink);
+  border-radius: var(--radius);
+}
+.dashboard .task-list-control .task-row-actions button {
+  width: 32px;
+  min-width: 32px;
+  height: 34px;
+  border-radius: var(--radius);
+  border-color: var(--line);
+  color: var(--ink);
+}
+.dashboard .task-list-control .task-row-actions .task-delete { color: var(--red-ink); }
+.dashboard .task-list-control .task-row-actions .task-delete:enabled:hover { background: var(--red-soft); color: var(--red-ink); }
+.dashboard .desk-tasks.task-items > .task-row { border-radius: 0; min-height: 50px; }
+.dashboard .desk-tasks.task-items > .task-row[data-selected=true] {
+  background: var(--yellow-soft);
+  box-shadow: inset 2px 0 var(--yellow);
+}
+.dashboard .task-check-hit input, .dashboard .project-steps input { accent-color: var(--ink); }
+.dashboard :is(.task-composer input, .accomplishment-input input, .project-progress textarea, .ai-suggestion-editor textarea) {
+  border-color: var(--line-strong);
+  border-radius: var(--radius);
+}
+.dashboard .task-accomplishments > strong { color: var(--ink); }
+.dashboard .task-recognized, .dashboard .task-accomplishments li::marker { color: var(--text-muted); }
+.dashboard :is(.project-reading, .project-observation, .reading-bookmark, .daily-synthesis, .task-editor-error) {
+  background: var(--quiet);
+  border-color: var(--line);
+  border-radius: var(--radius);
+}
+.dashboard :is(.next-task-action, .project-actions button, .project-progress select, .project-progress button, .recorder-toggle,
+  .checkpoint-workspace button, .daily-synthesis button, .review-save button, .review-conflict button, .preview-pin-actions button) {
+  min-height: 34px;
+  border-radius: var(--radius);
+  border-color: var(--line-strong);
+  color: var(--ink);
+  background: var(--surface);
+}
+.dashboard .project-progress .project-actions button:first-child { border-color: var(--ink); background: var(--surface); color: var(--ink); }
+.dashboard .daily-review .review-save button[type=submit] { border: 1px solid var(--ink); background: var(--yellow); color: var(--ink); }
+.dashboard :is(.next-task-action, .project-actions button, .recorder-toggle, .review-save button):enabled:hover { background: var(--quiet); }
+.dashboard :is(.task-list-control, .project-progress, .daily-review, .checkpoint-workspace, .desk-section-head) button:disabled {
+  opacity: .65;
+  cursor: default;
+}
+.dashboard .project-steps [data-state=next] small { color: var(--red-ink); }
+.dashboard .project-steps [data-state=done] small { color: var(--text-muted); }
+.dashboard .suggestion-value {
+  padding: 11px 13px;
+  border-left: 3px solid var(--yellow);
+  background: var(--quiet);
+}
+.dashboard .suggestion-actions .editor-button { min-height: 36px; border-radius: var(--radius); }
+.dashboard .saved-dot, .dashboard .draft-dot { width: 7px; height: 7px; border-radius: 0; }
+.dashboard .draft-dot { background: var(--yellow); }
+
+.dashboard .calendar-layout { gap: var(--grid-gap); grid-template-columns: minmax(0, 1.65fr) minmax(250px, 1fr); }
+.dashboard .task-calendar h2 { font-weight: 750; }
+.dashboard .calendar-week { gap: 0; margin-bottom: 0; padding-block: 7px; background: var(--quiet); }
+.dashboard .calendar-days { gap: 0; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.dashboard .calendar-days button { border: 0; border-right: 1px solid var(--line); border-top: 1px solid var(--line); border-radius: 0; padding: 7px; }
+.dashboard .calendar-days button[data-adjacent=true] { color: var(--text-muted); background: var(--quiet); }
+.dashboard .calendar-days button[aria-current=date] > span { color: var(--red-ink); }
+.dashboard .calendar-days button[aria-pressed=true] { background: var(--yellow-soft); box-shadow: inset 0 -3px var(--yellow); color: var(--ink); }
+.dashboard .calendar-days button[aria-pressed=false]:hover { background: var(--quiet); }
+.dashboard .calendar-days small { color: var(--ink); font-weight: 650; }
+.dashboard :is(.calendar-mail, .calendar-toolbar button, .calendar-agenda button) { min-height: 34px; border-color: var(--ink); border-radius: var(--radius); color: var(--ink); }
+.dashboard .calendar-agenda button.calendar-add { background: var(--yellow); }
+.dashboard .calendar-actions { flex-wrap: wrap; }
+.dashboard .calendar-agenda [role=alert] { color: var(--red-ink); }
+
+.dashboard .daily-review { padding: clamp(16px, 2vw, 28px); }
+.dashboard .review-heading { margin-bottom: 18px; padding-bottom: 16px; border-bottom: 2px solid var(--ink); }
+.dashboard .daily-review h1 { font-size: clamp(31px, 3vw, 44px); font-weight: 800; }
+.dashboard .review-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--grid-gap); }
+.dashboard .review-metrics > div { padding: 12px; border: 1px solid var(--line); background: var(--page); }
+.dashboard .review-metrics > div:first-child { border-left: 3px solid var(--red); }
+.dashboard .review-metrics strong { font-size: clamp(18px, 2.4vw, 30px); }
+.dashboard .daily-review :is(.review-suggestion, .review-conflict) { border-radius: var(--radius); background: var(--yellow-soft); }
+.dashboard .daily-review .review-conflict { color: var(--red-ink); background: var(--red-soft); }
+.dashboard .daily-review :is(textarea, input) { border-radius: var(--radius); border-color: var(--line-strong); }
+.dashboard .daily-review .review-link { color: var(--ink); }
+
+.simulator-shell .topbar {
+  min-height: 60px;
+  border-bottom: 1px solid var(--ink);
+  background: var(--surface);
+}
+.simulator-shell .brand { display: inline-flex; align-items: center; gap: 9px; }
+.simulator-shell .brand::before { content: ''; width: 16px; height: 16px; background: var(--red); }
+.simulator-shell .topbar nav { min-height: 59px; }
+.simulator-shell .topbar nav .nav-current { border-bottom: 3px solid var(--yellow); }
+.simulator-main .page-heading { padding-bottom: 16px; border-bottom: 2px solid var(--ink); margin-bottom: 18px; }
+.simulator-main .page-heading h1 { font-size: clamp(31px, 3vw, 46px); }
+.simulator-main .simulator-screen-card { border-radius: var(--radius); border-color: var(--line); }
+.simulator-main .simulator-segmented { border-radius: var(--radius); }
+.simulator-main .simulator-segmented button[aria-pressed=true] { background: var(--yellow-soft); color: var(--ink); }
+.simulator-main .simulator-notice { border-left-color: var(--red); background: var(--surface); color: var(--text-muted); }
+.simulator-main .simulator-canvas-scroll { background: var(--quiet); border: 1px solid var(--line); border-radius: var(--radius); }
+.simulator-main .simulator-canvas-frame { outline: 5px solid var(--ink); }
+.simulator-main .simulator-wait { background: var(--yellow-soft); }
+.simulator-main .simulator-status-dot { border-radius: 0; }
+.simulator-main .simulator-status-dot.is-paused { background: var(--red); }
+
+@media (max-width: 1030px) {
+  .dashboard .calendar-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px), (pointer: coarse) {
+  .dashboard .task-list-control .task-row-actions button { width: 34px; min-width: 34px; min-height: 44px; }
+  .dashboard .task-list-control .task-add:enabled { min-height: 44px; }
+}
+@media (max-width: 520px) {
+  .dashboard .calendar-days button { padding: 4px; }
+  .dashboard .review-metrics { gap: 5px; }
+  .dashboard .review-metrics > div { padding: 7px; }
+  .simulator-shell .topbar { flex-wrap: wrap; row-gap: 0; padding-top: 10px; }
+  .simulator-shell .topbar nav { flex-basis: 100%; min-height: 44px; }
+  .simulator-main .simulator-view-actions { flex-wrap: wrap; }
+}

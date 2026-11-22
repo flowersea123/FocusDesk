@@ -10,7 +10,7 @@ type Block = {
   kind: 'app' | 'site' | 'ai' | 'focus' | 'sample';
 };
 interface Lane { key:string; title:string; blocks:Block[]; color:string }
-const palette = ['#307b62','#b57645','#627ca3','#967393','#627f52','#9b725e','#6b6a95'];
+const palette = ['#62615c','#9c9a91','#4f4e49','#85847b','#74736d','#aaa89e','#54534f'];
 const browserName = /^(?:(?:Google )?Chrome(?: Canary)?|Chromium|(?:Microsoft )?Edge|Firefox|Safari(?: Technology Preview)?|Arc|Brave(?: Browser)?|Vivaldi|夸克|浏览器)$/i;
 
 function pageIdentity(title:string) {
@@ -44,7 +44,7 @@ function buildLanes(rows:Track[], taskNames: Map<string,string>) {
     let lane = lanes.get(key);
     if (!lane) {
       const slot = Array.from(key).reduce((sum,c) => sum + c.codePointAt(0)!,0) % palette.length;
-      const color = block.kind === 'focus' ? '#7962a7' : block.kind === 'site' ? '#ad6a3a' : block.kind === 'ai' ? '#357b66' : palette[slot];
+      const color = block.kind === 'focus' ? 'var(--yellow)' : block.kind === 'site' ? '#74736d' : block.kind === 'ai' ? 'var(--ink)' : palette[slot];
       lane = {key,title,color,blocks:[]};
       lanes.set(key,lane);
     }

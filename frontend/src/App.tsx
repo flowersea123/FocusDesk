@@ -24,11 +24,11 @@ const scenarios: { value: DemoScenario; label: string }[] = [
   { value: 'failure', label: '读取失败' },
 ];
 const dateFormat = new Intl.DateTimeFormat('zh-CN', {
-  year: 'numeric', month: 'long', day: 'numeric', weekday: 'long', timeZone: 'UTC',
+  weekday: 'long', timeZone: 'UTC',
 });
 
 const symbols = {
-  today: <><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M7 3v4m10-4v4M3 10h18m-14 5 2 2 4-4" /></>,
+  today: <path d="M3 3h7v7H3zm11 0h7v7h-7zM3 14h7v7H3zm11 0h7v7h-7z" />,
   calendar: <><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M7 3v4m10-4v4M7 14h2m3 0h2m-7 3h2"/></>,
   review: <><path d="M4 19V5m0 14h16M8 15v-3m5 3V7m5 8v-5" /></>,
   mail: <><rect x="3" y="5" width="18" height="14" rx="3" /><path d="m4 7 8 6 8-6" /></>,
@@ -202,15 +202,18 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
   return <div className="dashboard">
     <a className="desk-skip" href="#workspace">跳至工作台</a>
     <header className="desk-header" ref={header} data-open={navOpen}>
-      <div className="desk-header-inner">
+      <div className="desk-top">
         <a className="desk-brand" href="#workspace" aria-label="FocusDesk 首页"
           onClick={event => { event.preventDefault(); navigate('today'); }}>
-          <span aria-hidden="true" className="desk-brand-mark"><i /><i /><i /></span>FocusDesk
+          <span aria-hidden="true" className="desk-brand-mark" />FocusDesk
         </a>
+        <span className="desk-brand-line">One thing at a time</span>
+        <span className="desk-source" data-recording={recording} data-error={Boolean(error)}><i aria-hidden="true" />{recording ? (session?.mode === 'ai' ? 'AI 状态记录中' : '屏幕记录中') : mock ? '本地演示' : error ? 'Hub 读取失败' : local ? '本机 Hub' : '只读 Hub'}</span>
         <button type="button" className="desk-menu" ref={navButton} aria-expanded={navOpen}
           aria-controls="desk-navigation" aria-label={navOpen ? '收起导航' : '展开导航'} onClick={() => setNavOpen(open => !open)}>
           <DeskIcon name={navOpen ? 'close' : 'menu'} />
         </button>
+      </div>
         <nav id="desk-navigation" className="desk-nav" aria-label="主导航">
           <a href="#workspace" aria-current={view === 'today' ? 'page' : undefined}
             onClick={event => { event.preventDefault(); navigate('today'); }}><DeskIcon name="today" />工作台</a>
@@ -225,19 +228,19 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
             <DeskIcon name="screen" />模拟屏 <span className="desk-external" aria-hidden="true">↗</span></a>
           <a href="/connect"><DeskIcon name="connect" />连接设备</a>
         </nav>
-        <span className="desk-source" data-recording={recording}><i aria-hidden="true" />{recording ? (session?.mode === 'ai' ? 'AI 状态记录中' : '屏幕记录中') : mock ? '本地演示' : local ? '本机 Hub' : '只读 Hub'}</span>
-      </div>
     </header>
 
     <main id="workspace" className="desk-main" tabIndex={-1}>
       {view === 'today' && <div className="desk-masthead">
-        <div>
-          <h1>今日工作台</h1>
-          {activityDate && <p className="desk-date"><time dateTime={activityDate}>{dateFormat.format(new Date(activityDate + 'T12:00:00Z'))}</time></p>}
-        </div>
-        {activity.review && <dl className="today-totals">
-          <div><dt>专注计时</dt><dd>{formatActivityDuration(activity.review.totalSeconds)}</dd></div>
-          <div><dt>已记录前台</dt><dd>{formatActivityDuration((activity.review.appSessions ?? []).reduce((sum, item) => sum + item.seconds, 0))}</dd></div>
+        <h1>今日工作台</h1>
+        {(overview || activity.review) && <dl className="today-totals">
+          {activity.review && <div><dt>今日专注</dt><dd>{formatActivityDuration(activity.review.totalSeconds)}</dd></div>}
+          {activity.review && <div><dt>已记录前台</dt><dd>{formatActivityDuration((activity.review.appSessions ?? []).reduce((sum, item) => sum + item.seconds, 0))}</dd></div>}
+          {overview && <div><dt>已完成任务</dt><dd>{completed} / {count}</dd></div>}
+          {activityDate && <div className="desk-masthead-date">
+            <dt>{dateFormat.format(new Date(activityDate + 'T12:00:00Z'))}</dt>
+            <dd><time dateTime={activityDate}>{activityDate}</time></dd>
+          </div>}
         </dl>}
         <button type="button" className="desk-reload" disabled={loading || saving} onClick={() => { reload(); activity.refresh(); }} title="重新读取" aria-label="重新读取">
           <DeskIcon name="refresh" />
@@ -251,19 +254,7 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
         {loading && <p className={overview ? 'sr-only' : 'loading-line'} role="status">{overview ? '正在读取，暂时保留上次内容…' : '正在读取今日概览…'}</p>}
       </div>
       <div hidden={view !== 'today'}>
-      {source.localWorkspace && overview && <div className="today-insights">
-        <div className="today-brief task-first">
-          <NextTask overview={overview} next={next} saving={saving} onStart={source.updateFocus ? startRecommended : undefined} onInspect={task => inspectTask(task.id)} onApp={inspectApp} onHistory={inspectHistory}/>
-        </div>
-        <ActivityTimeline recorder={recorder} review={activity.review} tasks={tasks} revealApp={revealApp?.date === activity.review?.date ? revealApp : null} error={activity.error} onRetry={activity.refresh}/>
-        {activity.review && (activity.review.observations.length > 0 || activity.review.sessions.length > 0 || !!activity.review.appSessions?.length || !!activity.review.aiSessions?.length || !!activity.review.workActivities?.length) &&
-          <details className="today-digest" onToggle={event => setDigestOpen(event.currentTarget.open)}>
-            <summary>今日小结</summary>
-            {digestOpen && <DailySynthesis active={view === 'today'} review={activity.review}/>}
-          </details>}
-      </div>}
-      <div className="desk-grid">
-        <div className="desk-work">
+      <div className="desk-grid" data-local-workspace={Boolean(source.localWorkspace)}>
           <section className="desk-task-panel" aria-labelledby="overview-title" aria-busy={loading}>
             <div className="desk-section-head">
               <h2 id="overview-title">今日任务</h2>
@@ -286,20 +277,32 @@ export default function App({ source = defaultSource }: { source?: OverviewSourc
                 observed ? <>最近识别的任务　<strong>{observed.title}</strong></> : <strong>最近画面未匹配任务</strong> :
                 '等待识别当前画面…'}</p>}
             </div>}
-            {source.localWorkspace && <>
-              <ProjectProgress overview={overview} selected={selected} manual={!!manual} onFollow={() => chooseTask('')}
-                recorder={recorder} refreshKey={checkpointVersion} data={progress} onData={setProgress} onChange={checkpointsChanged} />
-              <CheckpointWorkspace overview={overview} recorder={recorder} active={view === 'today'} refreshKey={checkpointVersion} onChange={checkpointsChanged} />
-            </>}
             {!mock && !source.updateTasks && <p className="readonly-note">请在本机打开 FocusDesk 编辑任务。</p>}
           </section>
+          {source.localWorkspace && <div className="desk-project">
+            <ProjectProgress overview={overview} selected={selected} manual={!!manual} onFollow={() => chooseTask('')}
+              recorder={recorder} refreshKey={checkpointVersion} data={progress} onData={setProgress} onChange={checkpointsChanged} />
+            {overview && <NextTask overview={overview} next={next} saving={saving} onStart={source.updateFocus ? startRecommended : undefined}
+              onInspect={task => inspectTask(task.id)} onApp={inspectApp} onHistory={inspectHistory} />}
+          </div>}
+          <aside className="desk-device" aria-label="专注与设备">
+            {focusPanel}
+            <EpaperPreview overview={previewOverview} project={pinned} onUnpin={restoreOverview} draft={taskDraft !== null || suggestionDraft !== null} />
+          </aside>
+          {source.localWorkspace && overview && <div className="desk-activity">
+            <ActivityTimeline recorder={recorder} review={activity.review} tasks={tasks}
+              revealApp={revealApp?.date === activity.review?.date ? revealApp : null} error={activity.error} onRetry={activity.refresh} />
+            {activity.review && (activity.review.observations.length > 0 || activity.review.sessions.length > 0 || !!activity.review.appSessions?.length || !!activity.review.aiSessions?.length || !!activity.review.workActivities?.length) &&
+              <details className="today-digest" onToggle={event => setDigestOpen(event.currentTarget.open)}>
+                <summary>今日小结</summary>
+                {digestOpen && <DailySynthesis active={view === 'today'} review={activity.review} />}
+              </details>}
+          </div>}
           {overview && <AISuggestionEditor overview={overview} saving={saving} writable={Boolean(source.updateAISuggestion)}
             onSave={saveAISuggestion} onDraftChange={setSuggestionDraft} onReload={reload} />}
-        </div>
-        <aside className="desk-side" aria-label="专注与设备">
-          {focusPanel}
-          <EpaperPreview overview={previewOverview} project={pinned} onUnpin={restoreOverview} draft={taskDraft !== null || suggestionDraft !== null} />
-        </aside>
+          {source.localWorkspace && <div className="desk-capture">
+            <CheckpointWorkspace overview={overview} recorder={recorder} active={view === 'today'} refreshKey={checkpointVersion} onChange={checkpointsChanged} />
+          </div>}
       </div>
       <details className="desk-details" open={mock}>
         <summary>数据来源与版本</summary>

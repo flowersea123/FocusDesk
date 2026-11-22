@@ -1,10 +1,86 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Outlook 邮箱 · FocusDesk</title>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>邮件与待办 · FocusDesk</title>
 <style nonce="{{NONCE}}">
-:root{color-scheme:light;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#171817;background:#fbfbf8}*{box-sizing:border-box}body{margin:0}header{height:72px;border-bottom:2px solid #151515;background:white;display:flex;align-items:center;justify-content:space-between;padding:0 max(5vw,16px)}header strong{font-size:24px;letter-spacing:-1.3px}a{color:inherit;text-underline-offset:3px}main{max-width:760px;margin:clamp(30px,7vh,70px) auto;padding:0 20px 60px}h1{font-size:clamp(32px,5vw,46px);letter-spacing:-.04em;margin:0 0 8px}h2{font-size:21px;margin:0 0 12px}h3{font-size:16px;margin:0 0 8px;overflow-wrap:anywhere}.intro{color:#494b47;margin:0 0 28px;line-height:1.75}.card{border:1px solid #242424;border-radius:12px;padding:clamp(18px,4vw,28px);background:white;margin-bottom:18px}.upload{display:block;border:1px solid #a3a39e;border-radius:5px;padding:12px;width:100%;font:inherit;font-size:14px;margin:14px 0}.actions{display:flex;gap:10px;flex-wrap:wrap}button{font:inherit;font-weight:600;font-size:14px;border:1px solid black;background:white;color:black;padding:9px 15px;border-radius:4px;cursor:pointer}button.primary{background:#151515;color:white}button:disabled{opacity:.47;cursor:default}button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #d39b00;outline-offset:2px}#status,#error{margin:12px 0 0;font-size:14px}#error:not(:empty){color:#9d1717}#status:empty,#error:empty{display:none}.summary,blockquote{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.75}.item{padding:14px 0;border-top:1px solid #d0d1cc}.time{font-variant-numeric:tabular-nums}blockquote{margin:8px 0;padding:6px 12px;background:#f6f6f1;border-left:3px solid #e2b700}.hint{color:#595b55;font-size:14px}details img{max-width:100%;height:auto;display:block;margin:12px auto}summary{cursor:pointer}label{font-weight:600}.subject{overflow-wrap:anywhere}.action-state{font-size:14px;color:#333}
-.account-heading{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}.account-heading h2{margin:0}.card details{margin:14px 0}#app-registration ol{padding-left:22px;line-height:1.65}#app-registration li+li{margin-top:7px}.field{display:block;margin:12px 0}.field input{display:block;margin-top:5px;border:1px solid #979a93;border-radius:5px;width:100%;padding:9px;font:inherit;font-weight:400}.hint,.item,code{overflow-wrap:anywhere}.card[hidden],form[hidden]{display:none}#outlook-notice{color:#774213}#outlook-notice:empty{display:none}#outlook-inbox>h3{margin-top:22px}
-.account-types{border:0;margin:16px 0;padding:0;min-width:0}.account-types legend{font-weight:600;margin-bottom:8px;padding:0}.account-options{display:flex;gap:8px;flex-wrap:wrap}.account-options label{display:flex;align-items:center;gap:7px;min-height:40px;padding:8px 12px;border:1px solid #b2b4ac;border-radius:5px;font-size:14px;font-weight:500;cursor:pointer}.account-options label:has(:checked){border-color:#242424;background:#f2f3ed;font-weight:600}.account-options input{accent-color:#171817;margin:0}.field[hidden]{display:none}
-.mail-plan{margin:10px 0 16px}.plan-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}.plan-fields label{font-size:13px;display:grid;gap:4px}.plan-fields input{min-width:0;width:100%;border:1px solid #b6b8b1;border-radius:5px;padding:8px;font:inherit;background:white;color:inherit}.plan-fields input[readonly]{background:#f5f5f0}.plan-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}.plan-actions a{font-size:13px}.mail-action+.mail-action{border-top:1px solid #ddd;padding-top:8px}.mail-action h4{margin:12px 0 4px}.mail-action .hint:empty{display:none}@media(max-width:460px){.plan-fields{grid-template-columns:1fr}}
+:root {
+  --page:#f7f6f2; --surface:#fff; --ink:#111; --muted:#605e58; --line:#d5d3ce;
+  --red:#e3262e; --red-ink:#ab1c24; --yellow:#f5c518; --yellow-soft:#fff4c7; --quiet:#efeee9;
+  color-scheme:light; font-family:Inter,'Noto Sans SC','Segoe UI','Microsoft YaHei',sans-serif;
+  color:var(--ink); background:var(--page);
+}
+* { box-sizing:border-box; }
+body { margin:0; font-size:14px; line-height:1.6; }
+body > header {
+  min-height:60px; padding:0 max(24px,calc((100vw - 1120px) / 2)); display:flex;
+  align-items:center; justify-content:space-between; gap:14px; border-bottom:1px solid var(--ink); background:var(--surface);
+}
+body > header strong { display:inline-flex; align-items:center; gap:8px; font-size:24px; font-weight:800; letter-spacing:-.06em; }
+body > header strong::before { content:''; width:16px; height:16px; background:var(--red); }
+a { color:inherit; text-underline-offset:3px; }
+main {
+  width:min(1120px,calc(100% - 48px)); margin:28px auto 42px; display:grid;
+  grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); align-items:start; gap:16px;
+}
+main > h1, main > .intro, #result { grid-column:1 / -1; }
+h1 { margin:0; font-size:clamp(31px,4vw,46px); font-weight:800; letter-spacing:-.045em; line-height:1.15; }
+.intro { margin:-4px 0 2px; padding-bottom:15px; border-bottom:2px solid var(--ink); color:var(--muted); }
+.card { padding:clamp(16px,2.1vw,25px); border:1px solid var(--line); border-radius:2px; background:var(--surface); min-width:0; }
+h2 { margin:0 0 12px; font-size:19px; font-weight:750; }
+h2::before { content:''; display:inline-block; width:4px; height:.95em; margin-right:8px; background:var(--red); vertical-align:-.08em; }
+h3 { font-size:16px; margin:0 0 7px; overflow-wrap:anywhere; }
+label { font-weight:650; }
+button { min-height:38px; font:inherit; font-size:13px; font-weight:650; padding:7px 12px; border:1px solid var(--ink); border-radius:2px; background:var(--surface); color:var(--ink); cursor:pointer; }
+button.primary { background:var(--yellow); }
+button:enabled:hover { background:var(--quiet); }
+button.primary:enabled:hover { background:var(--yellow-soft); }
+button:disabled { opacity:.55; cursor:default; }
+:where(button,input,a,summary):focus-visible { outline:2px solid var(--red-ink); outline-offset:3px; }
+input { accent-color:var(--ink); }
+.upload, .field input, .plan-fields input {
+  width:100%; min-width:0; padding:8px; border:1px solid var(--line); border-radius:2px;
+  background:var(--surface); color:inherit; font:inherit; font-weight:400;
+}
+.upload { display:block; margin:8px 0; }
+.upload::file-selector-button { padding:7px 9px; border:1px solid var(--ink); background:var(--surface); font:inherit; cursor:pointer; }
+.actions,.plan-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.hint { color:var(--muted); font-size:13px; }
+#status,#error { margin:9px 0 0; font-size:13px; }
+#error:not(:empty) { color:var(--red-ink); }
+#status:empty,#error:empty,#outlook-notice:empty,.mail-action .hint:empty { display:none; }
+.summary,blockquote { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.7; }
+.item { padding:14px 0; border-top:1px solid var(--line); }
+.time { color:var(--red-ink); font-variant-numeric:tabular-nums; }
+blockquote { margin:6px 0; padding:7px 10px; background:var(--quiet); border-left:3px solid var(--yellow); }
+details img { max-width:100%; height:auto; display:block; margin:10px auto; }
+summary { cursor:pointer; }
+.subject,.hint,.item,code { overflow-wrap:anywhere; }
+.account-heading { display:flex; justify-content:space-between; align-items:baseline; gap:8px 12px; flex-wrap:wrap; }
+.account-heading h2 { margin:0; }
+#outlook-state { padding:3px 7px; background:var(--quiet); font-variant-numeric:tabular-nums; }
+.card details { margin:13px 0; }
+#app-registration ol { padding-left:20px; }
+#app-registration li + li { margin-top:6px; }
+.field { display:block; margin:9px 0; }
+.field input { display:block; margin-top:4px; }
+.card[hidden],form[hidden],.field[hidden] { display:none; }
+#outlook-notice { color:var(--red-ink); }
+#outlook-inbox > h3 { margin-top:17px; }
+.account-types { border:0; margin:12px 0; padding:0; min-width:0; }
+.account-types legend { font-weight:650; margin-bottom:6px; }
+.account-options { display:flex; gap:6px; flex-wrap:wrap; }
+.account-options label { display:flex; align-items:center; gap:6px; min-height:38px; padding:6px 9px; border:1px solid var(--line); border-radius:2px; font-weight:500; cursor:pointer; }
+.account-options label:has(:checked) { border-color:var(--ink); background:var(--yellow-soft); font-weight:650; }
+.account-options input { margin:0; }
+.mail-plan { margin:9px 0 13px; }
+.plan-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px 12px; }
+.plan-fields label { display:grid; gap:4px; font-size:13px; }
+.plan-fields input[readonly] { background:var(--quiet); }
+.plan-actions { margin:9px 0; }
+.plan-actions a,.action-state { font-size:13px; }
+.mail-action + .mail-action { border-top:1px solid var(--line); padding-top:7px; }
+.mail-action h4 { margin:9px 0 4px; }
+@media (max-width:760px) { main { grid-template-columns:minmax(0,1fr); } }
+@media (max-width:460px) { main { width:calc(100% - 30px); margin-top:20px; } body > header { padding:0 15px; } .plan-fields { grid-template-columns:minmax(0,1fr); } }
+
 </style></head>
 <body><header><strong>FocusDesk</strong><a id="hub-link" href="{{HUB}}" target="_blank" rel="noreferrer">任务面板 ↗</a></header><main>
 <h1>邮件与待办</h1><p class="intro">新邮件由本机模型总结。有明确截止日的事项自动加入日历，也可以提前选择计划日。</p>
