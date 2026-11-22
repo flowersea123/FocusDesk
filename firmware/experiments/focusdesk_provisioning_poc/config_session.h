@@ -35,9 +35,21 @@ class ConfigSession {
     restore(now);
   }
 
+  bool startHubTrial(const char (&hubUrl)[96], const char* id, uint32_t now) {
+    if (!hasSaved_) return false;
+    Config candidate = saved_;
+    std::memcpy(candidate.hub_url, hubUrl, sizeof(candidate.hub_url));
+    const bool accepted = startTrial(candidate, id, now);
+    focusdesk_poc::wipe(&candidate, sizeof(candidate));
+    return accepted;
+  }
+
   bool startTrial(const Config& candidate, const char* id, uint32_t now) {
     if (!storageReady_ || testing() || !validConfig(candidate)) return false;
     if (attempt.id[0] && std::strcmp(attempt.id, id) == 0) return false;
+    const bool sameConnectedWifi = hasSaved_ &&
+        std::strcmp(candidate.ssid, saved_.ssid) == 0 &&
+        std::strcmp(candidate.password, saved_.password) == 0 && link_.matches(saved_);
     // A manual edit may interrupt a background reconnect of the saved network.
     attempt.state = focusdesk_poc::State::Idle;
     if (attempt.accept(id) != focusdesk_poc::Acceptance::New) return false;
@@ -46,8 +58,13 @@ class ConfigSession {
     error = "";
     attempt.start(now);
     started_ = now;
-    mode_ = Mode::Trial;
-    if (!link_.connect(candidate_)) fail("WIFI_FAILED", now);
+    usingSavedWifi_ = sameConnectedWifi;
+    if (usingSavedWifi_) {
+      beginHubVerification(now);
+    } else {
+      mode_ = Mode::Trial;
+      if (!link_.connect(candidate_)) fail("WIFI_FAILED", now);
+    }
     return true;
   }
 
@@ -57,9 +74,7 @@ class ConfigSession {
       if (static_cast<uint32_t>(now - started_) >= focusdesk_poc::CONNECT_TIMEOUT_MS) {
         fail("WIFI_FAILED", now);
       } else if (link_.matches(candidate_)) {
-        if (link_.subnetConflict()) { fail("SUBNET_CONFLICT", now); return; }
-        attempt.state = focusdesk_poc::State::Verifying;
-        mode_ = Mode::Verify;
+        beginHubVerification(now);
       }
       return;
     }
@@ -93,6 +108,7 @@ class ConfigSession {
       }
       saved_ = candidate_;
       hasSaved_ = true;
+      usingSavedWifi_ = false;
       focusdesk_poc::wipe(&candidate_, sizeof(candidate_));
       result = "saved";
       error = "";
@@ -126,8 +142,15 @@ class ConfigSession {
   Config candidate_ = {};
   bool hasSaved_ = false;
   bool storageReady_ = false;
+  bool usingSavedWifi_ = false;
   Mode mode_ = Mode::Idle;
   uint32_t started_ = 0;
+
+  void beginHubVerification(uint32_t now) {
+    if (link_.subnetConflict()) { fail("SUBNET_CONFLICT", now); return; }
+    attempt.state = focusdesk_poc::State::Verifying;
+    mode_ = Mode::Verify;
+  }
 
   void waitToRetry(uint32_t now) {
     link_.disconnect();
@@ -147,7 +170,10 @@ class ConfigSession {
     error = reason;
     attempt.state = focusdesk_poc::State::Failed;
     focusdesk_poc::wipe(&candidate_, sizeof(candidate_));
-    restore(now);
+    const bool savedWifiStillConnected = usingSavedWifi_ && link_.matches(saved_);
+    usingSavedWifi_ = false;
+    if (savedWifiStillConnected) mode_ = Mode::Online;
+    else restore(now);
   }
 };
 }  // namespace focusdesk_config

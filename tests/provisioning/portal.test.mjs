@@ -82,6 +82,35 @@ test('Chinese SSID, spaces, plus, ampersand and quote round-trip in the actual P
   assert.equal(ui.calls.filter(call=>call.method==='POST').length,1);
 });
 
+test('Save Hub only submits the address without using the Wi-Fi fields', async () => {
+  let posted;
+  const ui = await page({responses: [reply({token:TOKEN, remaining_s:600}), reply(status({
+    state:'connected', wifi_connected:true, config:{saved:true, storage_ready:true, hub_url:HUB}
+  })), request => {
+    posted = new URLSearchParams(request.body);
+    return reply({attempt_id:posted.get('attempt_id')}, 202);
+  }]});
+  const button = ui.node('save-hub-only');
+  assert.match(source, /id="save-hub-only"[^>]+formnovalidate/);
+  assert.equal(button.hidden, false);
+  assert.equal(button.disabled, false);
+  ui.node('hub-url').value = 'http://192.168.1.10:8790';
+  ui.node('ssid').value = 'other network';
+  ui.node('password').value = 'unrelated password';
+  await ui.node('wifi-form').listeners.submit({submitter:button, preventDefault(){}});
+  assert.equal(posted.get('hub_url'), 'http://192.168.1.10:8790');
+  assert.deepEqual([...posted.keys()].sort(), ['attempt_id', 'hub_url']);
+});
+
+test('Save Hub only is unavailable with no saved Wi-Fi configuration', async () => {
+  const ui = await page({responses:initial()});
+  const button = ui.node('save-hub-only');
+  assert.equal(button.hidden, true);
+  assert.equal(button.disabled, true);
+  await ui.node('wifi-form').listeners.submit({submitter:button, preventDefault(){}});
+  assert.equal(ui.calls.filter(call => call.method === 'POST').length, 0);
+});
+
 test('SSID UTF-8 byte limit, control characters, open Wi-Fi and 64-character raw PSK are rejected before sending',async()=>{
   const ui=await page({responses:initial()});
   for(const [ssid,password] of [['中'.repeat(11),'password'],['a\0b','password'],['abc',''],['abc','a'.repeat(64)],['abc','中文密码password']]){

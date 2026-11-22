@@ -95,10 +95,11 @@ inline const char* parseForm(const char* body, size_t length, Credentials& outpu
     if (end + 1 == length) { error = "FORM_INVALID"; break; }
     offset = end + 1;
   }
-  if (!error && (found != (requireHub ? 15U : 7U) || !candidate.ssid[0] || !validUtf8(candidate.ssid))) error = "SSID_INVALID";
+  const bool hubOnly = requireHub && found == 12U;
+  if (!error && !hubOnly && (found != (requireHub ? 15U : 7U) || !candidate.ssid[0] || !validUtf8(candidate.ssid))) error = "SSID_INVALID";
   if (!error && requireHub && !candidate.hub_url[0]) error = "HUB_INVALID";
   const size_t passwordLength = std::strlen(candidate.password);
-  if (!error && (passwordLength < 8 || passwordLength > 63)) error = "PASSWORD_8_TO_63_ASCII_REQUIRED";
+  if (!error && !hubOnly && (passwordLength < 8 || passwordLength > 63)) error = "PASSWORD_8_TO_63_ASCII_REQUIRED";
   for (size_t i = 0; !error && i < passwordLength; ++i) {
     const auto c = static_cast<unsigned char>(candidate.password[i]);
     if (c < 0x20 || c > 0x7e) error = "PASSWORD_8_TO_63_ASCII_REQUIRED";
