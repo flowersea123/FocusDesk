@@ -80,6 +80,7 @@ int main() {
     Store store; store.exists = false;
     Link link; Session session(store, link); session.begin(0);
     check(session.storageReady() && !session.hasSaved() && link.connects == 0);
+    check(!session.startHubTrial(original.hub_url, "no-saved-wifi", 0));
     check(session.startTrial(replacement, "first", 0));
     check(!session.startTrial(original, "second", 0));
     tick(session, link, 100);
@@ -105,7 +106,7 @@ int main() {
     link.online = true; tick(session, link, 1);
     const auto newHub = config("original", "original-pass", "http://192.168.1.10:8790");
     link.hub = outcome;
-    check(session.startTrial(newHub, "hub-only", 2));
+    check(session.startHubTrial(newHub.hub_url, "hub-only", 2));
     check(link.connects == 1 && link.online && session.attempt.state == poc::State::Verifying);
     tick(session, link, 3);
     check(link.hubChecks == 1 && link.checkedHub == newHub.hub_url && store.writes == 0);
@@ -208,6 +209,12 @@ int main() {
       check(poc::parseForm((form + suffix).c_str(), form.size() + suffix.size(), output, true) != nullptr);
     const std::string noHub = "ssid=desk&password=password&attempt_id=one";
     check(poc::parseForm(noHub.c_str(), noHub.size(), output, true) != nullptr);
+    const std::string hubOnly = "hub_url=http%3A%2F%2F192.168.1.2%3A8790&attempt_id=two";
+    check(poc::parseForm(hubOnly.c_str(), hubOnly.size(), output, true) == nullptr);
+    check(!output.ssid[0] && !output.password[0] && std::strcmp(output.hub_url, "http://192.168.1.2:8790") == 0);
+    const std::string partialWifi = hubOnly + "&ssid=desk";
+    check(poc::parseForm(partialWifi.c_str(), partialWifi.size(), output, true) != nullptr);
+    check(poc::parseForm(hubOnly.c_str(), hubOnly.size(), output) != nullptr);
     poc::Attempt attempt; attempt.state = poc::State::Saving;
     check(attempt.accept("other") == poc::Acceptance::Busy);
     attempt.state = poc::State::Verifying;

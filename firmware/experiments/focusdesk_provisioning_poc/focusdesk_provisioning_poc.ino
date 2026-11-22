@@ -479,8 +479,9 @@ esp_err_t connectHandler(httpd_req_t* request) {
   poc::Acceptance accepted;
   portENTER_CRITICAL(&statusMux);
   const bool storageReady = configStatus.storageReady;
+  const bool wifiAvailable = candidate.ssid[0] || configStatus.saved;
   if (std::strcmp(configStatus.result, "testing") != 0 && !requestQueued) attempt.state = poc::State::Idle;
-  accepted = storageReady ? attempt.accept(candidate.attempt_id) : poc::Acceptance::Busy;
+  accepted = storageReady && wifiAvailable ? attempt.accept(candidate.attempt_id) : poc::Acceptance::Busy;
   if (accepted == poc::Acceptance::New) {
     requestQueued = true;
     configStatus.result = "testing";
@@ -490,6 +491,10 @@ esp_err_t connectHandler(httpd_req_t* request) {
   if (!storageReady) {
     poc::wipe(&candidate, sizeof(candidate));
     return errorReply(request, "503 Service Unavailable", "STORAGE_UNAVAILABLE");
+  }
+  if (!wifiAvailable) {
+    poc::wipe(&candidate, sizeof(candidate));
+    return errorReply(request, "422 Unprocessable Content", "NO_SAVED_WIFI");
   }
   if (accepted == poc::Acceptance::Busy || accepted == poc::Acceptance::Expired) {
     poc::wipe(&candidate, sizeof(candidate));
@@ -610,12 +615,16 @@ void provisioningLoop() {
   if (xQueueReceive(requests, &pending, 0) == pdTRUE) {
     poc::wipe(requestQueueStorage, sizeof(requestQueueStorage));
     if (setupOpen && remainingSeconds()) {
-      fc::Config candidate;
-      std::memcpy(candidate.ssid, pending.ssid, sizeof(candidate.ssid));
-      std::memcpy(candidate.password, pending.password, sizeof(candidate.password));
-      std::memcpy(candidate.hub_url, pending.hub_url, sizeof(candidate.hub_url));
-      configSession.startTrial(candidate, pending.attempt_id, millis());
-      poc::wipe(&candidate, sizeof(candidate));
+      if (!pending.ssid[0]) {
+        configSession.startHubTrial(pending.hub_url, pending.attempt_id, millis());
+      } else {
+        fc::Config candidate;
+        std::memcpy(candidate.ssid, pending.ssid, sizeof(candidate.ssid));
+        std::memcpy(candidate.password, pending.password, sizeof(candidate.password));
+        std::memcpy(candidate.hub_url, pending.hub_url, sizeof(candidate.hub_url));
+        configSession.startTrial(candidate, pending.attempt_id, millis());
+        poc::wipe(&candidate, sizeof(candidate));
+      }
       printMemory("connect_start");
     }
     poc::wipe(&pending, sizeof(pending));

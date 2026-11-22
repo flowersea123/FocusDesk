@@ -31,6 +31,7 @@ constexpr char POC_PORTAL_PAGE[] PROGMEM = R"FDHTML(<!doctype html>
 <input id="hub-url" name="hub_url" type="text" maxlength="95" autocomplete="off" autocapitalize="none" spellcheck="false" required placeholder="http://192.168.1.10:8787" aria-describedby="hub-help">
 <p id="hub-help" class="small">Start FocusDesk on your computer and copy its LAN address from the device connection page. You can also paste its full daily-overview API address.</p>
 <button id="connect" type="submit" disabled>Save and connect</button>
+<button id="save-hub-only" type="submit" formnovalidate hidden disabled>Save Hub only</button>
 </form>
 </section>
 <section aria-live="polite" aria-atomic="false">
@@ -70,7 +71,7 @@ constexpr char POC_PORTAL_PAGE[] PROGMEM = R"FDHTML(<!doctype html>
 (() => {
   'use strict';
   const byId = id => document.getElementById(id);
-  const form = byId('wifi-form'), button = byId('connect');
+  const form = byId('wifi-form'), button = byId('connect'), hubOnlyButton = byId('save-hub-only');
   const storageKey = 'focusdesk-poc-attempt';
   const states = new Set(['idle','queued','connecting','verifying','saving','connected','failed','disconnected','expired']);
   const results = new Set(['none','testing','saved','failed']);
@@ -101,6 +102,8 @@ constexpr char POC_PORTAL_PAGE[] PROGMEM = R"FDHTML(<!doctype html>
     button.disabled = submitting || expired || !token ||
       !!(lastStatus && (!lastStatus.config.storage_ready || isBusy(lastStatus)));
     button.textContent = submitting ? 'Sending request...' : 'Save and connect';
+    hubOnlyButton.hidden = !lastStatus?.config.saved;
+    hubOnlyButton.disabled = button.disabled || hubOnlyButton.hidden;
   }
   function validHub(value) {
     if (new TextEncoder().encode(value).length > 95) return false;
@@ -275,14 +278,21 @@ constexpr char POC_PORTAL_PAGE[] PROGMEM = R"FDHTML(<!doctype html>
   form.addEventListener('submit', async event => {
     event.preventDefault();
     if (submitting || expired || !token || !lastStatus || !lastStatus.config.storage_ready || isBusy(lastStatus)) return;
-    const ssid = byId('ssid').value, password = byId('password').value;
+    const hubOnly = event.submitter === hubOnlyButton;
+    if (hubOnly && !lastStatus.config.saved) return;
     const hubUrl = byId('hub-url').value;
-    const bytes = new TextEncoder().encode(ssid).length;
-    if (bytes < 1 || bytes > 32 || /[\u0000-\u001f\u007f]/.test(ssid)) {
-      say('Enter a Wi-Fi name of 1-32 UTF-8 bytes without control characters.'); return;
-    }
-    if (!/^[\x20-\x7e]{8,63}$/.test(password)) {
-      say('Enter 8-63 printable ASCII password characters. Open Wi-Fi and 64-character raw PSKs are not supported.'); return;
+    const fields = {hub_url:hubUrl};
+    if (!hubOnly) {
+      const ssid = byId('ssid').value, password = byId('password').value;
+      const bytes = new TextEncoder().encode(ssid).length;
+      if (bytes < 1 || bytes > 32 || /[\u0000-\u001f\u007f]/.test(ssid)) {
+        say('Enter a Wi-Fi name of 1-32 UTF-8 bytes without control characters.'); return;
+      }
+      if (!/^[\x20-\x7e]{8,63}$/.test(password)) {
+        say('Enter 8-63 printable ASCII password characters. Open Wi-Fi and 64-character raw PSKs are not supported.'); return;
+      }
+      fields.ssid = ssid;
+      fields.password = password;
     }
     if (!validHub(hubUrl)) {
       say('Enter the Hub LAN address as http://IPv4:port, optionally followed by /api/v1/daily-overview.'); return;
@@ -298,13 +308,17 @@ constexpr char POC_PORTAL_PAGE[] PROGMEM = R"FDHTML(<!doctype html>
       if (!lastStatus || !lastStatus.config.storage_ready) {
         say('Device storage is unavailable. The new settings were not submitted.'); return;
       }
+      if (hubOnly && !lastStatus.config.saved) {
+        say('No Wi-Fi settings are saved. Enter the Wi-Fi name and password to connect.'); return;
+      }
       if (isBusy(lastStatus)) {
         say('The device is already testing a connection. Wait for its current result before starting another test.'); return;
       }
       const attempt = Date.now().toString(16) + '-' + (++counter).toString(16);
       rememberAttempt(attempt);
-      const body = new URLSearchParams({ssid,password,hub_url:hubUrl,attempt_id:attempt}).toString();
-      say('Sending new settings for Wi-Fi and Hub checks before saving. Rejoin the hotspot if the phone disconnects.');
+      const body = new URLSearchParams({...fields,attempt_id:attempt}).toString();
+      say(hubOnly ? 'Checking the new Hub using the saved Wi-Fi.' :
+        'Sending new settings for Wi-Fi and Hub checks before saving. Rejoin the hotspot if the phone disconnects.');
       const result = await request('/api/connect', {
         method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded','X-FocusDesk-Token':token}, body
       });

@@ -35,10 +35,19 @@ class ConfigSession {
     restore(now);
   }
 
+  bool startHubTrial(const char (&hubUrl)[96], const char* id, uint32_t now) {
+    if (!hasSaved_) return false;
+    Config candidate = saved_;
+    std::memcpy(candidate.hub_url, hubUrl, sizeof(candidate.hub_url));
+    const bool accepted = startTrial(candidate, id, now);
+    focusdesk_poc::wipe(&candidate, sizeof(candidate));
+    return accepted;
+  }
+
   bool startTrial(const Config& candidate, const char* id, uint32_t now) {
     if (!storageReady_ || testing() || !validConfig(candidate)) return false;
     if (attempt.id[0] && std::strcmp(attempt.id, id) == 0) return false;
-    const bool sameConnectedWifi = mode_ == Mode::Online && hasSaved_ &&
+    const bool sameConnectedWifi = hasSaved_ &&
         std::strcmp(candidate.ssid, saved_.ssid) == 0 &&
         std::strcmp(candidate.password, saved_.password) == 0 && link_.matches(saved_);
     // A manual edit may interrupt a background reconnect of the saved network.
