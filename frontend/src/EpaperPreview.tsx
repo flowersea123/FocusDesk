@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DailyOverview, Task } from '../../contracts/daily-overview';
 import { deviceTaskLabel } from '../../contracts/device-task-label';
 import type { ProjectStatus } from '../../contracts/project-progress';
-import { buildProjectDisplay, type DisplaySnapshot } from '../../contracts/display-snapshot';
+import { buildProjectDisplay, DISPLAY_TASK_LIMIT, type DisplaySnapshot } from '../../contracts/display-snapshot';
 import { paintDisplaySnapshot } from './simulator/canvas';
 import './epaper-preview.css';
 
@@ -37,7 +37,7 @@ export default function EpaperPreview({ overview, draft, project, onUnpin }: { o
   const focus = sample ? null : overview?.focus;
   const priority = pending.find(task => task.id === focus?.task_id) ?? pending[0];
   const ordered = priority ? [priority, ...pending.filter(task => task.id !== priority.id)] : [];
-  const visible = ordered.slice(0, 5).map(task => ({ ...task, title:deviceTaskLabel(task) }));
+  const visible = ordered.slice(0, DISPLAY_TASK_LIMIT).map(task => ({ ...task, title:deviceTaskLabel(task) }));
   const hidden = Math.max(0, ordered.length - visible.length);
   const date = overview?.date ?? '2026-11-12';
   const dateLabel = overviewDate
@@ -56,7 +56,7 @@ export default function EpaperPreview({ overview, draft, project, onUnpin }: { o
     ...visible.map(task => task.title), !visible.length && emptyLabel, hidden && `+${hidden} more`,
     'AI RECOMMENDATION', recommendation].filter(Boolean).join(' ') : '';
   return <section className="preview-card" aria-labelledby="preview-title">
-    <div className="section-heading"><h2 id="preview-title">电子纸预览</h2><span className="dimension-label">400 × 300</span></div>
+    <div className="section-heading"><h2 id="preview-title" lang="en">E-Paper Preview</h2><span className="dimension-label">400 × 300</span></div>
     <div className="preview-source-options" role="group" aria-label="预览内容">
       <button type="button" aria-pressed={!sample} onClick={() => setSample(false)}>当前任务</button>
       <button type="button" aria-pressed={sample} onClick={() => setSample(true)}>多任务示例</button>
@@ -88,6 +88,6 @@ export default function EpaperPreview({ overview, draft, project, onUnpin }: { o
     {error && project && <p role="alert">{error}</p>}
     <p className="preview-note">{pinned ? '模拟屏与设备读取同一份任务进度。' : sample ? '合成任务仅用于查看排版。' : '浏览器内随编辑更新，设备下次读取时使用已保存的内容。'}</p>
     <div className="display-colors" aria-label="电子纸四色"><span><i className="color-black" />黑</span><span><i className="color-white" />白</span><span><i className="color-yellow" />黄</span><span><i className="color-red" />红</span></div>
-    <a className="connection-link" href="/connect">连接设备 <span aria-hidden="true">↗</span></a>
+    <a className="connection-link" href="/connect"><span lang="en">Devices</span> <span aria-hidden="true">↗</span></a>
   </section>;
 }

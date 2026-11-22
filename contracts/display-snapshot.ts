@@ -4,7 +4,8 @@ import type { DailyOverview } from './daily-overview.ts';
 import { DISPLAY_FONTS } from './display-fonts.ts';
 
 export const DISPLAY_PALETTE = [[0, 0, 0], [255, 255, 255], [255, 218, 0], [210, 32, 32]] as const;
-const FONT = { regular10: 10, bold10: 11, regular11: 12, bold11: 13, regular13: 14, regular16: 15, bold16: 16, bold17: 17 } as const;
+export const DISPLAY_TASK_LIMIT = 4;
+const FONT = { taskRegular: 0, taskBold: 1, regular10: 10, bold10: 11, regular11: 12, bold11: 13, regular13: 14, regular16: 15, bold17: 17 } as const;
 export type DisplayCommand = [0, number, number, number, number, number] |
   [1, number, number, number, number, string] | [2, number, number, number, number, number];
 export interface DisplaySnapshot {
@@ -88,7 +89,7 @@ export function buildDisplaySnapshot(overview: DailyOverview): DisplaySnapshot {
   const focused = overview.focus && overview.tasks.find(task => task.id === overview.focus!.task_id && task.status === 'todo');
   const priority = focused || pending[0];
   const ordered = priority ? [priority, ...pending.filter(task => task.id !== priority.id)] : [];
-  const visible = ordered.slice(0, 5);
+  const visible = ordered.slice(0, DISPLAY_TASK_LIMIT);
   const date = new Date(`${overview.date}T12:00:00Z`);
   const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'UTC' }).format(date).toUpperCase();
   const month = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(date).toUpperCase();
@@ -100,13 +101,14 @@ export function buildDisplaySnapshot(overview: DailyOverview): DisplaySnapshot {
   if (focused && overview.focus) text(`FOCUS - UNTIL ${localTime(overview.focus.ends_at, overview.timezone)}`, 16, 73, FONT.regular10);
 
   visible.forEach((task, index) => {
-    const top = 87 + index * 24;
+    const baseline = 101 + index * 29;
+    const top = baseline - 11;
     // Eight straight segments form a ten-pixel rounded checkbox.
     for (const [x, y, width, height] of [[2, 0, 6, 1], [1, 1, 1, 1], [8, 1, 1, 1], [0, 2, 1, 6],
       [9, 2, 1, 6], [1, 8, 1, 1], [8, 8, 1, 1], [2, 9, 6, 1]]) rect(32 + x, top + y, width, height, 0);
-    text(deviceTaskLabel(task), 54, 97 + index * 24, index === 0 ? FONT.bold16 : FONT.regular16, 0, 330);
+    text(deviceTaskLabel(task), 54, baseline, index === 0 ? FONT.taskBold : FONT.taskRegular, 0, 330);
   });
-  if (visible.length) rect(16, 84, 2, 16, 3);
+  if (visible.length) rect(16, 86, 2, 19, 3);
   else text(overview.tasks.length ? 'All tasks done' : 'No tasks for today', 16, 97, FONT.regular16);
   if (ordered.length > visible.length) rightText(`+${ordered.length - visible.length} more`, 216);
 
@@ -116,7 +118,7 @@ export function buildDisplaySnapshot(overview: DailyOverview): DisplaySnapshot {
   }
   text('AI RECOMMENDATION', 28, 242, FONT.bold10, 0, 344);
   recommendationLines(overview.ai_suggestion).forEach((line, index) => text(line, 28, 256 + index * 16, FONT.regular13, 0, 344));
-  return { schema_version: 'display-1', layout_version: 'goal-1', revision: `goal-1:nun1:${overview.revision}`, width: 400, height: 300, commands };
+  return { schema_version: 'display-1', layout_version: 'goal-1', revision: `goal-1:tasks4:${overview.revision}`, width: 400, height: 300, commands };
 }
 
 /** Pixel-exact bitmap raster. No browser font substitution or antialiasing. */

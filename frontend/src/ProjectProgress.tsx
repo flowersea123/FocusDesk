@@ -85,7 +85,7 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
   if (!tasks.length && !error) return null;
 
   return <section className="project-progress" id="project-progress" tabIndex={-1} aria-labelledby="project-progress-title">
-    <header><h3 id="project-progress-title">任务详情{selected && <span> · {selected.title}</span>}</h3>
+    <header><h3 id="project-progress-title"><span lang="en">Task Details</span>{selected && <span> · {selected.title}</span>}</h3>
       {manual && <button type="button" className="project-follow" onClick={onFollow}>跟随识别结果</button>}
     </header>
     {(canTarget || (active && target)) && <div className="project-selection">
@@ -98,7 +98,7 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
     {current && !status && !error && <p role="status">正在读取任务记录…</p>}
     {status && <>
       {(documentTitle || position || section) && <div className="project-reading">
-        <h3>阅读位置</h3>
+        <h3 lang="en">Reading Position</h3>
         {position ? <>
           <strong>第 {position.page} / {position.total} 页</strong>
           {section && <p>{pageSection ? '读到 ' : '最近章节书签　'}<strong>{section}</strong></p>}
@@ -116,7 +116,9 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
       </details>}
       {latest && <div className="project-observation"><small>最近截图依据 · <time dateTime={latest.capturedAt}>{time(latest.capturedAt)}</time> · {checkpointSourceLabel(latest.source)}</small>
         <p>{latest.summary}</p></div>}
-      {plan.length > 0 && <ol className="project-steps" aria-label="完成步骤">{plan.map(part => {
+      {plan.length > 0 && <><p className="project-step-count"><strong lang="en">Checklist</strong>
+        <span>{plan.filter(part => status.completed.includes(part)).length} / {plan.length}</span>
+      </p><ol className="project-steps" aria-label="完成步骤">{plan.map(part => {
         const done = status.completed.includes(part);
         const next = part === status.remaining[0];
         const edited = currentPlan?.stepEdits?.find(edit => edit.section === part);
@@ -125,7 +127,7 @@ export default function ProjectProgress({ overview, selected, manual, onFollow, 
             onChange={event => void change('set-step', {section:part,done:event.target.checked})}/>{part.split('|')[0].trim()}</label>
           <small>{edited?.done ? '已完成 · 手动勾选' : done ? '已完成 · ' + checkpointSourceLabel(status.automaticParts?.includes(part) ? 'automatic' : 'manual') : next ? '下一步' : '待完成'}</small>
         </li>;
-      })}</ol>}
+      })}</ol></>}
       <div className="project-actions"><button type="button" disabled={busy} onClick={()=>change(pinned?'unpin':'pin')}>{pinned?'恢复电子屏总览':'在电子屏显示此任务'}</button>
         <button type="button" disabled={busy} onClick={()=>setDraft({id:current,revision:data!.config.revision,text:plan.join('\n')})}>{plan.length?'编辑步骤清单':'定义完成步骤'}</button></div>
       {pinned && <small>已选为电子屏内容 · <a href="/simulator" target="_blank" rel="noreferrer">查看模拟屏 ↗</a></small>}

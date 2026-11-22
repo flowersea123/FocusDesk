@@ -52,7 +52,7 @@ test('manual events remain intact and do not acquire fabricated AI suggestion pr
 test('Focus Mode moves the selected task first and retains the next unfinished task and saved work fields', () => {
   const overview = { ...base, work_state: state, focus: { task_id: 'two', started_at: base.updated_at, ends_at: '2026-11-11T10:25:00.000Z' } };
   const snapshot = buildDisplaySnapshot(overview);
-  const priorityLines = snapshot.commands.filter(op => op[0] === 1 && op[3] === 16);
+  const priorityLines = snapshot.commands.filter(op => op[0] === 1 && op[3] === 1);
   assert.equal(priorityLines.map(op => op[5]).join(' '), base.tasks[1].title);
   assert.ok(texts(snapshot).includes('FOCUS - UNTIL 10:25'));
   assert.ok(texts(snapshot).includes(base.tasks[0].title));
@@ -98,7 +98,7 @@ test('all generated glyph ink and shapes stay inside 400x300 for long text and d
         assert.ok(cursor <= 400, `cursor ${op[5]}`);
       }
     }
-    const priorityLines = snapshot.commands.filter(op => op[0] === 1 && op[3] === 16);
+    const priorityLines = snapshot.commands.filter(op => op[0] === 1 && op[3] === 1);
     assert.ok(priorityLines.length <= 1);
     const pixels = rasterizeDisplaySnapshot(snapshot);
     assert.equal(pixels.length, 120000);
@@ -107,8 +107,8 @@ test('all generated glyph ink and shapes stay inside 400x300 for long text and d
 });
 test('snapshot is deterministic and shares source revision with a layout discriminator', () => {
   assert.deepEqual(buildDisplaySnapshot(base), buildDisplaySnapshot(structuredClone(base)));
-  assert.equal(buildDisplaySnapshot(base).revision, `goal-1:nun1:${base.revision}`);
-  assert.notEqual(buildDisplaySnapshot(base).revision, `goal-1:min1:${base.revision}`);
+  assert.equal(buildDisplaySnapshot(base).revision, `goal-1:tasks4:${base.revision}`);
+  assert.notEqual(buildDisplaySnapshot(base).revision, `goal-1:nun1:${base.revision}`);
   assert.notEqual(buildDisplaySnapshot(base).revision, `goal-1:ss:${base.revision}`);
   assert.equal(buildDisplaySnapshot(base).layout_version, 'goal-1');
   assert.notEqual(buildDisplaySnapshot({ ...base, revision: 'new' }).revision, buildDisplaySnapshot(base).revision);
@@ -123,7 +123,7 @@ test('task order and duplicate titles are preserved independently of additional 
   assert.ok(!texts(snapshot).includes('NEXT ACTION'));
 });
 
-test('device layout shows five equal-size tasks, hidden count and rounded recommendation area', () => {
+test('device layout shows four larger task rows, hidden count and rounded recommendation area', () => {
   const overview = { ...base, date: '2026-11-12', tasks: [
     { id: 'proposal', title: 'Write proposal', status: 'todo', due_at: null },
     { id: 'slides', title: 'Review slides', status: 'todo', due_at: null },
@@ -134,24 +134,25 @@ test('device layout shows five equal-size tasks, hidden count and rounded recomm
   ] };
   const snapshot = buildDisplaySnapshot(overview);
   const content = texts(snapshot);
-  const ordered = ['FOCUSDESK', 'THU, NOV 12', 'Tasks', '0 / 6 DONE', 'Write proposal', 'Review slides', 'Read 10 pages', 'Plan tomorrow', 'Organize notes', '+1 more', 'AI RECOMMENDATION', 'No suggestion yet.'];
+  const ordered = ['FOCUSDESK', 'THU, NOV 12', 'Tasks', '0 / 6 DONE', 'Write proposal', 'Review slides', 'Read 10 pages', 'Plan tomorrow', '+2 more', 'AI RECOMMENDATION', 'No suggestion yet.'];
   assert.deepEqual(content, ordered);
   const pixels = rasterizeDisplaySnapshot(snapshot);
   const at = (x, y) => pixels[y * 400 + x];
-  assert.equal(at(16, 84), 3);
-  assert.equal(at(34, 87), 0);
-  assert.equal(at(35, 89), 1);
-  assert.equal(at(34, 111), 0);
-  assert.equal(at(35, 113), 1);
+  assert.equal(at(16, 86), 3);
+  assert.equal(at(34, 90), 0);
+  assert.equal(at(35, 92), 1);
+  assert.equal(at(34, 119), 0);
+  assert.equal(at(35, 121), 1);
+  assert.equal(at(34, 177), 0);
+  assert.equal(at(34, 206), 1);
   assert.equal(at(16, 224), 1);
   assert.equal(at(20, 224), 2);
   assert.equal(at(380, 280), 2);
   assert.equal(at(16, 290), 1);
   const focused = buildDisplaySnapshot({ ...overview, focus: { task_id: 'feedback', started_at: base.updated_at, ends_at: '2026-11-11T10:25:00.000Z' } });
-  assert.ok(texts(focused).includes('Reply to feedback'));
-  assert.ok(texts(focused).includes('Write proposal'));
-  assert.ok(!texts(focused).includes('Organize notes'));
-  assert.ok(texts(focused).includes('+1 more'));
+  assert.deepEqual(texts(focused).slice(4, 10), ['FOCUS - UNTIL 10:25', 'Reply to feedback',
+    'Write proposal', 'Review slides', 'Read 10 pages', '+2 more']);
+  assert.ok(!texts(focused).includes('Plan tomorrow'));
 });
 
 test('maximum completed list remains within existing transport and command budgets', () => {
@@ -168,7 +169,7 @@ test('maximum completed list remains within existing transport and command budge
   assert.ok(empty.includes('0 / 0 DONE'));
 });
 
-test('Nunito typography has uniform task sizes and preserves legacy glyph registrations', () => {
+test('larger task typography uses existing fonts and preserves glyph registrations', () => {
   assert.deepEqual(DISPLAY_FONTS.map(font => font.name), [
     'FreeSans9pt7b', 'FreeSansBold9pt7b', 'FreeSansBold18pt7b', 'FreeSans12pt7b', 'FreeSansBold12pt7b',
     'SourceSans3Regular9pt7b', 'SourceSans3Bold9pt7b', 'SourceSans3Bold18pt7b', 'SourceSans3Regular12pt7b', 'SourceSans3Bold12pt7b',
@@ -178,15 +179,15 @@ test('Nunito typography has uniform task sizes and preserves legacy glyph regist
   const textCommands = snapshot.commands.filter(op => op[0] === 1);
   assert.equal(textCommands.find(op => op[5] === 'FOCUSDESK')[3], 13);
   assert.equal(textCommands.find(op => op[5] === 'Tasks')[3], 17);
-  assert.equal(textCommands.find(op => op[5] === 'lab report')[3], 16);
-  assert.equal(textCommands.find(op => op[5] === 'lab report')[2], 97);
-  assert.equal(textCommands.find(op => op[5] === base.tasks[1].title)[3], 15);
+  assert.equal(textCommands.find(op => op[5] === 'lab report')[3], 1);
+  assert.equal(textCommands.find(op => op[5] === 'lab report')[2], 101);
+  assert.equal(textCommands.find(op => op[5] === base.tasks[1].title)[3], 0);
   assert.equal(textCommands.find(op => op[5] === 'AI RECOMMENDATION')[3], 11);
   assert.equal(textCommands.find(op => op[5] === 'No suggestion yet.')[3], 14);
   assert.equal(buildDisplaySnapshot({ ...base, tasks: [] }).commands.find(op => op[0] === 1 && op[5] === 'No tasks for today')[3], 15);
   for (const overview of [base, { ...base, tasks: [] }, { ...base, tasks: base.tasks.map(task => ({ ...task, title: 'W'.repeat(40) })) },
     { ...base, focus: { task_id: 'one', started_at: base.updated_at, ends_at: '2026-11-11T10:25:00.000Z' } }]) {
-    assert.ok(buildDisplaySnapshot(overview).commands.filter(op => op[0] === 1).every(op => op[3] >= 10 && op[3] <= 17));
+    assert.ok(buildDisplaySnapshot(overview).commands.filter(op => op[0] === 1).every(op => [0, 1, 10, 11, 12, 13, 14, 15, 17].includes(op[3])));
   }
 });
 
@@ -210,8 +211,8 @@ test('ten tasks with focus and a maximum-length suggestion fit firmware transpor
   assert.ok(snapshot.commands.length <= 64);
   assert.ok(Buffer.byteLength(JSON.stringify(snapshot)) <= 4096);
   assert.ok(snapshot.revision.length <= 80);
-  assert.ok(texts(snapshot).includes('+5 more'));
-  assert.equal(snapshot.commands.filter(op => op[0] === 1 && [15, 16].includes(op[3])).length, 5);
+  assert.ok(texts(snapshot).includes('+6 more'));
+  assert.equal(snapshot.commands.filter(op => op[0] === 1 && [0, 1].includes(op[3])).length, 4);
   for (const op of snapshot.commands.filter(op => op[0] === 1)) {
     let cursor = op[1];
     for (const char of op[5]) {

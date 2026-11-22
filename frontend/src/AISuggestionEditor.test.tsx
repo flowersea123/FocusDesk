@@ -9,7 +9,7 @@ import App from './App';
 const initial = (): DailyOverview => ({ ...parseDailyOverview(fixture), ai_suggestion: 'Start with the outline.' });
 async function editSuggestion(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole('button', { name: '编辑建议' }));
-  return screen.getByRole('textbox', { name: 'AI 建议' });
+  return screen.getByRole('textbox', { name: 'AI Suggestion' });
 }
 
 describe('AI suggestion editor', () => {
@@ -19,7 +19,7 @@ describe('AI suggestion editor', () => {
     const updateAISuggestion = vi.fn().mockImplementation(async input => ({ ...data, ...input, revision: 'saved-ai' }));
     const updateTasks = vi.fn();
     render(<App source={{ kind: 'http', read: vi.fn().mockResolvedValue(data), updateAISuggestion, updateTasks }} />);
-    expect(screen.queryByRole('textbox', { name: 'AI 建议' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'AI Suggestion' })).not.toBeInTheDocument();
     const field = await editSuggestion(user);
     expect(field).toHaveValue(data.ai_suggestion);
     expect(field).toHaveFocus();
@@ -48,7 +48,7 @@ describe('AI suggestion editor', () => {
     await user.clear(field);
     expect(document.querySelector('.paper-recommendation p')).toHaveTextContent('No suggestion yet.');
     await user.click(screen.getByRole('button', { name: '取消修改' }));
-    expect(screen.queryByRole('textbox', { name: 'AI 建议' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'AI Suggestion' })).not.toBeInTheDocument();
     expect(document.querySelector('.paper-recommendation p')).toHaveTextContent(data.ai_suggestion!);
     expect(screen.getByRole('button', { name: '编辑建议' })).toHaveFocus();
     expect(updateAISuggestion).not.toHaveBeenCalled();
@@ -128,7 +128,7 @@ describe('AI suggestion editor', () => {
   it('shows saved suggestions in read-only views', async () => {
     const data = initial();
     render(<App source={{ kind: 'http', read: vi.fn<OverviewSource['read']>().mockResolvedValue(data) }} />);
-    const section = await screen.findByRole('region', { name: 'AI 建议' });
+    const section = await screen.findByRole('region', { name: 'AI Suggestion' });
     expect(within(section).getByText(data.ai_suggestion!)).toBeVisible();
     expect(within(section).queryByRole('textbox')).not.toBeInTheDocument();
     expect(within(section).queryByRole('button')).not.toBeInTheDocument();
@@ -143,7 +143,7 @@ describe('AI suggestion editor', () => {
     render(<App source={{kind:'http', read:vi.fn().mockResolvedValue(data), updateAISuggestion}} />);
     const add = await screen.findByRole('button', {name:'添加建议'});
     await user.click(add);
-    const field = screen.getByRole('textbox', {name:'AI 建议'});
+    const field = screen.getByRole('textbox', {name:'AI Suggestion'});
     await user.type(field, 'One{Enter}Two');
     expect(field).toHaveValue('One\nTwo');
     fireEvent.keyDown(field, {key:'Enter', ctrlKey:true, isComposing:true});
@@ -154,7 +154,7 @@ describe('AI suggestion editor', () => {
     expect(screen.getByRole('button', {name:'添加建议'})).toHaveFocus();
     expect(updateAISuggestion).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', {name:'添加建议'}));
-    await user.type(screen.getByRole('textbox', {name:'AI 建议'}), 'Next{Enter}step');
+    await user.type(screen.getByRole('textbox', {name:'AI Suggestion'}), 'Next{Enter}step');
     await user.keyboard('{Meta>}{Enter}{/Meta}');
     expect(await screen.findByRole('button', {name:'编辑建议'})).toHaveFocus();
     expect(updateAISuggestion).toHaveBeenCalledExactlyOnceWith({revision:data.revision, ai_suggestion:'Next\nstep'},expect.any(AbortSignal));

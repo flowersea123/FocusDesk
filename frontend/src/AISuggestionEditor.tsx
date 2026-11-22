@@ -62,7 +62,7 @@ export default function AISuggestionEditor({ overview, saving, writable, onSave,
 
   return <section className="ai-suggestion-editor" aria-labelledby="ai-suggestion-title">
     <div className="section-heading">
-      <h2 id="ai-suggestion-title">AI 建议</h2>
+      <h2 id="ai-suggestion-title" lang="en">AI Suggestion</h2>
       {editing && writable ? <span className="suggestion-count">{value.length} / {MAX_AI_SUGGESTION_LENGTH}</span> :
         writable && <button type="button" ref={trigger} className="secondary-button" disabled={locked}
           onClick={() => { setEditing(true); setSaved(false); }}>{original ? '编辑建议' : '添加建议'}</button>}

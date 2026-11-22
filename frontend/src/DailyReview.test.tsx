@@ -30,7 +30,7 @@ describe('DailyReview', () => {
     vi.stubGlobal('fetch', request);
     model.observations.push({ id:'b', at:'2026-11-16T16:21:00Z', summary:'屏幕显示批注', source:'automatic' });
     render(<DailyReview refreshKey={1}/>);
-    expect(await screen.findByRole('heading',{name:'当日活动时间轴'})).toBeVisible();
+    expect(await screen.findByRole('heading',{name:'Activity Timeline'})).toBeVisible();
     await screen.findByText(model.summary);
     expect(screen.getByText('00:00–00:15')).toBeInTheDocument();
     expect(screen.getByText('完成两页草稿')).toBeInTheDocument();
@@ -390,7 +390,7 @@ it('labels a summary assembled from recorded items and retains its visible count
   })));
   render(<DailySynthesis review={review}/>);
   expect(await screen.findByText('按记录汇总')).toBeVisible();
-  expect(screen.getByRole('heading',{name:'今日工作小结'})).toBeVisible();
+  expect(screen.getByRole('heading',{name:'Work Summary'})).toBeVisible();
   expect(screen.getByText('练习册中第 2 题显示已完成。')).toBeVisible();
   expect(screen.getByText('屏幕显示已完成 1 道题')).toBeVisible();
   expect(screen.queryByText('本机 AI 总结')).toBeNull();

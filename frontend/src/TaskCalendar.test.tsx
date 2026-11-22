@@ -48,7 +48,7 @@ it('changes only the planned day and follows the saved entry across months', asy
   await user.click(await screen.findByRole('button', { name: '改期' }));
   fireEvent.change(screen.getByLabelText('新的计划日期'), { target: { value: '2026-12-01' } });
   await user.click(screen.getByRole('button', { name: '保存日期' }));
-  expect(await screen.findByRole('heading', { name: '2026年12月1日' })).toBeVisible();
+  expect(await screen.findByRole('heading', { name: 'December 1, 2026' })).toBeVisible();
   expect(changed).toHaveBeenCalledOnce();
 });
 it('uses the revision from the start of editing and refreshes after a conflicting change', async () => {

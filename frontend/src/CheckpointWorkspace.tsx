@@ -100,12 +100,12 @@ export function CheckpointWorkspace({ overview, recorder, active, refreshKey, on
   }
   const recent = history?.records[0];
   return <details className="checkpoint-workspace" id="record">
-    <summary className="checkpoint-disclosure"><strong>记录时间线</strong>
+    <summary className="checkpoint-disclosure"><strong lang="en">Recording Timeline</strong>
       <span>{recent ? [recent.appName, recent.pageTitle || recent.summary, !recent.taskId && '未关联任务'].filter(Boolean).join(' · ') :
         readError ? '时间线读取失败' : recorder.status?.state === 'recording' && recorder.status.mode !== 'ai' ? '正在等待记录' : '查看与补记'}</span>
     </summary>
     <section className="checkpoint-history" aria-labelledby="timeline-title">
-      <h3 id="timeline-title" className="sr-only">记录时间线</h3>
+      <h3 id="timeline-title" className="sr-only" lang="en">Recording Timeline</h3>
       {readError && <p className="checkpoint-error" role="alert">时间线读取失败。{readError} <button type="button" onClick={load}>重试</button></p>}
       {actionError && <p className="checkpoint-error" role="alert">{actionError}</p>}
       {!history && !readError && <p role="status">正在读取记录…</p>}

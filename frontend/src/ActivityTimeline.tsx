@@ -29,7 +29,7 @@ const shownTracks = 5;
 // The recorder normally revisits a stable page every 45 seconds. Use close samples only to
 // show the first-to-last observation window; it never contributes to measured foreground time.
 const observationGap = 60_000;
-const colors = ['#467eb1', '#ba713e', '#658753', '#a86689', '#3d8a81', '#947942', '#786da4', '#986154'];
+const colors = ['#74736d', '#9c9a91', '#4f4e49', '#85847b', '#62615c', '#aaa89e', '#54534f', '#8d8b83'];
 const endLabels = {running:'计时中', stopped:'提前结束', expired:'自然到期', unobserved:'计至最后一次确认', continued:'延续至次日'};
 
 export function formatActivityDuration(seconds: number) {
@@ -310,7 +310,7 @@ function Chart({review, tasks, revealApp, handled, historical}: {
       {plots.map(({row, spans:spanEntries, observations:points, durations, evidence, stamps}) => {
         const chat = row.conversation;
         const measure = measureLabels[row.kind];
-        const color = row.kind === 'ai' ? '#307c70' : row.kind === 'focus' ? '#7962a7' : palette.get(row.id);
+        const color = row.kind === 'ai' ? 'var(--ink)' : row.kind === 'focus' ? 'var(--yellow)' : palette.get(row.id);
         const trackStyle = {'--activity-color':color} as CSSProperties;
         return <div className="activity-row" key={row.id} style={trackStyle}>
           <button type="button" className="activity-name" aria-label={'查看 ' + row.name + ' 的全部记录'} aria-controls={detailsId}
@@ -422,7 +422,7 @@ export default function ActivityTimeline({review, tasks, revealApp, error, onRet
   const recording = state === 'recording' || state === 'starting' || state === 'stopping';
   const aiOnly = recording && recorder?.status?.mode === 'ai';
   return <section className="activity-timeline" aria-labelledby={heading}>
-    <header className="activity-header"><h2 id={heading}>{historical ? '当日活动时间轴' : '今日活动时间轴'}</h2>
+    <header className="activity-header"><h2 id={heading} lang="en">{historical ? 'Activity Timeline' : 'Today’s Activity'}</h2>
       {review && <span><time dateTime={review.date}>{review.date}</time> · {review.timezone}</span>}
     </header>
     {error && <p role="alert" className="activity-error">活动记录读取失败。{error} {onRetry &&

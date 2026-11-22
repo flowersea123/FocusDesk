@@ -62,8 +62,8 @@ test('default start has no task hint, auto-follows the observed task, and distin
   expect(model.actions).toEqual([{ action: 'start' }]);
   model.recorder = { ...model.recorder, observedTaskId: 'read', observedAt: at, savedCount: 1, lastSavedAt: at };
   await refresh();
-  const card = screen.getByRole('region', { name: /^任务详情/ });
-  expect(screen.getByRole('region', { name: '今日任务' })).toHaveTextContent('最近识别的任务 Read paper');
+  const card = screen.getByRole('region', { name: /^Task Details/ });
+  expect(screen.getByRole('region', { name: 'Today’s Tasks' })).toHaveTextContent('最近识别的任务 Read paper');
   const readingRow = screen.getByRole('button', {name:'查看 Read paper 详情'}).closest('li')!;
   expect(within(readingRow).getByRole('list', {name:'Read paper 已完成事项'})).toHaveTextContent('Introduction');
   expect(readingRow).toHaveTextContent('《Sample Paper》');
@@ -84,7 +84,7 @@ test('default start has no task hint, auto-follows the observed task, and distin
   select(''); expect(within(card).getByText('第 6 / 12 页')).toBeVisible();
   model.recorder = { ...model.recorder, observedAt: '2026-11-16T08:12:00Z', observedTaskId: null };
   await refresh();
-  expect(screen.getByRole('region', { name: '今日任务' })).toHaveTextContent('最近画面未匹配任务');
+  expect(screen.getByRole('region', { name: 'Today’s Tasks' })).toHaveTextContent('最近画面未匹配任务');
   expect(within(card).queryByRole('progressbar')).not.toBeInTheDocument();
   expect(document.querySelector('#record > summary')).toBeVisible();
   await click('停止记录'); expect(model.actions.at(-1)).toEqual({ action: 'stop' });
@@ -96,7 +96,7 @@ test('a section alone has no numerical completion and unquantified work shows th
     { ...paper, percent: null, total: null, readingPosition: undefined, completed: [] }];
   model.recorder = { ...idle, state: 'recording', observedTaskId: 'read', observedAt: at };
   mount(); await act(async () => {});
-  const card = screen.getByRole('region', { name: /^任务详情/ });
+  const card = screen.getByRole('region', { name: /^Task Details/ });
   const row = screen.getByRole('button', {name:'查看 Read paper 详情'}).closest('li')!;
   expect(row).toHaveTextContent('《Sample Paper》');
   expect(row).not.toHaveTextContent(/第 \d/);
@@ -107,7 +107,7 @@ test('a section alone has no numerical completion and unquantified work shows th
   expect(card).not.toHaveTextContent('进度待确认'); expect(card).not.toHaveTextContent('%');
   model.recorder = { ...model.recorder, observedTaskId: 'read', observedAt: '2026-11-16T08:16:00Z' };
   await refresh();
-  expect(screen.getByRole('region', { name: '今日任务' })).toHaveTextContent('最近识别的任务 Read paper');
+  expect(screen.getByRole('region', { name: 'Today’s Tasks' })).toHaveTextContent('最近识别的任务 Read paper');
   expect(card).toHaveTextContent('正在编辑第 3 张幻灯片的标题。');
 });
 
@@ -127,7 +127,7 @@ test('paper window sightings remain in the task details and do not create accomp
   await refresh();
   expect(screen.getByText('最近画面未匹配任务')).toBeVisible();
   select('Read paper');
-  const card = screen.getByRole('region', {name:/^任务详情/});
+  const card = screen.getByRole('region', {name:/^Task Details/});
   fireEvent.click(within(card).getByText('论文访问记录 · 2 篇'));
   expect(within(card).getByText('Methods for Visual Search')).toBeVisible();
   expect(card).not.toHaveTextContent('暂无进度记录');
@@ -146,7 +146,7 @@ test('shows the latest paper and its observed page inside its own task row, incl
   expect(within(row).queryByRole('list')).not.toBeInTheDocument();
   expect(screen.getByRole('button', {name:'查看 Prepare slides 详情'}).closest('li')).not.toHaveTextContent(latestPaper.title);
   select('Read paper');
-  const card = screen.getByRole('region', {name:/^任务详情/});
+  const card = screen.getByRole('region', {name:/^Task Details/});
   expect(card).toHaveTextContent('第 2 / 15 页');
   expect(within(card).queryByRole('button', {name:'确认已读 Method'})).not.toBeInTheDocument();
 

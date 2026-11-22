@@ -187,7 +187,7 @@ export default function DailySynthesis({ active = true, review, onSuggestion }: 
   const unavailable = failedKey === key;
   return <section className="daily-synthesis" aria-labelledby={heading}>
     <header>
-      <h2 id={heading}>{review.date === review.today ? '今日工作小结' : '当日工作小结'}</h2>
+      <h2 id={heading} lang="en">Work Summary</h2>
       {digest && <small>{digest.method === 'recorded' ? '按记录汇总' : '本机 AI 总结'}</small>}
     </header>
     {(digest || !review.workActivities?.length) && <p>{digest?.summary ?? review.summary}</p>}

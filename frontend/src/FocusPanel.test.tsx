@@ -85,7 +85,7 @@ describe('Focus Mode', () => {
       .mockResolvedValueOnce(active()).mockResolvedValueOnce({ ...data, revision: 'stopped' });
     render(<App source={{ kind: 'http', read: vi.fn().mockResolvedValue(data), updateFocus: save }} />);
     await user.click(await screen.findByRole('button', { name: '开始专注 · 25 分钟' }));
-    expect(await screen.findByRole('heading', { name: '正在专注' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Focusing' })).toBeInTheDocument();
     const preview = document.getElementById('preview-transcript')!;
     expect(preview).toHaveTextContent('FOCUS - UNTIL 00:15');
     for (const task of raw.tasks.filter(task => task.status === 'todo')) expect(preview).toHaveTextContent(task.title);
@@ -105,7 +105,7 @@ describe('Focus Mode', () => {
     render(<App source={{ kind: 'http', read, updateFocus: save }} />);
     await user.click(await screen.findByRole('button', { name: '开始专注 · 25 分钟' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Changed elsewhere');
-    expect(screen.getByRole('heading', { name: '正在专注' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Focusing' })).toBeInTheDocument();
     expect(save).toHaveBeenCalledOnce();
   });
 
@@ -114,7 +114,7 @@ describe('Focus Mode', () => {
     const read = vi.fn().mockResolvedValueOnce(active()).mockResolvedValue(idle());
     render(<App source={{ kind: 'http', read, updateFocus: save }} />);
     await act(async () => { await Promise.resolve(); });
-    expect(screen.getByRole('heading', { name: '正在专注' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Focusing' })).toBeInTheDocument();
     await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
     expect(screen.getByRole('button', { name: '开始专注 · 25 分钟' })).toBeInTheDocument();
     expect(save).not.toHaveBeenCalled();
@@ -133,7 +133,7 @@ describe('Focus Mode', () => {
     expect(read.mock.calls[1][1].aborted).toBe(true);
     await act(async () => { resolveWrite(active()); });
     await act(async () => { resolveRead(idle()); });
-    expect(screen.getByRole('heading', { name: '正在专注' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Focusing' })).toBeInTheDocument();
     expect(save).toHaveBeenCalledOnce();
   });
 });

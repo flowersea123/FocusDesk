@@ -19,10 +19,10 @@
 .paper-summary > span { font-size: 2.75cqw; }
 .paper-focus-caption { position: absolute; top: 16cqw; left: 4cqw; font-size: 2.5cqw; line-height: 3cqw; }
 .paper-tasks { position: absolute; top: 20cqw; left: 4cqw; right: 4cqw; }
-.paper-task { position: relative; display: flex; align-items: center; gap: 3cqw; height: 6cqw; padding-left: 4cqw; }
-.paper-task.is-current::before { content: ''; position: absolute; left: 0; top: 1cqw; width: .5cqw; height: 4cqw; border-radius: .25cqw; background: #d22020; }
+.paper-task { position: relative; display: flex; align-items: center; gap: 3cqw; height: 7.25cqw; padding-left: 4cqw; }
+.paper-task.is-current::before { content: ''; position: absolute; left: 0; top: 1.5cqw; width: .5cqw; height: 4.75cqw; border-radius: .25cqw; background: #d22020; }
 .paper-task-check { flex: 0 0 2.5cqw; height: 2.5cqw; border: 1px solid #000; border-radius: .7cqw; }
-.preview-task-title { min-width: 0; font-size: 4cqw; line-height: 6cqw; font-weight: 400; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.preview-task-title { min-width: 0; font-size: 4.5cqw; line-height: 7.25cqw; font-weight: 400; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .paper-task.is-current .preview-task-title { font-weight: 750; }
 .paper-empty { margin: 0; font-size: 4cqw; line-height: 6cqw; }
 .paper-more { position: absolute; right: 4cqw; top: 51cqw; font-size: 2.75cqw; line-height: 4cqw; }

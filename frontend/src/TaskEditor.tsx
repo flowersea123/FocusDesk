@@ -279,6 +279,11 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, st
   }
 
   return <div className="task-list-control" ref={group} aria-busy={busy}>
+    {onSave && !draft && <div className="task-list-footer">
+      <button type="button" className="task-add" data-task-focus="add" disabled={locked || full} aria-label="添加任务"
+        aria-keyshortcuts="Alt+Shift+N" title="添加任务（Alt + Shift + N）" onClick={() => openDraft('add')}><span aria-hidden="true">＋</span> 添加任务</button>
+      <small className={full ? undefined : 'task-shortcut-note'}>{full ? '已达 ' + MAX_TASKS + ' 项上限' : '任务行内按 Shift + Enter 插入'}</small>
+    </div>}
     {tasks.length === 0 && !draft && <p className="desk-empty">今天没有安排的任务</p>}
     <ul className="desk-tasks task-items">{tasks.map(task => {
       const status = statuses?.find(item => item.taskId === task.id);
@@ -308,7 +313,7 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, st
               onClick={() => openDraft('edit', task, 'edit:' + task.id)}><TaskIcon action="edit" /></button>
             <button type="button" disabled={locked || full} data-task-focus={'add:' + task.id} aria-label={'在 ' + task.title + ' 后添加任务'}
               title="在此任务后添加（Shift + Enter）" onClick={() => openDraft('add', task, 'add:' + task.id)}><TaskIcon action="add" /></button>
-            <button type="button" disabled={locked} data-task-focus={'delete:' + task.id} aria-label={'删除 ' + task.title}
+            <button type="button" className="task-delete" disabled={locked} data-task-focus={'delete:' + task.id} aria-label={'删除 ' + task.title}
               title={current.focus?.task_id === task.id ? '删除此任务会结束当前专注计时' : '删除任务'}
               onClick={() => void remove(task)}><TaskIcon action="remove" /></button>
           </div>}
@@ -325,11 +330,6 @@ export default function TaskEditor({ overview, saving, onSave, onDraftChange, st
       {draft && ((draft.kind === 'add' && (!draft.after || missingAnchor)) || (draft.kind === 'edit' && !original)) &&
         <li className="task-compose-row">{compose()}</li>}
     </ul>
-    {onSave && !draft && <div className="task-list-footer">
-      <button type="button" className="task-add" data-task-focus="add" disabled={locked || full} aria-label="添加任务"
-        aria-keyshortcuts="Alt+Shift+N" title="添加任务（Alt + Shift + N）" onClick={() => openDraft('add')}><span aria-hidden="true">＋</span> 添加任务</button>
-      <small className={full ? undefined : 'task-shortcut-note'}>{full ? '已达 ' + MAX_TASKS + ' 项上限' : '任务行内按 Shift + Enter 插入'}</small>
-    </div>}
     {onSave && <div className="task-list-notice">
       <span role="status">{pending ? '正在保存…' : message}</span>
       {undo && <button type="button" data-task-focus="undo" disabled={locked || full}
