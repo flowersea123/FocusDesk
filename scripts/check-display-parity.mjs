@@ -1,7 +1,7 @@
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { buildDisplaySnapshot, rasterizeDisplaySnapshot, DISPLAY_PALETTE } from '../contracts/display-snapshot.ts';
+import { buildProjectDisplay, buildDisplaySnapshot, rasterizeDisplaySnapshot, DISPLAY_PALETTE } from '../contracts/display-snapshot.ts';
 
 const renderer = process.argv[2];
 if (!renderer) throw new Error('Pass the host renderer executable built from tests/firmware/v02_snapshot_test.cpp');
@@ -46,8 +46,33 @@ for (const priority of ['normal', 'action_needed', 'urgent']) {
 for (const status of ['acknowledged', 'ignored', 'closed']) {
   variants[status] = { ...variants.urgent, signals: variants.urgent.signals.map(signal => ({ ...signal, status })) };
 }
-for (const [name, input] of Object.entries(variants)) {
-  const scene = buildDisplaySnapshot(input);
+const scenes = Object.fromEntries(Object.entries(variants).map(([name, overview]) => [name, buildDisplaySnapshot(overview)]));
+const project = { taskId:'paper', title:'Read the paper', total:5, remaining:[], evidence:null };
+for (const [name, percent, completed] of [
+  ['project-unknown', null, []], ['project-empty', 0, []],
+  ['project-paper', 40, ['Introduction', 'Method']],
+  ['project-full', 100, ['摘要', 'Introduction', 'Methods', 'Results', 'Discussion', 'Conclusion']],
+]) {
+  scenes[name] = buildProjectDisplay({ ...project, percent, completed }, 'project:' + name);
+}
+scenes['project-automatic'] = buildProjectDisplay({
+  ...project, total: null, percent: 75, evidenceSource: 'automatic',
+  completed: ['Introduction', 'Method'], automaticParts: ['Method'],
+}, 'project:automatic');
+scenes['project-calendar-reminder'] = buildProjectDisplay({
+  ...project, percent:100, completed:['Alpha','Beta','Gamma','Delta','Epsilon'],
+  calendarReminder:{title:'Read student week brief',count:2},
+}, 'project:calendar-reminder');
+const readingPage = {page:6, total:12, document:'Example Paper', section:'Method'};
+scenes['reading-position'] = buildProjectDisplay({...project, percent:null, total:null, completed:[],
+  readingPosition:readingPage},'project:reading-position');
+scenes['reading-and-completion'] = buildProjectDisplay({...project, percent:40, completed:['Introduction','Method'],
+  automaticParts:['Method'], readingPosition:readingPage},'project:reading-and-completion');
+scenes['reading-section-only'] = buildProjectDisplay({...project, percent:0, completed:[],
+  readingBookmark:{current:{section:'2. 方法'}}},'project:reading-section-only');
+scenes['reading-long-page-count'] = buildProjectDisplay({...project, percent:100, completed:['Alpha','Beta','Gamma','Delta','Epsilon','Zeta'],
+  readingPosition:{page:100000,total:100000,document:'W'.repeat(180)}},'project:reading-long-page-count');
+for (const [name, scene] of Object.entries(scenes)) {
   const source = path.join(destination, `${name}.json`);
   const raw = path.join(destination, `${name}.raw`);
   await writeFile(source, JSON.stringify(scene));
@@ -64,4 +89,4 @@ for (const [name, input] of Object.entries(variants)) {
   await writeFile(path.join(destination, `${name}.ppm`), Buffer.concat([Buffer.from('P6\n400 300\n255\n'), rgb]));
   console.log(`PASS ${name}: 120000/120000 pixels identical`);
 }
-await writeFile(path.join(destination, 'result.json'), JSON.stringify({ cases: Object.keys(variants), pixelsPerCase: 120000, matched: true }, null, 2));
+await writeFile(path.join(destination, 'result.json'), JSON.stringify({ cases: Object.keys(scenes), pixelsPerCase: 120000, matched: true }, null, 2));

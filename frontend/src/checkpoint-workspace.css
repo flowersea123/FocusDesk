@@ -1,0 +1,39 @@
+.dashboard [hidden] { display: none !important; }
+
+.checkpoint-workspace { display: grid; min-width: 0; max-width: 880px; gap: 16px; }
+.checkpoint-history, .checkpoint-manual { background: #fff; border: 1px solid var(--line); border-radius: 13px; }
+.checkpoint-history { padding: clamp(18px, 3vw, 28px); min-width: 0; }
+.checkpoint-history h2 { margin: 0; font-size: 18px; line-height: 1.5; font-weight: 650; }
+.checkpoint-history p { color: var(--muted); margin: 5px 0; font-size: 13px; line-height: 1.6; }
+.checkpoint-history .checkpoint-empty { margin: 14px 0 0; }
+.checkpoint-history .checkpoint-error { color: #963930; }
+.checkpoint-timeline { margin: 19px 0 0; padding: 0; list-style: none; }
+.checkpoint-timeline li { position: relative; padding: 0 0 19px 21px; overflow-wrap: anywhere; }
+.checkpoint-timeline li::before { content: ''; position: absolute; top: 6px; left: 2px; width: 8px; height: 8px; border: 2px solid #ae9fc3; border-radius: 50%; background: white; }
+.checkpoint-timeline li:not(:last-child)::after { content: ''; position: absolute; top: 14px; left: 5px; bottom: -6px; width: 1px; background: #e2dce9; }
+.checkpoint-timeline li:last-child { padding-bottom: 0; }
+.checkpoint-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 12px; color: var(--muted); font-size: 12px; }
+.checkpoint-meta time { font-variant-numeric: tabular-nums; }
+.checkpoint-meta strong { color: var(--ink); font-weight: 650; }
+.checkpoint-timeline .checkpoint-page { margin: 5px 0 1px; font-size: 15px; font-weight: 625; line-height: 1.5; }
+.checkpoint-timeline .checkpoint-summary { margin: 5px 0 1px; font-size: 14px; color: var(--ink); }
+.checkpoint-history button { padding: 5px 0; font: inherit; font-size: 12px; color: var(--accent); border: 0; background: transparent; text-decoration: underline; text-underline-offset: 3px; }
+.checkpoint-history .checkpoint-remove { color: var(--muted); }
+.checkpoint-delete-confirm { display: flex; gap: 14px; }
+.checkpoint-history .checkpoint-earlier { margin: 12px 0 0 21px; font-size: 13px; }
+.checkpoint-manual > summary { cursor: pointer; padding: 13px clamp(18px, 3vw, 28px); font-size: 14px; font-weight: 550; color: var(--muted); }
+.checkpoint-manual[open] > summary { color: var(--ink); }
+.checkpoint-manual > .screen-observation { padding: 0 clamp(18px, 3vw, 28px) 20px; }
+#record { scroll-margin-top: 12px; }
+#record:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.checkpoint-older { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 10px; }
+.checkpoint-older summary { cursor: pointer; font-size: 13px; font-weight: 550; color: var(--accent); }
+@media (max-width: 480px) { .checkpoint-workspace { gap: 12px; } }
+
+
+.desk-task-panel > .checkpoint-workspace { display: block; max-width: none; padding-top: 10px; margin-top: 13px; border-top: 1px solid var(--line); }
+.checkpoint-disclosure { cursor: pointer; color: var(--ink); font-size: 14px; padding: 4px 0; }
+.checkpoint-disclosure > span { display: block; margin: 2px 0 0 17px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.desk-task-panel .checkpoint-history { padding: 0 0 5px 4px; border: 0; border-radius: 0; }
+.desk-task-panel .checkpoint-manual { margin-top: 8px; border-radius: 6px; }
+.desk-task-panel .checkpoint-manual > summary { padding: 8px 12px; }

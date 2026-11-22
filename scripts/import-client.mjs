@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { open } from 'node:fs/promises';
 import { MAX_OVERVIEW_BYTES, parseDailyOverview } from '../contracts/daily-overview.ts';
-import { isDeviceTaskTitle } from '../contracts/task-update.ts';
 
 class ImportFailure extends Error {
   constructor(code) { super(code); this.code = code; }
@@ -56,7 +55,6 @@ async function readSource(filePath) {
     overview = parseDailyOverview({ ...source, schema_version: '1.0', revision: 'import-validation', updated_at: '2000-01-01T00:00:00Z' });
   } catch { throw new ImportFailure('IMPORT_INVALID_SOURCE'); }
   if (!['UTC', 'Asia/Shanghai'].includes(overview.timezone)) throw new ImportFailure('IMPORT_UNSUPPORTED_DEVICE_TIMEZONE');
-  if (overview.tasks.some(task => !isDeviceTaskTitle(task.title))) throw new ImportFailure('IMPORT_UNSUPPORTED_DEVICE_TEXT');
   return freeze({ date: overview.date, timezone: overview.timezone, tasks: overview.tasks,
     ...(Object.hasOwn(source, 'focus') ? { focus: overview.focus } : {}),
     ...(Object.hasOwn(source, 'work_state') ? { work_state: overview.work_state } : {}),

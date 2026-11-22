@@ -1,6 +1,10 @@
 # FocusDesk 开发交接
 
+本页保留历史版本的交接与验收记录。当前源码的启动方式、功能和本轮跨平台实测请查看[根 README](../README.md) 和[当前验收记录](VERIFICATION.md)。
+
 整理日期为2026-11-13，交接版本为0.2.0。目标仓库为GitHub私有仓库 `flowersea123/FocusDesk`。
+
+后续 Mac 开发扩展见本地 `codex/mac-device-simulator` 分支，含 `npm run dev`、真实 Hub 驱动的 `/simulator` 页面、macOS 数据锁和可重跑的固件主机像素校验。启动和本轮验证见 [Mac 本机开发与设备模拟](MAC_DEVELOPMENT.md)。本页末尾保留原 Windows 交接批次的验收记录。
 
 ## 已完成与待开发
 

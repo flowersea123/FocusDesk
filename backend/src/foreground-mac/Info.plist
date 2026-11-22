@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+ <key>CFBundleIdentifier</key><string>app.focusdesk.ForegroundCapture</string>
+ <key>CFBundleName</key><string>FocusDesk Capture</string>
+ <key>CFBundleDisplayName</key><string>FocusDesk Capture</string>
+ <key>CFBundleExecutable</key><string>FocusDeskCapture</string>
+ <key>CFBundlePackageType</key><string>APPL</string>
+ <key>CFBundleVersion</key><string>1</string>
+ <key>CFBundleShortVersionString</key><string>1.0</string>
+ <key>LSMinimumSystemVersion</key><string>14.0</string>
+ <key>LSUIElement</key><true/>
+ <key>NSScreenCaptureUsageDescription</key><string>在你开启前台记录期间，FocusDesk 只读取前台内容窗口以生成本机工作记录。</string>
+</dict></plist>

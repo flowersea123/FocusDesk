@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "FocusDesk · ChatGPT 活动",
+  "version": "1.1.0",
+  "description": "录制时在本机按 ChatGPT 对话记录生成状态、主题与可见问答短摘。",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAufgP/PIrb+1G8VCQyO1W83zRwu+8/OeIkgdPlV5+r5wy/UygFkCZIPSceHTtqm8LugYns7+vsiFody2NyMMZMyFVQ7yRpO9UiMsbrw2IJ+jOEduLUV7s5p2bfs1rJB7Vx7dRBIHaf6Sv4zQxt5kry4I5CaWWklcI3Uqf70xEtR/rjWUS8P9lbLwn5LM+PfRzc0DMXVNu9R417ONO2oDCZjBGkm7izwpbwi94ZKMi6q+Tfw1J7WGZEAPD15EBKjovjZnBCuMOnMJQCgRcw+nK4JPnTEICNI8XDRgnUVpmzBpxHJtYLfqPSTNixMrLcRA6NF0LyjMaRk0W7Pta42BAnwIDAQAB",
+  "host_permissions": [
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
+        "activity.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+  "permissions": [
+    "storage"
+  ]
+}

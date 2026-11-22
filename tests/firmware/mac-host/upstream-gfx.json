@@ -1,0 +1,8 @@
+{
+  "name": "Adafruit GFX Library",
+  "version": "1.13.0",
+  "url": "https://codeload.github.com/adafruit/Adafruit-GFX-Library/tar.gz/refs/tags/1.13.0",
+  "sha256": "8ab038fb445d99f320feb9d463c7afe4cd91475fd8ea9c4047be444aacbb3b29",
+  "directory": "Adafruit-GFX-Library-1.13.0",
+  "license": "license.txt"
+}

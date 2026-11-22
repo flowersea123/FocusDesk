@@ -5,6 +5,8 @@
   "type": "module",
   "engines": { "node": ">=24" },
   "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "model": "llama-server --offline --host 127.0.0.1 --port 18187 --alias focusdesk-mail -c 8192 -np 1 --cache-ram 0 --sleep-idle-seconds 60 --reasoning-budget 0 --no-webui --log-disable",
     "build": "npm --prefix frontend run build",
     "start": "node backend/server.ts --host 127.0.0.1",
     "lan": "node scripts/start-focusdesk.mjs",
@@ -17,6 +19,11 @@
     "test:packaging": "node --test tests/packaging/*.test.mjs",
     "test:desktop": "node --test tests/desktop/*.test.mjs",
     "test:migration": "node --test tests/migration/*.test.mjs",
-    "test:installer": "node --test tests/installer/*.test.mjs"
+    "test:installer": "node --test tests/installer/*.test.mjs",
+    "test:development": "node --test tests/development/*.test.mjs",
+    "test:mail": "npm --prefix experiments/mail-ai test",
+    "test:provisioning": "node --test tests/provisioning/*.test.mjs",
+    "verify": "npm run build && npm test && npm run test:frontend && npm run test:integration && npm run test:packaging && npm run test:desktop && npm run test:migration && npm run test:installer && npm run test:development && npm run test:mail && npm run test:provisioning && npm run test:display-host",
+    "test:display-host": "node scripts/test-display-host.mjs"
   }
 }

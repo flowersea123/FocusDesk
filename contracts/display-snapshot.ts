@@ -1,3 +1,5 @@
+import { deviceTaskLabel } from './device-task-label.ts';
+import { devicePart, type ProjectStatus } from './project-progress.ts';
 import type { DailyOverview } from './daily-overview.ts';
 import { DISPLAY_FONTS } from './display-fonts.ts';
 
@@ -102,7 +104,7 @@ export function buildDisplaySnapshot(overview: DailyOverview): DisplaySnapshot {
     // Eight straight segments form a ten-pixel rounded checkbox.
     for (const [x, y, width, height] of [[2, 0, 6, 1], [1, 1, 1, 1], [8, 1, 1, 1], [0, 2, 1, 6],
       [9, 2, 1, 6], [1, 8, 1, 1], [8, 8, 1, 1], [2, 9, 6, 1]]) rect(32 + x, top + y, width, height, 0);
-    text(task.title, 54, 97 + index * 24, index === 0 ? FONT.bold16 : FONT.regular16, 0, 330);
+    text(deviceTaskLabel(task), 54, 97 + index * 24, index === 0 ? FONT.bold16 : FONT.regular16, 0, 330);
   });
   if (visible.length) rect(16, 84, 2, 16, 3);
   else text(overview.tasks.length ? 'All tasks done' : 'No tasks for today', 16, 97, FONT.regular16);
@@ -145,4 +147,55 @@ export function rasterizeDisplaySnapshot(snapshot: DisplaySnapshot): Uint8Array 
     }
   }
   return pixels;
+}
+
+/** Dedicated large-task view. Uses drawing instructions already understood by the device. */
+export function buildProjectDisplay(project: ProjectStatus, revision: string): DisplaySnapshot {
+  const commands: DisplayCommand[] = [];
+  const rect = (x:number,y:number,w:number,h:number,color:number) => commands.push([0,x,y,w,h,color]);
+  const draw = (label:string,x:number,y:number,font:number,width:number) => {
+    const fitted = lines(label,font,width,1)[0];
+    if (fitted) commands.push([1,x - textBounds(fitted,font).left,y,font,0,fitted]);
+  };
+  const page = project.readingPosition;
+  const section = page ? page.section : project.readingBookmark?.current.section;
+  const reading = !!(page || section);
+  draw('FOCUSDESK  /  TASK LOG',18,25,FONT.bold11,360);
+  draw(deviceTaskLabel({id:project.taskId,title:project.title,device_title:project.deviceTitle}),18,reading ? 48 : 61,FONT.bold17,364);
+  if (reading) {
+    draw('READING POSITION',18,71,FONT.bold11,137);
+    if (page) draw('Page ' + page.page + '/' + page.total,161,71,FONT.regular13,210);
+    if (section) {
+      const name = devicePart(section,[...project.completed,...project.remaining]);
+      draw(name ? 'Section: ' + name : 'Section name on Hub',18,92,FONT.regular13,364);
+    } else if (page?.document && page.document !== project.title && /^[\x20-\x7e]+$/.test(page.document)) {
+      draw(page.document,18,92,FONT.regular13,364);
+    }
+  }
+  const automatic = new Set(project.automaticParts ?? []);
+  const items = project.accomplishments ?? project.completed.map(text => ({
+    text, source: automatic.has(text) ? 'automatic' : 'manual',
+  }));
+  const reminder = project.calendarReminder;
+  const visible = items.slice(0, reminder ? 4 : 5);
+  const headingY = reading ? 120 : 92;
+  draw('COMPLETED',18,headingY,FONT.bold11,364);
+  visible.forEach(({text,source},i) => {
+    const y = headingY + 28 + i * 23;
+    const planItem = project.completed.find(item => item.split('|')[0].trim() === text);
+    const name = planItem ? devicePart(planItem) : /^[\x20-\x7e]+$/.test(text) ? text : devicePart(text);
+    const label = name ?? deviceTaskLabel({id:String(i+1),title:text});
+    draw(String(i + 1) + '.',18,y,FONT.bold11,23);
+    draw(label,44,y,FONT.regular13,source === 'automatic' ? 273 : 336);
+    if (source === 'automatic') draw('AUTO',329,y,FONT.regular10,52);
+  });
+  if (!items.length) draw('No completed items recorded',18,headingY+28,FONT.regular13,364);
+  if (items.length>visible.length) draw('+'+(items.length-visible.length)+' more on Hub',18,reminder ? 264 : 283,FONT.regular10,364);
+  if (reminder) {
+    rect(0,272,400,28,2);
+    draw('TO DO',18,290,FONT.bold11,44);
+    draw(reminder.title,71,290,FONT.regular13,reminder.count > 1 ? 265 : 311);
+    if (reminder.count > 1) draw('+' + (reminder.count - 1),352,290,FONT.bold11,31);
+  }
+  return {schema_version:'display-1',layout_version:'goal-1',revision,width:400,height:300,commands};
 }

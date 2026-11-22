@@ -27,7 +27,7 @@ int main() {
   const auto plain = headers();
   check(fc::parseHubHeaders(plain.data(), plain.size(), output));
   check(output.contentLength == 43);
-  for (const std::string& type : {"application/json", "APPLICATION/JSON", "application/json; charset=utf-8",
+  for (const char* type : {"application/json", "APPLICATION/JSON", "application/json; charset=utf-8",
        "Application/Json ; CHARSET = UTF-8", "application/json;charset=\"UTF-8\"", "\tapplication/json\t"}) {
     const auto value = headers("Cache-Control: no-store\r\nConnection: close\r\n", "4096", type, "HTTP/1.0 200 OK");
     check(fc::parseHubHeaders(value.data(), value.size(), output));
@@ -37,16 +37,16 @@ int main() {
   check(fc::parseHubHeaders(mixed.data(), mixed.size(), output));
   check(output.contentLength == 1);
 
-  for (const std::string& length : {"", "0", "0000", "4097", "999999999999999999999999999999999",
+  for (const char* length : {"", "0", "0000", "4097", "999999999999999999999999999999999",
        "+12", "-12", "1.0", "1e2", "0x10", "12,12", "1 2", "12x"}) rejected(headers("", length));
-  for (const std::string& type : {"", "text/html", "application/jsonp", "application/json garbage", "application/json;",
+  for (const char* type : {"", "text/html", "application/jsonp", "application/json garbage", "application/json;",
        "application/json; charset", "application/json; charset=", "application/json; charset=latin1",
        "application/json; charset=\"utf-8", "application/json; charset=utf-8; charset=utf-8"}) rejected(headers("", "12", type));
-  for (const std::string& status : {"HTTP/1.1 201 OK", "HTTP/1.1 301 Redirect", "HTTP/1.1 404 Missing", "HTTP/1.1 500 Error",
+  for (const char* status : {"HTTP/1.1 201 OK", "HTTP/1.1 301 Redirect", "HTTP/1.1 404 Missing", "HTTP/1.1 500 Error",
        "HTTP/1.2 200 OK", "HTTP/2 200", "http/1.1 200 OK", "HTTP/1.1 2000 OK", "HTTP/1.1 200x", "HTTP/1.1\t200 OK"}) {
     rejected(headers("", "12", "application/json", status));
   }
-  for (const std::string& field : {"Content-Length: 43\r\n", "content-length: 44\r\n", "Content-Type: application/json\r\n",
+  for (const char* field : {"Content-Length: 43\r\n", "content-length: 44\r\n", "Content-Type: application/json\r\n",
        "CONTENT-TYPE: text/html\r\n", "Transfer-Encoding: chunked\r\n", "transfer-encoding:\r\n",
        "Content-Encoding: gzip\r\n", "Content-Encoding: identity\r\n", "Content-Encoding:\r\n",
        " X-Fold: unsafe\r\n", "\tcontinuation\r\n", "Content Length: 43\r\n", "Content-Length : 43\r\n",

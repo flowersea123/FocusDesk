@@ -1,12 +1,49 @@
-.focus-panel { margin: 24px 0 8px; padding: 21px; border: 1px solid #000; border-left: 4px solid #d22020; background: #fff; }
-.focus-panel h3 { margin: 6px 0 16px; font-size: 22px; }
-.focus-panel label { display: block; margin-bottom: 9px; font-size: 14px; }
-.focus-panel select { width: 100%; padding: 12px; color: #000; background: #fff; border: 1px solid #000; font: inherit; }
-.focus-action { margin-top: 14px; padding: 11px 18px; border: 1px solid #000; background: #000; color: #fff; cursor: pointer; font: inherit; }
-.focus-action:disabled { opacity: 1; cursor: default; background: #fff; color: #000; border-style: dashed; }
-.focus-action:focus-visible, .focus-panel select:focus-visible { outline: 3px solid #ffda00; outline-offset: 3px; }
-.focus-task { display: block; overflow-wrap: anywhere; font-size: 20px; line-height: 1.4; }
-.focus-time { font-size: 15px; line-height: 1.6; }
-.focus-time span { font-size: 12px; }
-.focus-hint { margin: 12px 0 0; font-size: 12px; line-height: 1.7; color: #000; }
-.focus-error { color: #d22020; font-size: 14px; }
+.focus-panel {
+  container: focus-panel / inline-size;
+  min-width: 0;
+  width: 100%;
+  padding: clamp(18px, 2vw, 30px);
+  border: 1px solid #343141;
+  border-radius: 15px;
+  color: #faf9ff;
+  background: radial-gradient(ellipse at 87% 70%, #363044 0, transparent 59%), #23212b;
+}
+.focus-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px;
+  grid-template-areas: "label dial" "task dial" "time dial" "actions dial" "error error"; }
+.focus-label { grid-area: label; display: flex; align-items: center; gap: 8px; color: #d5c9ff; font-size: 13px; font-weight: 600; margin: 0; }
+.focus-label i { width: 9px; height: 9px; border: 2px solid #bda7fb; border-radius: 50%; }
+.focus-task { grid-area: task; margin: 10px 0 0; color: #fff; font-size: clamp(22px, 2.5vw, 32px); font-weight: 600; line-height: 1.25; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.focus-panel .focus-choice {
+  grid-area: task; min-width: 0; width: 100%; max-width: 28em; margin: 9px 0 0; padding: 7px 8px;
+  border: 1px solid #655e73; border-radius: 6px; background: #302c39; color: #fff; color-scheme: dark;
+  font-size: 17px; font-weight: 600; line-height: 1.4; text-overflow: ellipsis; cursor: pointer;
+}
+.focus-choice:enabled:hover { border-color: #ac9ac9; }
+.focus-panel .focus-choice:disabled { opacity: .65; cursor: default; }
+.focus-time { grid-area: time; margin: 7px 0 0; color: #d1cdd9; font-size: 12px; line-height: 1.6; }
+.focus-actions { grid-area: actions; display: flex; margin-top: 17px; }
+.focus-panel .focus-action { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 40px; padding: 0 15px; border: 1px solid #d1c3ff; border-radius: 7px; background: #d6c6ff; color: #272034; font-size: 13px; font-weight: 650; }
+.focus-panel .focus-action:enabled:hover { background: #e6ddff; }
+.focus-panel .focus-action:disabled { background: #4b4658; border-color: #5a5465; border-style: solid; color: #d8d2e2; }
+.play-icon { width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 6px solid currentColor; }
+.stop-icon { width: 8px; height: 8px; background: currentColor; border-radius: 1px; }
+.focus-panel .focus-choice:focus-visible, .focus-panel .focus-action:focus-visible { outline: 2px solid #ded0ff; outline-offset: 3px; }
+.focus-error { grid-area: error; margin: 12px 0 0; color: #ffc6c6; font-size: 13px; }
+.focus-dial { grid-area: dial; position: relative; width: clamp(95px, 12vw, 145px); aspect-ratio: 1; display: grid; place-items: center; border: 1px solid #494354; border-radius: 50%; }
+.focus-dial::before, .focus-dial::after { content: ''; position: absolute; border-radius: 50%; }
+.focus-dial::before { inset: 6px; background: repeating-conic-gradient(from -.5deg, #93879d 0 1deg, transparent 1deg 6deg); mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px)); }
+.focus-dial::after { inset: 15px; background: conic-gradient(#c0a4ff var(--time-arc), #514a62 0); mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px)); }
+.focus-dial-face { text-align: center; }
+.dial-label { display: block; margin: 0 0 3px; color: #d1c6e2; font-size: 11px; }
+.dial-clock { font-family: 'Inter', 'Helvetica Neue', sans-serif; font-size: clamp(25px, 3.05vw, 42px); font-weight: 400; font-variant-numeric: tabular-nums; letter-spacing: -.065em; line-height: 1.12; }
+@container focus-panel (max-width: 400px) {
+  .focus-grid { grid-template-areas: "label dial" "task task" "time time" "actions actions" "error error"; column-gap: 12px; }
+  .focus-task { font-size: 22px; }
+  .focus-panel .focus-choice { font-size: 16px; }
+  .focus-dial { width: 73px; }
+  .focus-dial::before { inset: 4px; mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px)); }
+  .focus-dial::after { inset: 10px; }
+  .dial-clock { font-size: 21px; }
+  .dial-label { font-size: 9px; margin-bottom: 0; }
+  .focus-actions { margin-top: 12px; }
+}

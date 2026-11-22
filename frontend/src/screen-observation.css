@@ -1,0 +1,22 @@
+.screen-observation h4 { margin: 0; }
+.screen-observation p, .screen-observation small, .screen-observation summary { font-size: 13px; line-height: 1.55; }
+.screen-observation > p { margin: 0 0 14px; color: var(--muted); }
+.so-field { display: grid; gap: 5px; margin: 12px 0; font-size: 13px; font-weight: 600; }
+.so-field :is(select, textarea, input) { width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid #c9c6d1; border-radius: 7px; color: var(--ink); background: white; font: inherit; font-weight: 400; }
+.so-field small { font-weight: 400; color: var(--muted); }
+.so-actions, .so-draft-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.so-actions button { padding: 8px 12px; font: inherit; font-size: 13px; border: 1px solid #c9c6d1; border-radius: 7px; color: var(--ink); background: white; }
+.so-actions .so-primary { background: #50406e; border-color: #50406e; color: white; }
+.so-actions button:disabled { opacity: .55; }
+.screen-observation :is(.so-note, .so-error) { margin: 10px 0 0; }
+.screen-observation .so-error { color: #963930; }
+.so-draft { margin-top: 16px; padding: 14px; border: 1px solid var(--line); border-radius: 9px; }
+.so-draft-head { justify-content: space-between; }
+.so-draft-head time { font-size: 12px; }
+.so-draft details { margin: 7px 0; }
+.so-draft summary { cursor: pointer; text-decoration: underline; }
+.so-draft img { display: block; max-width: 100%; max-height: 320px; margin-top: 8px; object-fit: contain; }
+.so-progress { padding: 10px 0; font-size: 13px; }
+.so-progress input { accent-color: var(--accent); margin-right: 6px; }
+.so-progress p { margin: 4px 0; overflow-wrap: anywhere; }
+.so-draft > .so-actions { margin-top: 12px; }

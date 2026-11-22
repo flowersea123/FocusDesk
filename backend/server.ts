@@ -39,7 +39,7 @@ try {
       server.closeIdleConnections();
       const force = setTimeout(() => server.closeAllConnections(), 2_000);
       force.unref();
-      try { await Promise.all([closed, loader.close()]); }
+      try { await Promise.all([closed, server.stopRecording(), loader.close()]); }
       finally {
         clearTimeout(force);
         await dataLock!.release();

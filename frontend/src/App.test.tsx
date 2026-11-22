@@ -6,9 +6,19 @@ import { createMockSource, type OverviewSource } from './data/overview-source';
 import { parseDailyOverview, type DailyOverview } from '../../contracts/daily-overview';
 import today from '../../contracts/fixtures/today.json';
 
+const deviceTitles = ['Zheng li jin tian de zhong dian ren wu', 'Wan cheng Dashboard ye mian yan zheng'];
+
 afterEach(() => vi.useRealTimers());
 
 describe('Dashboard', () => {
+  it('opens the local mail page from the editable Hub without leaving the task editor', async () => {
+    render(<App source={{ kind: 'http', read: vi.fn().mockResolvedValue(parseDailyOverview(today)), updateTasks: vi.fn() }} />);
+    await screen.findAllByText(today.tasks[0].title);
+    const mail = within(screen.getByRole('navigation')).getByRole('link', { name: '邮件与待办' });
+    expect(mail).toHaveAttribute('href', `http://127.0.0.1:${Number(process.env.FOCUSDESK_TRIAL_PORT ?? 5184)}/`);
+    expect(mail).toHaveAttribute('target', '_blank');
+  });
+
   it('shows task controls and omits editors for fields outside the preview', async () => {
     const signals = (['active', 'acknowledged', 'ignored', 'closed'] as const).map((status, index) => ({
       id: `event-${index}`, content: `Manual event ${index + 1}`, source: 'Manual',
@@ -21,8 +31,8 @@ describe('Dashboard', () => {
     expect(within(tasks).getAllByRole('listitem')).toHaveLength(data.tasks.length);
     expect(screen.queryByRole('region', { name: 'Signal management' })).not.toBeInTheDocument();
     for (const signal of signals) expect(screen.queryByDisplayValue(signal.content)).not.toBeInTheDocument();
-    for (const link of screen.getAllByRole('link', { name: /Device connection/ })) expect(link).toHaveAttribute('href', '/connect');
-    expect(screen.getByRole('heading', { name: 'Daily overview' })).toBeVisible();
+    for (const link of screen.getAllByRole('link', { name: '连接设备' })) expect(link).toHaveAttribute('href', '/connect');
+    expect(screen.getByRole('heading', { name: '今日工作台' })).toBeVisible();
     expect(screen.queryByLabelText('YOUR GOAL')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/CURRENT ACTION/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/NEXT ACTION/)).not.toBeInTheDocument();
@@ -33,21 +43,22 @@ describe('Dashboard', () => {
     render(<App source={createMockSource(0)} />);
     const taskRegion = screen.getByRole('region', { name: '今日任务' });
     await within(taskRegion).findByText(today.tasks[0].title);
-    expect(screen.getByText('本地 Mock 演示')).toBeVisible();
-    expect(screen.getByText(/固定演示日期，不是实时今日/)).toBeVisible();
-    expect(screen.getByText(/Browser-only design preview\./)).toBeVisible();
+    expect(screen.getByText('本地演示')).toBeVisible();
+    expect(screen.getByText(/固定演示日期/)).toBeVisible();
+    expect(screen.getByText(/浏览器内随编辑更新/)).toBeVisible();
     const preview = screen.getByRole('img', { name: '400 × 300 e-paper preview' });
     const pageTitles = within(taskRegion).getAllByRole('listitem').map(item => item.querySelector('.task-title')?.textContent);
     expect(pageTitles).toEqual(today.tasks.map(task => task.title));
+    expect(screen.getByRole('link', { name: /打开模拟屏查看设备/ })).toHaveAttribute('href', '/simulator');
     expect(preview).toHaveClass('paper-design');
     expect(preview).toHaveAttribute('data-width', '400');
     expect(preview).toHaveAttribute('data-height', '300');
     expect(preview).toHaveAttribute('data-source-revision', today.revision);
     expect(preview).toHaveAttribute('data-preview-mode', 'workspace');
-    expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(today.tasks.filter(task => task.status === 'todo').map(task => task.title));
+    expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(deviceTitles);
     const transcript = document.getElementById('preview-transcript')!;
     expect(transcript).toHaveTextContent('FOCUSDESK');
-    for (const task of today.tasks.filter(task => task.status === 'todo')) expect(transcript).toHaveTextContent(task.title);
+    for (const label of deviceTitles) expect(transcript).toHaveTextContent(label);
     expect(transcript).toHaveTextContent('AI RECOMMENDATION No suggestion yet.');
     expect(screen.getByLabelText('1 项已完成，共 3 项')).toBeInTheDocument();
   });
@@ -72,7 +83,7 @@ describe('Dashboard', () => {
     await user.click(screen.getByRole('button', { name: '当前任务' }));
     expect(preview).toHaveAttribute('data-preview-mode', 'workspace');
     expect(preview.querySelector('.paper-recommendation p')).toHaveTextContent('No suggestion yet.');
-    expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(data.tasks.filter(task => task.status === 'todo').map(task => task.title));
+    expect([...preview.querySelectorAll('.preview-task-title')].map(item => item.textContent)).toEqual(deviceTitles);
     expect(screen.getByRole('button', { name: '当前任务' })).toHaveAttribute('aria-pressed', 'true');
   });
 
@@ -105,8 +116,8 @@ describe('Dashboard', () => {
     await screen.findAllByText(today.tasks[0].title);
     await user.click(screen.getByRole('button', { name: '次日样例' }));
     await waitFor(() => expect(screen.queryByText(today.revision)).not.toBeInTheDocument());
-    expect(screen.getByText('Tuesday, 3 November 2026')).toBeVisible();
-    expect(screen.getByText(/固定演示日期，不是实时今日/)).toBeVisible();
+    expect(screen.getByText('2026年11月3日星期二')).toBeVisible();
+    expect(screen.getByText(/固定演示日期/)).toBeVisible();
   });
 
   it('shows initial loading, then an explicit failure without inventing empty data, and supports retry', async () => {
@@ -129,9 +140,10 @@ describe('Dashboard', () => {
     const source: OverviewSource = { kind: 'http', read: vi.fn().mockResolvedValue(parseDailyOverview(today)) };
     render(<App source={source} />);
     await screen.findAllByText(today.tasks[0].title);
-    expect(screen.getByText('Local Hub')).toBeVisible();
-    expect(screen.getByText(/日期以任务文件为准，不是实时今日/)).toBeInTheDocument();
+    expect(screen.getByText('只读 Hub')).toBeVisible();
+    expect(screen.getByText(/工作台日期取自任务文件/)).toBeInTheDocument();
     expect(screen.getByText(/请在本机打开 FocusDesk 编辑任务/)).toBeVisible();
+    expect(screen.queryByRole('link', { name: '邮件与待办' })).not.toBeInTheDocument();
     expect(screen.queryByText(/尚待成员 B/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '空列表' })).not.toBeInTheDocument();
   });

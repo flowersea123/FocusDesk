@@ -1,0 +1,86 @@
+.project-progress { min-width:0; background:#fff; border:1px solid var(--line); border-radius:13px; padding:clamp(18px,2.5vw,25px); color:var(--ink); }
+.project-progress header,.project-actions {display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;}
+.project-progress header {justify-content:space-between;}
+.project-progress h2 {margin:0;font-size:21px;letter-spacing:-.04em;}
+.project-progress p,.project-progress small span {margin:7px 0;color:var(--muted);font-size:13px;line-height:1.65;}
+.project-progress select,.project-progress textarea {max-width:100%;border:1px solid #c8c4d1;border-radius:7px;background:#fff;font:inherit;color:inherit;padding:8px;}
+.project-progress h3 {margin:16px 0 8px;font-size:14px;}
+.project-progress ul {display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 14px;list-style:none;padding:0;}
+.project-progress li {padding:4px 10px;background:#f2eef8;border-radius:5px;font-size:13px;overflow-wrap:anywhere;}
+.project-actions {margin:14px 0 5px;}
+.project-progress button,.daily-synthesis button {border:1px solid #cbc7d4;border-radius:7px;padding:7px 11px;background:white;color:var(--ink);font:inherit;font-size:13px;}
+.project-progress .project-actions button:first-child {background:#50406e;color:white;border-color:#50406e;}
+.project-progress a {text-decoration:underline;}
+.project-plan {margin-top:18px;border-top:1px solid var(--line);padding-top:15px;}
+.project-plan label {font-weight:650;}
+.project-plan textarea {width:100%;}
+
+.project-device-canvas { display:block; width:100%; height:auto; image-rendering:auto; }
+
+.reading-bookmark { margin: 16px 0; padding: 10px 14px; border-left: 3px solid #8b75ae; background: #f6f3f9; border-radius: 0 7px 7px 0; overflow-wrap: anywhere; }
+.reading-bookmark h3 { margin: 0 0 4px; }
+.reading-bookmark p { margin: 0; }
+.reading-bookmark button { margin-top: 8px; }
+
+.project-progress { overflow-wrap: anywhere; }
+.project-progress header { gap: 10px; }
+.project-progress header .recorder-toggle { min-height: 40px; padding: 8px 13px; border: 1px solid #50406e; background: #50406e; color: #fff; font-weight: 600; }
+.project-progress header .recorder-toggle.is-active { color: #823b37; border-color: #dbc7c5; background: #fff; }
+.project-progress .recorder-status { margin-top: 10px; }
+.project-progress .recorder-error, .project-progress > [role=alert] { color: #963930; }
+.project-progress .project-recognition { margin: 12px 0 9px; color: var(--ink); }
+.project-selection { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.project-selection label { display: flex; flex: 1 1 200px; align-items: center; min-width: 0; gap: 8px; color: var(--muted); font-size: 13px; }
+.project-selection select { min-width: 0; flex: 1; text-overflow: ellipsis; }
+.project-selection button, .project-reading button { font-size: 12px; }
+.project-target { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; }
+.project-target button { border: 0; color: var(--accent); text-decoration: underline; }
+.project-progress .project-reading-section { font-size: clamp(18px, 2vw, 23px); line-height: 1.35; }
+.project-reading h3 { margin: 12px 0 4px; color: var(--muted); font-size: 12px; font-weight: 550; }
+.project-reading .project-document { font-size: 12px; }
+.project-reading button { margin-top: 4px; }
+.project-observation { margin: 12px 0; padding: 6px 11px; border-left: 3px solid #ab97c3; background: #f7f5f9; }
+.project-observation p, .project-observation small { margin: 0; }
+.project-observation p { color: var(--ink); }
+.project-observation small { font-size: 12px; }
+.project-progress .project-actions { gap: 6px; }
+@media (max-width: 600px) {
+  .dashboard .desk-nav { flex-wrap: wrap; }
+  .dashboard .desk-nav a { padding-inline: 6px; }
+}
+
+.desk-task-panel .project-progress { margin-top: 13px; padding: 12px 0 0; border: 0; border-radius: 0; border-top: 1px solid var(--line); }
+.project-progress #project-progress-title { margin: 0; color: var(--ink); font-size: 15px; font-weight: 650; }
+.project-progress #project-progress-title span { color: var(--muted); font-size: 14px; font-weight: 500; }
+.project-progress .project-follow { border: 0; background: transparent; padding: 3px 0; color: var(--accent); text-decoration: underline; }
+.project-progress .project-selection { border: 0; padding: 0; margin-top: 7px; }
+.task-recorder-state .recorder-status { margin-top: 9px; }
+.task-recorder-state p { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+.task-recorder-state .recorder-error { color: #963930; }
+.task-recorder-state .project-recognition { color: var(--ink); }
+.desk-task-panel .desk-section-head { flex-wrap: wrap; }
+.desk-task-panel .desk-section-head .recorder-toggle { margin-left: auto; min-height: 38px; padding: 7px 12px; }
+.desk-tasks .task-progress-select { border: 0; background: transparent; cursor: pointer; color: inherit; text-align: left; padding: 3px 0; font-family: inherit; }
+.desk-tasks .task-progress-select:hover { text-decoration: underline; }
+.desk-tasks li[data-selected=true] { background: #f7f4fa; border-radius: 5px; padding-inline: 8px; }
+.task-recognized { color: #327155; font-size: 11px; white-space: nowrap; }
+.desk-task-panel .checkpoint-workspace + .task-editor { margin-top: 12px; }
+@media (max-width: 440px) {
+  .desk-task-panel .desk-section-head { gap: 5px 8px; }
+}
+
+.project-steps { margin:10px 0; padding-left:1.6em; }
+.project-steps li { padding:4px 0; background:transparent; }
+.project-steps li::marker { color:var(--muted); }
+.project-steps small { margin-left:8px; font-size:12px; }
+.project-steps [data-state="next"] small { color:var(--accent); font-weight:650; }
+.project-steps [data-state="done"] small { color:#386846; }
+.project-steps label { cursor:pointer; }
+.project-steps input { margin:0 7px 0 1px; vertical-align:middle; accent-color:var(--accent); }
+
+.project-paper-visits { margin: 12px 0; }
+.project-paper-visits summary { font-size: 13px; font-weight: 600; cursor: pointer; }
+.project-paper-visits p { font-size: 12px; color: var(--muted); }
+.project-paper-visits ul { display: grid; }
+.project-paper-visits li { display: grid; grid-template-columns: max-content 1fr; gap: 9px; padding: 3px 0; background: none; }
+.project-paper-visits time { font-variant-numeric: tabular-nums; color: var(--muted); }

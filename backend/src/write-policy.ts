@@ -19,13 +19,17 @@ export function isLoopback(address: string | undefined): boolean {
   return isIPv4(ipv4) && ipv4.split('.')[0] === '127';
 }
 
-export function checkWritePolicy(address: string | undefined, host: string | undefined, origin: string | undefined, contentType: string | undefined) {
+export function isLocalRequest(address: string | undefined, host: string | undefined): boolean {
   let localHost = false;
   try {
     const hostname = new URL(`http://${host}`).hostname.replace(/^\[|\]$/g, '');
     localHost = hostname === 'localhost' || isLoopback(hostname);
   } catch { /* Invalid Host cannot authorize a write. */ }
-  if (!isLoopback(address) || !localHost || !host || origin !== `http://${host}`) {
+  return Boolean(host && localHost && isLoopback(address));
+}
+
+export function checkWritePolicy(address: string | undefined, host: string | undefined, origin: string | undefined, contentType: string | undefined) {
+  if (!isLocalRequest(address, host) || origin !== `http://${host}`) {
     throw new WriteRequestError(403, 'WRITE_FORBIDDEN', 'Task editing requires a same-origin browser on this computer.');
   }
   if (!contentType || !/^application\/json(?:\s*;\s*charset\s*=\s*(?:utf-8|"utf-8"))?\s*$/i.test(contentType)) {
@@ -35,10 +39,11 @@ export function checkWritePolicy(address: string | undefined, host: string | und
 
 /** Bound both accumulated bytes and total upload time, without destroying the
  * socket before the service can send its structured rejection response. */
-export function readUpdateBody(request: IncomingMessage, timeoutMs = 5_000): Promise<string> {
+export function readUpdateBody(request: IncomingMessage, timeoutMs = 5_000, maxBytes = MAX_OVERVIEW_BYTES): Promise<string> {
+  const tooLarge = maxBytes === MAX_OVERVIEW_BYTES ? 'Task update exceeds 4096 bytes.' : 'Record exceeds ' + maxBytes + ' bytes.';
   const declared = Number(request.headers['content-length']);
-  if (declared > MAX_OVERVIEW_BYTES) {
-    return Promise.reject(new WriteRequestError(413, 'BODY_TOO_LARGE', 'Task update exceeds 4096 bytes.'));
+  if (declared > maxBytes) {
+    return Promise.reject(new WriteRequestError(413, 'BODY_TOO_LARGE', tooLarge));
   }
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -53,7 +58,7 @@ export function readUpdateBody(request: IncomingMessage, timeoutMs = 5_000): Pro
     const fail = (error: Error) => { cleanup(); request.pause(); reject(error); };
     const data = (chunk: Buffer) => {
       bytes += chunk.length;
-      if (bytes > MAX_OVERVIEW_BYTES) { fail(new WriteRequestError(413, 'BODY_TOO_LARGE', 'Task update exceeds 4096 bytes.')); return; }
+      if (bytes > maxBytes) { fail(new WriteRequestError(413, 'BODY_TOO_LARGE', tooLarge)); return; }
       chunks.push(chunk);
     };
     const end = () => {

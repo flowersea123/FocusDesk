@@ -48,11 +48,13 @@ describe('task write adapter', () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
-  it('sends one versioned JSON PUT and validates the server snapshot', async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify(fixture)));
+  it('sends one versioned JSON PUT with Chinese titles and validates the server snapshot', async () => {
+    const tasks = [{ ...fixture.tasks[0], title:'看论文', device_title:'Read papers' }, ...fixture.tasks.slice(1)];
+    const saved = { ...fixture, tasks };
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify(saved)));
     const source = createHttpSource({ baseUrl: '', pageOrigin: 'http://127.0.0.1:8787', fetcher });
-    const input = { revision: fixture.revision, tasks: fixture.tasks };
-    expect(await source.updateTasks!(input, new AbortController().signal)).toEqual(fixture);
+    const input = { revision: fixture.revision, tasks };
+    expect(await source.updateTasks!(input, new AbortController().signal)).toEqual(saved);
     expect(fetcher).toHaveBeenCalledWith('/api/v1/daily-overview/tasks', expect.objectContaining({
       method: 'PUT', body: JSON.stringify(input), headers: { Accept: 'application/json', 'Content-Type': 'application/json; charset=utf-8' },
     }));
@@ -70,7 +72,7 @@ describe('task write adapter', () => {
   it('rejects unsupported titles before issuing a write', () => {
     const fetcher = vi.fn<typeof fetch>();
     const source = createHttpSource({ baseUrl: '', pageOrigin: 'http://localhost:8787', fetcher });
-    expect(() => source.updateTasks!({ revision: fixture.revision, tasks: [{ ...fixture.tasks[0], title: '中文' }] }, new AbortController().signal)).toThrow();
+    expect(() => source.updateTasks!({ revision: fixture.revision, tasks: [{ ...fixture.tasks[0], title: '读'.repeat(41) }] }, new AbortController().signal)).toThrow();
     expect(fetcher).not.toHaveBeenCalled();
   });
 

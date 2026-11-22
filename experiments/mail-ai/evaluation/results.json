@@ -1,0 +1,1652 @@
+{
+  "date": "2026-11-14",
+  "machine": "Apple M5, 24 GiB unified memory, macOS 26.2, arm64",
+  "engine": "llama.cpp b12182 (fd27b2034)",
+  "context": 8192,
+  "parallel": 1,
+  "seed": 17,
+  "temperature": 0,
+  "thinking": false,
+  "source_data": "19 synthetic messages including 7 with images; 11 initial and 8 follow-up, same task prompt",
+  "metric": "Exact sorted list of Beijing deadline timestamps (or null for a date with unknown time); extra, missing, malformed or wrong values fail the case. Title/summary/source attribution quality not scored.",
+  "analyzer_sha256": "7b9898eed9d2231cb87690e5f7e79c23ac611d9646017fcdb871c0b6d436f465",
+  "inputs": {
+    "cases.json": "f05ef50c7afb6c7f52603823c931772ce19a10d8bc507fb42c6293a6a00e6137",
+    "second-set.json": "b9db806b6948d4483951979564d6a5df013f01eccb56a786e05ba419fef8d670",
+    "notice-zh.png": "9f30494ccf3919ff1f1e9b3b36b2e58d5a9642def00fb67e827ab33aeda667e5",
+    "notice-en.png": "77793ea329c720efb89bf03b04516c98e59f163ebce019ca65dee1dc84241d7b",
+    "meeting.png": "29c1c617804befb394fe92d646e93ec1bd2d1dd966f688c5e0602a81ff35f967",
+    "call-zh.png": "f42cd9a65cae32b22e008366ca018744607797cb94f411d5d66d599fd7bd933a",
+    "return-en.png": "41fdae357819f2d7a2077d2601ebed8615583bd49f09aa724f905a15be516a9d",
+    "receipt-zh.png": "97db563e8c5e76fb581420b4bd5643fa97e02ced38e9235e034bac46536bbbd9"
+  },
+  "models": [
+    {
+      "model": "LiquidAI/LFM2.5-VL-450M-GGUF",
+      "weights": [
+        {
+          "Path": "LFM2.5-VL-450M-Q4_K_M.gguf",
+          "Sha256": "1093f1331319199bbcacdbd7ecc9aa6e5678db6b55073948d0f508be90c8ab68",
+          "Size": 229313568,
+          "Revision": "0037d652469f610f74e6f5c57f62f9f32992df5c"
+        },
+        {
+          "Path": "mmproj-LFM2.5-VL-450m-Q8_0.gguf",
+          "Sha256": "ebfc428baa37efad8bae93864f914b2634a09009f91ad59f974fe1a1565d8561",
+          "Size": 102815168,
+          "Revision": "2794b52e73e5d78737374bb2883defee28f194e8"
+        }
+      ],
+      "bytes": 332128736,
+      "correct": 7,
+      "text_correct": 6,
+      "image_correct": 1,
+      "errors": 1,
+      "eligible_auto_tasks": 5,
+      "eligible_unexpected_time": 0,
+      "details": [
+        {
+          "id": "text-en",
+          "image": false,
+          "expected": [
+            "2026-11-16 17:00"
+          ],
+          "output": {
+            "summary": "Please submit the design portfolio by 2026-11-16 17:00 Beijing time.",
+            "deadlines": [
+              {
+                "title": "Design Portfolio",
+                "quote": "Please submit the design portfolio by 2026-11-16 17:00 Beijing time.",
+                "source": "body",
+                "due_local": "2026-11-16 17:00"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.795,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "Design Portfolio",
+              "dueAt": "2026-11-16T09:00:00.000Z",
+              "review": null
+            }
+          ]
+        },
+        {
+          "id": "text-zh-relative",
+          "image": false,
+          "expected": [
+            "2026-11-16 09:15"
+          ],
+          "output": {
+            "summary": "Recipient is asked to submit a course outline by 09:15 on 2026-11-14.",
+            "deadlines": [
+              {
+                "title": "Submit course outline",
+                "quote": "请在后天 09:15 前提交论文提纲。",
+                "source": "body",
+                "due_local": null
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.475,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "Submit course outline",
+              "dueAt": "2026-11-16T01:15:00.000Z",
+              "review": "日期、时分或时区需要核对"
+            }
+          ]
+        },
+        {
+          "id": "meeting-only",
+          "image": false,
+          "expected": [],
+          "output": {
+            "summary": "Lab seminar starts on 2026-11-17 at 14:30 Beijing time. Attendance is optional, and there is nothing to submit.",
+            "deadlines": [
+              {
+                "title": "Lab seminar",
+                "quote": "The lab seminar starts at 2026-11-17 14:30 Beijing time.",
+                "source": "body",
+                "due_local": "2026-11-17 14:30"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.523,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "Lab seminar",
+              "dueAt": null,
+              "review": "日期、时分或时区需要核对"
+            }
+          ]
+        },
+        {
+          "id": "cancelled",
+          "image": false,
+          "expected": [],
+          "output": {
+            "summary": "原定 2026-11-19 18:00 截止的训练营报名已经取消。你不需要再提交表格。",
+            "deadlines": [
+              {
+                "title": "2026-11-19 18:00",
+                "quote": "截止的训练营报名已经取消。你不需要再提交表格。",
+                "source": "body",
+                "due_local": null
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.585,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "2026-11-19 18:00",
+              "dueAt": null,
+              "review": "邮件包含改期、撤销或转发内容"
+            }
+          ]
+        },
+        {
+          "id": "date-only",
+          "image": false,
+          "expected": [
+            null
+          ],
+          "output": {
+            "summary": "请在 2026 年 11 月 18 日前交回报名表，具体几点截止还没有确定。",
+            "deadlines": [
+              {
+                "title": "2026-11-14 09:00",
+                "quote": "请在 2026 年 11 月 18 日前交回报名表，具体几点截止还没有确定。",
+                "source": "body",
+                "due_local": null
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.625,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "2026-11-14 09:00",
+              "dueAt": null,
+              "review": "日期、时分或时区需要核对"
+            }
+          ]
+        },
+        {
+          "id": "two-actions",
+          "image": false,
+          "expected": [
+            "2026-11-17 10:00",
+            "2026-11-20 16:45"
+          ],
+          "output": {
+            "summary": "Two deliverables: Submit your budget by 2026-11-17 10:00 Beijing time. Upload your poster by 2026-11-20 16:45 Beijing time.",
+            "deadlines": [
+              {
+                "title": "Submit your budget",
+                "quote": "Submit your budget by 2026-11-17 10:00 Beijing time.",
+                "source": "body",
+                "due_local": "2026-11-17 10:00"
+              },
+              {
+                "title": "Upload your poster",
+                "quote": "Upload your poster by 2026-11-20 16:45 Beijing time.",
+                "source": "body",
+                "due_local": "2026-11-20 16:45"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.895,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "Submit your budget",
+              "dueAt": "2026-11-17T02:00:00.000Z",
+              "review": null
+            },
+            {
+              "title": "Upload your poster",
+              "dueAt": "2026-11-20T08:45:00.000Z",
+              "review": null
+            }
+          ]
+        },
+        {
+          "id": "rescheduled",
+          "image": false,
+          "expected": [
+            "2026-11-18 12:30"
+          ],
+          "output": {
+            "summary": "The previous deadline of 2026-11-15 17:00 is cancelled. Please submit the field report by 2026-11-18 12:30 Beijing time instead.",
+            "deadlines": [
+              {
+                "title": "Field Report",
+                "quote": "Please submit the field report by 2026-11-18 12:30 Beijing time instead.",
+                "source": "body",
+                "due_local": "2026-11-18 12:30"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.653,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "Field Report",
+              "dueAt": null,
+              "review": "邮件包含改期、撤销或转发内容"
+            }
+          ]
+        },
+        {
+          "id": "image-zh",
+          "image": true,
+          "expected": [
+            "2026-11-21 18:35"
+          ],
+          "output": null,
+          "error": "本机模型返回 HTTP 500。请检查图片模块和上下文长度。",
+          "seconds": 1.355,
+          "exact": false,
+          "decisions": []
+        },
+        {
+          "id": "image-en",
+          "image": true,
+          "expected": [
+            "2026-11-23 09:50"
+          ],
+          "output": {
+            "summary": "Poster submission",
+            "deadlines": [
+              {
+                "title": "Final deliverable",
+                "date": "2026-11-23 ",
+                "quote": "Beijing time",
+                "source": "image",
+                "due_local": "2026-11-14 09:00"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.633,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "Final deliverable",
+              "dueAt": null,
+              "review": "请对照原图核对时间"
+            }
+          ]
+        },
+        {
+          "id": "image-meeting",
+          "image": true,
+          "expected": [],
+          "output": {
+            "summary": "Seminar poster received on 2026-11-14 09:00, event details in attachment.",
+            "deadlines": [
+              {
+                "title": "Seminar schedule",
+                "deadline": "2026-11-",
+                "quote": "The seminar starts at 2026-11-20 15:40 Beijing time.",
+                "source": "body",
+                "due_local": null
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 1.182,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "Seminar schedule",
+              "dueAt": null,
+              "review": "请核对图片和正文是否有不同要求"
+            }
+          ]
+        },
+        {
+          "id": "mixed-update",
+          "image": true,
+          "expected": [
+            "2026-11-25 11:20"
+          ],
+          "output": {
+            "summary": "The recipient is asked to upload the poster by 2026-11-23 09:50 Beijing time.",
+            "deadlines": [
+              {
+                "title": "Poster submission",
+                "quote": "附件为旧版通知。请在 2026-11-25 11:20 前提交展板，以此邮件正文为准。",
+                "source": "body",
+                "due_local": null
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.961,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "Poster submission",
+              "dueAt": null,
+              "review": "请核对图片和正文是否有不同要求"
+            }
+          ]
+        },
+        {
+          "id": "holdout-budget",
+          "image": false,
+          "expected": [
+            "2026-11-28 14:05"
+          ],
+          "output": {
+            "summary": "请在 2026-11-28 14:05 前提交设备借用单。",
+            "deadlines": [
+              {
+                "title": "equipment loan request",
+                "quote": "请在 2026-11-28 14:05 前提交设备借用单。",
+                "source": "body",
+                "due_local": "2026-11-28 14:05"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.687,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "equipment loan request",
+              "dueAt": "2026-11-28T06:05:00.000Z",
+              "review": null
+            }
+          ]
+        },
+        {
+          "id": "holdout-meeting-register",
+          "image": false,
+          "expected": [
+            "2026-12-02 11:40"
+          ],
+          "output": {
+            "summary": "Workshop starts on 2026-12-04 at 13:00. Register for the workshop by 2026-12-02 11:40 Beijing time.",
+            "deadlines": [
+              {
+                "title": "Workshop Registration",
+                "quote": "Register for the workshop by 2026-12-02 11:40 Beijing time.",
+                "source": "body",
+                "due_local": "2026-12-02 11:40"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.628,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "Workshop Registration",
+              "dueAt": "2026-12-02T03:40:00.000Z",
+              "review": null
+            }
+          ]
+        },
+        {
+          "id": "holdout-time-zone",
+          "image": false,
+          "expected": [
+            "2026-12-01 20:00"
+          ],
+          "output": {
+            "summary": "Submit the grant application by 2026-12-01 12:00 UTC.",
+            "deadlines": [
+              {
+                "title": "Submit the grant application",
+                "quote": "Submit the grant application by 2026-12-01 12:00 UTC.",
+                "source": "body",
+                "due_local": "2026-12-01 12:00"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.486,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "Submit the grant application",
+              "dueAt": "2026-12-01T12:00:00.000Z",
+              "review": "日期、时分或时区需要核对"
+            }
+          ]
+        },
+        {
+          "id": "holdout-fyi",
+          "image": false,
+          "expected": [],
+          "output": {
+            "summary": "This is a return document. Your application was submitted on 2026-11-13 16:45 and was successful. Please keep the record.",
+            "deadlines": [
+              {
+                "title": "Return Document",
+                "quote": "This is a return document. Your application was submitted on 2026-11-13 16:45 and was successful. Please keep the record.",
+                "source": "body",
+                "due_local": null
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.555,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "Return Document",
+              "dueAt": null,
+              "review": "截止原句无法与完整正文句子匹配"
+            }
+          ]
+        },
+        {
+          "id": "holdout-no-day",
+          "image": false,
+          "expected": [],
+          "output": {
+            "summary": "The recipient is asked to send a review when the revised manuscript is ready, and they have not set a deadline yet.",
+            "deadlines": [
+              {
+                "title": "Review note",
+                "quote": "Please send your review when the revised manuscript is ready.",
+                "source": "body",
+                "due_local": null
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.408,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "Review note",
+              "dueAt": null,
+              "review": "日期、时分或时区需要核对"
+            }
+          ]
+        },
+        {
+          "id": "holdout-image-zh",
+          "image": true,
+          "expected": [
+            "2026-12-03 13:08"
+          ],
+          "output": {
+            "summary": "The email is about a competition registration, with a deadline of 2026-12-03 13:08. The task is to attend the event on 2026-12-03 at 13:08. The deadline is 2026-12-03 13:08.",
+            "deadlines": [
+              {
+                "title": "Competition Registration",
+                "deadline": "",
+                "quote": "请参阅附件.",
+                "source": "body",
+                "due_local": null
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.66,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "Competition Registration",
+              "dueAt": null,
+              "review": "请核对图片和正文是否有不同要求"
+            }
+          ]
+        },
+        {
+          "id": "holdout-image-en",
+          "image": true,
+          "expected": [
+            "2026-12-07 08:06"
+          ],
+          "output": {
+            "summary": "Return request for equipment loans",
+            "deadlines": [
+              {
+                "title": "Return your field kit",
+                "date": "2026-12",
+                "quote": "Return the field kit by 2026-12-07 08:06 Beijing time.",
+                "source": "image",
+                "due_local": "2026-12-07 08:06"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 0.544,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "Return your field kit",
+              "dueAt": "2026-12-07T00:06:00.000Z",
+              "review": "请对照原图核对时间"
+            }
+          ]
+        },
+        {
+          "id": "holdout-image-receipt",
+          "image": true,
+          "expected": [],
+          "output": {
+            "summary": "The document is a notice regarding a service call, with a deadline of 2026-11-14 09:00. The caller is asked to return a confirmation. The call was made on 2026-11-12 17:43 and the caller is instructed to return the confirmation by 2026-11-14 09:00.",
+            "deadlines": [
+              {
+                "title": "Service Call",
+                "deadline": "2026-11-14 9",
+                "quote": "留存备查.",
+                "source": "body",
+                "due_local": null
+              },
+              {
+                "title": "Call",
+                "deadline": "2026-11-12 17",
+                "quote": "我们已于 2026-11-12 17:43 收到你的报告。",
+                "source": "body",
+                "due_local": null
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 1.044,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "Service Call",
+              "dueAt": null,
+              "review": "请核对图片和正文是否有不同要求"
+            },
+            {
+              "title": "Call",
+              "dueAt": null,
+              "review": "请核对图片和正文是否有不同要求"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "unsloth/Qwen3.5-0.8B-GGUF",
+      "weights": [
+        {
+          "Path": "Qwen3.5-0.8B-Q4_K_M.gguf",
+          "Sha256": "bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517",
+          "Size": 532517120,
+          "Revision": "88467eb7c8e3b6e7894c794f373050d4dbc6ae8a"
+        },
+        {
+          "Path": "mmproj-F16.gguf",
+          "Sha256": "56e4c6cfe73b0c82e3e82bc518d7591997e61d81f723fc41a586f4fa69ea2453",
+          "Size": 204987232,
+          "Revision": "88467eb7c8e3b6e7894c794f373050d4dbc6ae8a"
+        }
+      ],
+      "bytes": 737504352,
+      "correct": 14,
+      "text_correct": 8,
+      "image_correct": 6,
+      "errors": 0,
+      "eligible_auto_tasks": 3,
+      "eligible_unexpected_time": 0,
+      "details": [
+        {
+          "id": "text-en",
+          "image": false,
+          "expected": [
+            "2026-11-16 17:00"
+          ],
+          "output": {
+            "summary": "收件人要求于 2026-11-16 17:00 北京时间提交设计作品集",
+            "deadlines": [
+              {
+                "title": "2026-11-16 17:00 2026-11-16 17:00",
+                "quote": "Please submit the design portfolio by 2026-11-16 17:00 Beijing time.",
+                "source": "body",
+                "due_local": "2026-11-16 17:00"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 2.009,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "2026-11-16 17:00 2026-11-16 17:00",
+              "dueAt": "2026-11-16T09:00:00.000Z",
+              "review": "请核对任务标题，设备需要能说明事项的英文短标题"
+            }
+          ]
+        },
+        {
+          "id": "text-zh-relative",
+          "image": false,
+          "expected": [
+            "2026-11-16 09:15"
+          ],
+          "output": {
+            "summary": "需在后天 09:15 前提交论文提纲",
+            "deadlines": []
+          },
+          "error": null,
+          "seconds": 0.35,
+          "exact": false,
+          "decisions": []
+        },
+        {
+          "id": "meeting-only",
+          "image": false,
+          "expected": [],
+          "output": {
+            "summary": "Lab seminar scheduled for November 17, 2026, 14:30 Beijing time (optional attendance, no submission required).",
+            "deadlines": []
+          },
+          "error": null,
+          "seconds": 0.628,
+          "exact": true,
+          "decisions": []
+        },
+        {
+          "id": "cancelled",
+          "image": false,
+          "expected": [],
+          "output": {
+            "summary": "报名截止日期已取消，无需提交表格",
+            "deadlines": [
+              {
+                "title": "2026-11-19 18:00 2026 11 14 09:00 2026-1",
+                "quote": "原定 2026-11-19 18:00 截止的训练营报名已经取消。你不需要再提交表格。",
+                "source": "body",
+                "due_local": "2026-11-14 09:00"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 1.934,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "2026-11-19 18:00 2026 11 14 09:00 2026-1",
+              "dueAt": null,
+              "review": "邮件包含改期、撤销或转发内容"
+            }
+          ]
+        },
+        {
+          "id": "date-only",
+          "image": false,
+          "expected": [
+            null
+          ],
+          "output": {
+            "summary": "请在 2026 年 11 月 18 日前提交报名表",
+            "deadlines": [
+              {
+                "title": "2026-11-18 18:00 10:00 10:00 10:00 10:00",
+                "quote": "请在 2026 年 11 月 18 日前交回报名表，具体几点截止还没有确定。",
+                "source": "body",
+                "due_local": "2026-11-18 18:00"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 2.068,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "2026-11-18 18:00 10:00 10:00 10:00 10:00",
+              "dueAt": null,
+              "review": "日期、时分或时区需要核对"
+            }
+          ]
+        },
+        {
+          "id": "two-actions",
+          "image": false,
+          "expected": [
+            "2026-11-17 10:00",
+            "2026-11-20 16:45"
+          ],
+          "output": {
+            "summary": "Recipient must submit a budget by 2026-11-17 10:00 Beijing time and upload a poster by 2026-11-20 16:45 Beijing time.",
+            "deadlines": [
+              {
+                "title": "Submit Budget",
+                "quote": "Submit your budget by 2026-11-17 10:00 Beijing time.",
+                "source": "body",
+                "due_local": "2026-11-17 10:00"
+              },
+              {
+                "title": "Upload Poster",
+                "quote": "Upload your poster by 2026-11-20 16:45 Beijing time.",
+                "source": "body",
+                "due_local": "2026-11-20 16:45"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 2.506,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "Submit Budget",
+              "dueAt": "2026-11-17T02:00:00.000Z",
+              "review": null
+            },
+            {
+              "title": "Upload Poster",
+              "dueAt": "2026-11-20T08:45:00.000Z",
+              "review": null
+            }
+          ]
+        },
+        {
+          "id": "rescheduled",
+          "image": false,
+          "expected": [
+            "2026-11-18 12:30"
+          ],
+          "output": {
+            "summary": "Deadline extended from 2026-11-15 17:00 to 2026-11-18 12:30 Beijing time.",
+            "deadlines": [
+              {
+                "title": "Submit field report",
+                "quote": "Please submit the field report by 2026-11-18 12:30 Beijing time instead.",
+                "source": "body",
+                "due_local": "2026-11-18 12:30"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 1.772,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "Submit field report",
+              "dueAt": null,
+              "review": "邮件包含改期、撤销或转发内容"
+            }
+          ]
+        },
+        {
+          "id": "image-zh",
+          "image": true,
+          "expected": [
+            "2026-11-21 18:35"
+          ],
+          "output": {
+            "summary": "课程通知显示需提交工作坊最终作业，截止日期为2026-11-21 18:35",
+            "deadlines": [
+              {
+                "title": "Final Assignment Submission",
+                "quote": "请在 2026-11-21 18:35 前提交实验日志。",
+                "source": "body",
+                "due_local": "2026-11-21 18:35"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 1.816,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "Final Assignment Submission",
+              "dueAt": "2026-11-21T10:35:00.000Z",
+              "review": "请核对图片和正文是否有不同要求"
+            }
+          ]
+        },
+        {
+          "id": "image-en",
+          "image": true,
+          "expected": [
+            "2026-11-23 09:50"
+          ],
+          "output": {
+            "summary": "Poster submission deadline: 2026-11-23 09:50 Beijing time",
+            "deadlines": [
+              {
+                "title": "Poster Submission",
+                "quote": "Upload the poster by 2026-11-23 09:50 Beijing time.",
+                "source": "body",
+                "due_local": "2026-11-23 09:50"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 1.737,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "Poster Submission",
+              "dueAt": "2026-11-23T01:50:00.000Z",
+              "review": "请核对图片和正文是否有不同要求"
+            }
+          ]
+        },
+        {
+          "id": "image-meeting",
+          "image": true,
+          "expected": [],
+          "output": {
+            "summary": "The seminar series is scheduled for November 20, 2026, starting at 15:40 Beijing time. No registration or submission is required.",
+            "deadlines": []
+          },
+          "error": null,
+          "seconds": 0.906,
+          "exact": true,
+          "decisions": []
+        },
+        {
+          "id": "mixed-update",
+          "image": true,
+          "expected": [
+            "2026-11-25 11:20"
+          ],
+          "output": {
+            "summary": "截止日期为2026-11-25 11:20",
+            "deadlines": [
+              {
+                "title": "Poster Submission Deadline",
+                "quote": "请在 2026-11-25 11:20 前提交展板，以此邮件正文为准。",
+                "source": "body",
+                "due_local": "2026-11-25 11:20"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 1.751,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "Poster Submission Deadline",
+              "dueAt": "2026-11-25T03:20:00.000Z",
+              "review": "请核对图片和正文是否有不同要求"
+            }
+          ]
+        },
+        {
+          "id": "holdout-budget",
+          "image": false,
+          "expected": [
+            "2026-11-28 14:05"
+          ],
+          "output": {
+            "summary": "请在 2026-11-28 14:05 前提交设备借用单",
+            "deadlines": [
+              {
+                "title": "2026-11-28 14:05 14:05",
+                "quote": "请在 2026-11-28 14:05 前提交设备借用单。",
+                "source": "body",
+                "due_local": "2026-11-28 14:05"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 1.845,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "2026-11-28 14:05 14:05",
+              "dueAt": "2026-11-28T06:05:00.000Z",
+              "review": "请核对任务标题，设备需要能说明事项的英文短标题"
+            }
+          ]
+        },
+        {
+          "id": "holdout-meeting-register",
+          "image": false,
+          "expected": [
+            "2026-12-02 11:40"
+          ],
+          "output": {
+            "summary": "Registration deadline is 2026-12-02 11:40 Beijing time.",
+            "deadlines": [
+              {
+                "title": "Register for workshop",
+                "quote": "Register for the workshop by 2026-12-02 11:40 Beijing time.",
+                "source": "body",
+                "due_local": "2026-12-02 11:40"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 1.479,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "Register for workshop",
+              "dueAt": "2026-12-02T03:40:00.000Z",
+              "review": null
+            }
+          ]
+        },
+        {
+          "id": "holdout-time-zone",
+          "image": false,
+          "expected": [
+            "2026-12-01 20:00"
+          ],
+          "output": {
+            "summary": "Recipient must submit a grant application by December 1, 2026 at 12:00 UTC.",
+            "deadlines": [
+              {
+                "title": "Submit Grant Application",
+                "quote": "Submit the grant application by 2026-12-01 12:00 UTC.",
+                "source": "body",
+                "due_local": "2026-12-01 12:00"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 1.493,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "Submit Grant Application",
+              "dueAt": "2026-12-01T12:00:00.000Z",
+              "review": "日期、时分或时区需要核对"
+            }
+          ]
+        },
+        {
+          "id": "holdout-fyi",
+          "image": false,
+          "expected": [],
+          "output": {
+            "summary": "申请人已提交申请，系统已记录",
+            "deadlines": []
+          },
+          "error": null,
+          "seconds": 0.3,
+          "exact": true,
+          "decisions": []
+        },
+        {
+          "id": "holdout-no-day",
+          "image": false,
+          "expected": [],
+          "output": {
+            "summary": "Recipient asks for a review note to be sent when the revised manuscript is ready.",
+            "deadlines": []
+          },
+          "error": null,
+          "seconds": 0.424,
+          "exact": true,
+          "decisions": []
+        },
+        {
+          "id": "holdout-image-zh",
+          "image": true,
+          "expected": [
+            "2026-12-03 13:08"
+          ],
+          "output": {
+            "summary": "学生事务处要求提交个人报名表，截止日期为2026-12-03 13:08，所有时间为北京时间。",
+            "deadlines": [
+              {
+                "title": "2026-12-03 13:08",
+                "quote": "请在 2026-12-03 13:08 前提交个人报名表。",
+                "source": "body",
+                "due_local": "2026-12-03 13:08"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 1.979,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "2026-12-03 13:08",
+              "dueAt": "2026-12-03T05:08:00.000Z",
+              "review": "请核对图片和正文是否有不同要求"
+            }
+          ]
+        },
+        {
+          "id": "holdout-image-en",
+          "image": true,
+          "expected": [
+            "2026-12-07 08:06"
+          ],
+          "output": {
+            "summary": "Recipient is asked to return a field kit by 2026-12-07 08:06 Beijing time.",
+            "deadlines": [
+              {
+                "title": "Return the field kit",
+                "quote": "Return the field kit by 2026-12-07 08:06 Beijing time.",
+                "source": "body",
+                "due_local": "2026-12-07 08:06"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 1.841,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "Return the field kit",
+              "dueAt": "2026-12-07T00:06:00.000Z",
+              "review": "请核对图片和正文是否有不同要求"
+            }
+          ]
+        },
+        {
+          "id": "holdout-image-receipt",
+          "image": true,
+          "expected": [],
+          "output": {
+            "summary": "学生服务台已接收报告，无需补交或回复。",
+            "deadlines": [
+              {
+                "title": "11-12 17:43",
+                "quote": "我们已于 2026-11-12 17:43 收到你的报告。",
+                "source": "body",
+                "due_local": "2026-11-12 17:43"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 1.839,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "11-12 17:43",
+              "dueAt": null,
+              "review": "请核对图片和正文是否有不同要求"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "unsloth/Qwen3.5-2B-GGUF",
+      "weights": [
+        {
+          "Path": "Qwen3.5-2B-Q4_K_M.gguf",
+          "Sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+          "Size": 1280835840,
+          "Revision": "90057e31161eb95cc0bc1413c4f53b44de9b49c8"
+        },
+        {
+          "Path": "mmproj-F16.gguf",
+          "Sha256": "7035e9cb8d7c6a9681d07eef9a364783e86ea4cd73faab2eabb4f43a101830c7",
+          "Size": 668227264,
+          "Revision": "90057e31161eb95cc0bc1413c4f53b44de9b49c8"
+        }
+      ],
+      "bytes": 1949063104,
+      "correct": 15,
+      "text_correct": 8,
+      "image_correct": 7,
+      "errors": 0,
+      "eligible_auto_tasks": 3,
+      "eligible_unexpected_time": 0,
+      "details": [
+        {
+          "id": "text-en",
+          "image": false,
+          "expected": [
+            "2026-11-16 17:00"
+          ],
+          "output": {
+            "summary": "请提交设计作品集，截止日期为2026年11月16日北京时间17:00。",
+            "deadlines": [
+              {
+                "title": "submit_portfolio",
+                "quote": "Please submit the design portfolio by 2026-11-16 17:00 Beijing time.",
+                "source": "body",
+                "due_local": "2026-11-16 17:00"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 2.673,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "submit portfolio",
+              "dueAt": "2026-11-16T09:00:00.000Z",
+              "review": null
+            }
+          ]
+        },
+        {
+          "id": "text-zh-relative",
+          "image": false,
+          "expected": [
+            "2026-11-16 09:15"
+          ],
+          "output": {
+            "summary": "请在后天上午 9:15 前提交论文提纲。",
+            "deadlines": [
+              {
+                "title": "submit_outline",
+                "quote": "请在后天 09:15 前提交论文提纲。",
+                "source": "body",
+                "due_local": "2026-11-15 09:15"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 2.218,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "submit outline",
+              "dueAt": "2026-11-16T01:15:00.000Z",
+              "review": "日期、时分或时区需要核对"
+            }
+          ]
+        },
+        {
+          "id": "meeting-only",
+          "image": false,
+          "expected": [],
+          "output": {
+            "summary": "实验室研讨会将于2026年11月17日北京时间14:30开始，参会可选，无需提交材料。",
+            "deadlines": []
+          },
+          "error": null,
+          "seconds": 1.079,
+          "exact": true,
+          "decisions": []
+        },
+        {
+          "id": "cancelled",
+          "image": false,
+          "expected": [],
+          "output": {
+            "summary": "训练营报名已取消，无需提交表格。",
+            "deadlines": []
+          },
+          "error": null,
+          "seconds": 0.647,
+          "exact": true,
+          "decisions": []
+        },
+        {
+          "id": "date-only",
+          "image": false,
+          "expected": [
+            null
+          ],
+          "output": {
+            "summary": "请在 2026 年 11 月 18 日前交回报名表，具体截止时间为待定。",
+            "deadlines": [
+              {
+                "title": "submit_form",
+                "quote": "请在 2026 年 11 月 18 日前交回报名表，具体几点截止还没有确定。",
+                "source": "body",
+                "due_local": "2026-11-18 17:00"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 2.82,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "submit form",
+              "dueAt": null,
+              "review": "日期、时分或时区需要核对"
+            }
+          ]
+        },
+        {
+          "id": "two-actions",
+          "image": false,
+          "expected": [
+            "2026-11-17 10:00",
+            "2026-11-20 16:45"
+          ],
+          "output": {
+            "summary": "请提交预算文件，截止日期为2026-11-17 10:00北京时间；请上传海报文件，截止日期为2026-11-20 16:45北京时间。",
+            "deadlines": [
+              {
+                "title": "submit_budget",
+                "quote": "Submit your budget by 2026-11-17 10:00 Beijing time.",
+                "source": "body",
+                "due_local": "2026-11-17 09:00"
+              },
+              {
+                "title": "upload_poster",
+                "quote": "Upload your poster by 2026-11-20 16:45 Beijing time.",
+                "source": "body",
+                "due_local": "2026-11-20 08:45"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 4.73,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "submit budget",
+              "dueAt": "2026-11-17T02:00:00.000Z",
+              "review": "日期、时分或时区需要核对"
+            },
+            {
+              "title": "upload poster",
+              "dueAt": "2026-11-20T08:45:00.000Z",
+              "review": "日期、时分或时区需要核对"
+            }
+          ]
+        },
+        {
+          "id": "rescheduled",
+          "image": false,
+          "expected": [
+            "2026-11-18 12:30"
+          ],
+          "output": {
+            "summary": "截止日期已延长，请将现场报告于北京时间 2026-11-18 12:30 前提交。",
+            "deadlines": [
+              {
+                "title": "submit_report",
+                "quote": "Please submit the field report by 2026-11-18 12:30 Beijing time instead.",
+                "source": "body",
+                "due_local": "2026-11-18 12:30"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 2.765,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "submit report",
+              "dueAt": null,
+              "review": "邮件包含改期、撤销或转发内容"
+            }
+          ]
+        },
+        {
+          "id": "image-zh",
+          "image": true,
+          "expected": [
+            "2026-11-21 18:35"
+          ],
+          "output": {
+            "summary": "请查看随附通知。",
+            "deadlines": [
+              {
+                "title": "lab_log",
+                "quote": "请在 2026-11-21 18:35 前提交实验日志。",
+                "source": "body",
+                "due_local": "2026-11-21 18:35"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 3.044,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "lab log",
+              "dueAt": "2026-11-21T10:35:00.000Z",
+              "review": "请核对图片和正文是否有不同要求"
+            }
+          ]
+        },
+        {
+          "id": "image-en",
+          "image": true,
+          "expected": [
+            "2026-11-23 09:50"
+          ],
+          "output": {
+            "summary": "请提交最终版海报。",
+            "deadlines": [
+              {
+                "title": "poster_final",
+                "quote": "Upload the poster by 2026-11-23 09:50 Beijing time.",
+                "source": "body",
+                "due_local": "2026-11-23 09:50"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 2.808,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "poster final",
+              "dueAt": "2026-11-23T01:50:00.000Z",
+              "review": "请核对图片和正文是否有不同要求"
+            }
+          ]
+        },
+        {
+          "id": "image-meeting",
+          "image": true,
+          "expected": [],
+          "output": {
+            "summary": "The recipient is invited to a seminar on November 20, 2026, at 15:40 Beijing time. No registration or submission is required.",
+            "deadlines": []
+          },
+          "error": null,
+          "seconds": 1.829,
+          "exact": true,
+          "decisions": []
+        },
+        {
+          "id": "mixed-update",
+          "image": true,
+          "expected": [
+            "2026-11-25 11:20"
+          ],
+          "output": {
+            "summary": "请根据邮件正文要求，在2026-11-25 11:20前提交展板。",
+            "deadlines": [
+              {
+                "title": "submit_poster",
+                "quote": "请在 2026-11-25 11:20 前提交展板，以此邮件正文为准。",
+                "source": "body",
+                "due_local": "2026-11-25 11:20"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 3.548,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "submit poster",
+              "dueAt": "2026-11-25T03:20:00.000Z",
+              "review": "请核对图片和正文是否有不同要求"
+            }
+          ]
+        },
+        {
+          "id": "holdout-budget",
+          "image": false,
+          "expected": [
+            "2026-11-28 14:05"
+          ],
+          "output": {
+            "summary": "请在 2026-11-28 14:05 前提交设备借用单。",
+            "deadlines": [
+              {
+                "title": "submit_device_form",
+                "quote": "请在 2026-11-28 14:05 前提交设备借用单。",
+                "source": "body",
+                "due_local": "2026-11-28 14:05"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 2.754,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "submit device form",
+              "dueAt": "2026-11-28T06:05:00.000Z",
+              "review": null
+            }
+          ]
+        },
+        {
+          "id": "holdout-meeting-register",
+          "image": false,
+          "expected": [
+            "2026-12-02 11:40"
+          ],
+          "output": {
+            "summary": "参加 2026 年 12 月 4 日 13:00 在北京举行的研讨会，需在 2026 年 12 月 2 日 11:40 北京时间前报名。",
+            "deadlines": [
+              {
+                "title": "register",
+                "quote": "Register for the workshop by 2026-12-02 11:40 Beijing time.",
+                "source": "body",
+                "due_local": "2026-12-02 11:40"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 3.333,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "register",
+              "dueAt": "2026-12-02T03:40:00.000Z",
+              "review": null
+            }
+          ]
+        },
+        {
+          "id": "holdout-time-zone",
+          "image": false,
+          "expected": [
+            "2026-12-01 20:00"
+          ],
+          "output": {
+            "summary": "请提交资助申请，截止日期为2026年12月1日12:00 UTC。",
+            "deadlines": [
+              {
+                "title": "submit_application",
+                "quote": "Submit the grant application by 2026-12-01 12:00 UTC.",
+                "source": "body",
+                "due_local": "2026-12-01 01:00"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 2.707,
+          "exact": false,
+          "decisions": [
+            {
+              "title": "submit application",
+              "dueAt": "2026-12-01T12:00:00.000Z",
+              "review": "日期、时分或时区需要核对"
+            }
+          ]
+        },
+        {
+          "id": "holdout-fyi",
+          "image": false,
+          "expected": [],
+          "output": {
+            "summary": "申请已提交成功，请保留记录。",
+            "deadlines": []
+          },
+          "error": null,
+          "seconds": 0.654,
+          "exact": true,
+          "decisions": []
+        },
+        {
+          "id": "holdout-no-day",
+          "image": false,
+          "expected": [],
+          "output": {
+            "summary": "请发送修订稿评审意见，目前尚未设定截止日期。",
+            "deadlines": []
+          },
+          "error": null,
+          "seconds": 0.707,
+          "exact": true,
+          "decisions": []
+        },
+        {
+          "id": "holdout-image-zh",
+          "image": true,
+          "expected": [
+            "2026-12-03 13:08"
+          ],
+          "output": {
+            "summary": "请提交个人报名表",
+            "deadlines": [
+              {
+                "title": "submit_form",
+                "quote": "请在 2026-12-03 13:08 前提交个人报名表。",
+                "source": "body",
+                "due_local": "2026-12-03 13:08"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 2.959,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "submit form",
+              "dueAt": "2026-12-03T05:08:00.000Z",
+              "review": "请核对图片和正文是否有不同要求"
+            }
+          ]
+        },
+        {
+          "id": "holdout-image-en",
+          "image": true,
+          "expected": [
+            "2026-12-07 08:06"
+          ],
+          "output": {
+            "summary": "请于北京时间2026年12月7日08:06前归还现场设备包，并放置在接待台。",
+            "deadlines": [
+              {
+                "title": "Return field kit",
+                "quote": "Return the field kit by 2026-12-07 08:06 Beijing time.",
+                "source": "body",
+                "due_local": "2026-12-07 08:06"
+              }
+            ]
+          },
+          "error": null,
+          "seconds": 3.676,
+          "exact": true,
+          "decisions": [
+            {
+              "title": "Return field kit",
+              "dueAt": "2026-12-07T00:06:00.000Z",
+              "review": "请核对图片和正文是否有不同要求"
+            }
+          ]
+        },
+        {
+          "id": "holdout-image-receipt",
+          "image": true,
+          "expected": [],
+          "output": {
+            "summary": "学生服务台已确认收到并留存备查。",
+            "deadlines": []
+          },
+          "error": null,
+          "seconds": 1.334,
+          "exact": true,
+          "decisions": []
+        }
+      ]
+    }
+  ],
+  "linux_smoke": {
+    "host": "Linux ARM64, Docker Desktop VM, CPU only",
+    "architecture": {
+      "vocab_type": 2,
+      "n_vocab": 248320,
+      "n_ctx": 4096,
+      "n_ctx_train": 262144,
+      "n_embd": 2048,
+      "n_params": 1881825088,
+      "size": 1269873920,
+      "ftype": "Q4_K - Medium"
+    },
+    "samples": [
+      {
+        "id": "text-en",
+        "expected": [
+          "2026-11-16 17:00"
+        ],
+        "dates": [
+          "2026-11-16 17:00"
+        ],
+        "pass": true,
+        "httpStatus": 200,
+        "seconds": 7.200253791,
+        "result": {
+          "summary": "请提交设计作品集，截止日期为2026年11月16日北京时间17:00。",
+          "deadlines": [
+            {
+              "title": "submit_portfolio",
+              "quote": "Please submit the design portfolio by 2026-11-16 17:00 Beijing time.",
+              "source": "body",
+              "due_local": "2026-11-16 17:00"
+            }
+          ]
+        }
+      },
+      {
+        "id": "image-zh",
+        "expected": [
+          "2026-11-21 18:35"
+        ],
+        "dates": [
+          "2026-11-21 18:35"
+        ],
+        "pass": true,
+        "httpStatus": 200,
+        "seconds": 22.586188083,
+        "result": {
+          "summary": "请查看随附通知。",
+          "deadlines": [
+            {
+              "title": "lab_log",
+              "quote": "请在 2026-11-21 18:35 前提交实验日志。",
+              "source": "body",
+              "due_local": "2026-11-21 18:35"
+            }
+          ]
+        }
+      }
+    ],
+    "engine": "llama.cpp b12359 (b1b770d90)",
+    "model": "unsloth/Qwen3.5-2B-GGUF (Q4_K_M + mmproj-F16)",
+    "threads": 5,
+    "context": 4096,
+    "client": "macOS Node, loopback port to Linux container"
+  },
+  "mac_cli_hub_smoke": {
+    "model": "Qwen3.5-2B-GGUF",
+    "preview": "\nDesign portfolio deadline\n请提交设计作品集，截止日期为2026年11月16日北京时间17:00。\n  submit design portfolio · 2026-11-16 17:00（北京）\n  邮件原句　Please submit the design portfolio by 2026-11-16 17:00 Beijing time.\n  可加入待办。\n",
+    "first": "\nDesign portfolio deadline\n请提交设计作品集，截止日期为2026年11月16日北京时间17:00。\n  submit design portfolio · 2026-11-16 17:00（北京）\n  邮件原句　Please submit the design portfolio by 2026-11-16 17:00 Beijing time.\n  已加入待办\n",
+    "second": "\nDesign portfolio deadline\n请提交设计作品集，截止日期为2026年11月16日北京时间17:00。\n  submit design portfolio · 2026-11-16 17:00（北京）\n  邮件原句　Please submit the design portfolio by 2026-11-16 17:00 Beijing time.\n  已有相同事项\n",
+    "tasks": [
+      {
+        "id": "src-_JEK652YePiJYIr-n5-mxnvYaJP0BUUjZU7jyIWfhhA",
+        "title": "submit design portfolio",
+        "status": "todo",
+        "due_at": "2026-11-16T09:00:00.000Z"
+      }
+    ],
+    "source": "synthetic EML",
+    "isolated": true,
+    "display_snapshot_contains_title": true
+  },
+  "mac_browser_checks": [
+    "Opened real Chrome; trial showed the EML control, example and isolated Hub link.",
+    "Real model returned a Chinese summary, exact English source sentence, Beijing deadline and importable task; preview left the isolated list empty.",
+    "Clicking import committed exactly one task with the displayed title and due time to the real, isolated Hub.",
+    "A second live inference and import reported an existing task; the real Hub and its disk still held one unchanged entry.",
+    "The production Hub dashboard rendered the imported title.",
+    "The trial result fits the 390px viewport without horizontal scrolling.",
+    "The browser file picker uploaded the repository EML and displayed its real analysis, leaving stored tasks unchanged.",
+    "An uploaded MIME attachment reached the real multimodal model. Chrome displayed the original Chinese PNG and a review-only deadline.",
+    "Date-only EML clearly displayed the model time as unconfirmed, excluded import, and allowed inspection of the original sentence.",
+    "Chrome reported no page errors."
+  ]
+}

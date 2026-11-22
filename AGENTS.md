@@ -16,6 +16,9 @@ is permanently limited to UI.
 
 ## Development Rules
 
+- 在根目录 `revise` 记录每次修改的内容与实际验证。新功能适配 Linux、macOS、Windows，注明哪些平台已实际执行。
+- 先作本地 Git 提交，提交说明列出具体行为变化。推送 GitHub 前由用户确认。
+
 - Follow the user's explicit task instructions.
 - Modify only relevant files and modules.
 - Prefer minimal changes.
@@ -26,6 +29,8 @@ is permanently limited to UI.
 - Do not rewrite architecture unless requested.
 
 ## 授权与当前阶段
+
+- MAC-DEV-SIM（2026-11-13）：用户选择先完成 Mac 本机开发与电子纸模拟屏，暂不制作原生 Mac 应用。允许 macOS 数据锁、统一开发入口、真实 Hub 显示快照模拟、固件主机像素对照、相关测试与说明；复用现有业务和协议，不改固件、私有配置或已有个人任务，不烧录。入口与验收边界见 `docs/MAC_DEVELOPMENT.md`。
 
 - GITHUB-HANDOFF（2026-11-13）：用户授权清理可确认废弃内容、审查隐私、补齐交接说明、验证当前版本，并上传新建私有GitHub仓库 `flowersea123/FocusDesk`。当前行为和接手范围见根README与 `docs/HANDOFF.md`。后续开发重点包括AI功能与任务展示逻辑，具体实现按产品负责人任务执行。下方各日期条目记录历史阶段范围。
 

@@ -19,7 +19,7 @@ const FRONTEND_LICENSES = ['react','react-dom','scheduler'].map(name => ({
   source: `frontend/node_modules/${name}/LICENSE`, target: `licenses/${name}.LICENSE.txt`,
 }));
 FRONTEND_LICENSES.push({ source: 'contracts/DISPLAY_FONT_LICENSE.txt', target: 'licenses/DISPLAY_FONT_LICENSE.txt' });
-const EXCLUDED = new Set(['node_modules','.git','.cache','data','fixtures','firmware','tests','test','__tests__','coverage','test-results','playwright-report']);
+const EXCLUDED = new Set(['node_modules','.git','.cache','data','fixtures','firmware','tests','test','__tests__','__pycache__','coverage','test-results','playwright-report']);
 
 export function within(root, filename) {
   const relative = path.relative(root, filename);
@@ -29,7 +29,7 @@ export function excluded(name) {
   const lower = name.toLowerCase();
   return EXCLUDED.has(lower) || lower === 'private_config.h' || lower === '.env' ||
     lower.startsWith('.env.') || lower.endsWith('.local') || lower.endsWith('.log') ||
-    lower.endsWith('.map') || /\.(?:test|spec)\.[^.]+$/i.test(name);
+    /\.(?:map|pyc|pyo|gguf|safetensors|eml|pem|key|pfx|p12)$/i.test(name) || /\.(?:test|spec)\.[^.]+$/i.test(name);
 }
 async function collectTree(root, relative, files) {
   const directory = path.join(root, relative);
@@ -105,8 +105,8 @@ export async function compileLauncher({ projectRoot = ROOT, output, compiler = '
 
 export async function buildInstaller({ projectRoot = ROOT, output, cacheDir = DEFAULT_TOOL_CACHE,
                                       testUserDataDir, testAppVersion, compiler } = {}) {
-  if (process.platform !== 'win32') throw new Error('Windows installer builds require Windows.');
   if (testAppVersion && !testUserDataDir) throw new Error('A test app version requires isolated test user data.');
+  if (process.platform !== 'win32') throw new Error('Windows installer builds require Windows.');
   const root = path.resolve(projectRoot);
   const destination = path.resolve(root, output ?? '.cache/m1-dist/FocusDesk-Setup.exe');
   if (path.basename(destination).toLowerCase() !== 'focusdesk-setup.exe')

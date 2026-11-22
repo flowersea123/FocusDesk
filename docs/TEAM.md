@@ -1,5 +1,84 @@
 # 团队协作与交付
 
+## 2026-11-18 GitHub 源码交接
+
+前端负责推荐、首页布局与隔离浏览器操作，Linux 验证负责干净安装、全量回归及便携包实启，固件验证负责逐像素对照和 ESP32-S3 目标编译。Tech Lead 负责 macOS 全量回归、真实模型、仓库与导出文件审查、使用说明及整合。验收结果见[本次交接验证](VERIFICATION.md)。
+
+## 2026-11-16 中文任务与添加按钮
+
+任务编辑、任务数据与导入、真实浏览器验证并行开展。Tech Lead 整合设备短名、预览和发布。
+
+## 2026-11-16 对话归组、内容小结和截图内存
+
+Codex 来源负责历史身份匹配及公开消息，浏览器来源负责本地扩展、同一聊天跨标签归组，采样验证负责图像引用检查和 Linux 回归。Tech Lead 负责日志兼容、对话聚合、本机小结、时间轴以及发布核验。
+
+## 2026-11-16 时间段显示与全功能回归
+
+Tech Lead 负责活动时间轴、每日回顾及回归修复整合。浏览器验收、用户流程、跨平台验证分别使用隔离数据。跨平台角色负责安装器参数校验与配网传输测试的主机兼容。结果记录在根目录 revise。
+
+## 2026-11-16 并行 AI 活动与截图内存
+
+Codex 来源、录制生命周期与时段存储、macOS 截图内存实验分别核验。Tech Lead 整合 ChatGPT 浏览器扩展、时间线和使用入口。真实 Chrome 使用隔离配置和合成页面验证，平台覆盖和测量边界见根目录 revise。
+
+## 2026-11-16 邮件日历
+
+邮件角色负责历史邮件及行动项的就地安排和自动导入。Hub 角色负责计划日期、截止日期、去重、日历保存与到日显示。Tech Lead 负责工作台日历、导航与本机交付。已在隔离服务使用合成邮件、真实本机模型和可控日期验收。各平台及设备画面的实测范围见根目录 revise。
+
+## 2026-11-16 今日活动与接续任务
+
+时间轴组件、自动每日小结、隔离浏览器验收分别由三个角色负责。Tech Lead 已整合前台采样时段、日期与任务映射、工作台推荐和本机交付。各平台及模型实测见根目录 revise。
+
+## 2026-11-16 工作台直接操作
+
+任务列表负责逐行增删改、撤销与键盘操作。专注和建议面板负责选中任务的衔接与就地编辑。Tech Lead 负责主导航、响应式布局、页面状态和最终整合。浏览器验收使用临时 Hub 与合成任务。代码已整合，改动和各平台实测范围见根目录 revise。
+
+## 截图与任务进度
+
+视觉识别负责截图归属与页码，任务进度负责阅读位置聚合与设备显示，前端负责进度卡及录制操作。Tech Lead 整合记录契约、会话目标、持久化与端到端验证。本轮在隔离副本使用合成画面验证识别、存储、任务页和设备显示。实现与平台验证范围见根目录 revise。
+
+## 前台页面记录 · 2026-11-16
+
+Tech Lead 负责契约、Hub 会话生命周期、本地模型复用、文字记录、整合与端到端验收。macOS 采集角色负责 `backend/src/foreground-mac/` 与对应测试，桌面平台角色负责 `backend/src/foreground-platform/` 与对应测试。界面角色负责记录页、手动补记、导航与前端回归。验证使用合成页面，系统授权由当前使用者掌握。
+
+本轮已完成整合并释放文件。系统权限、原生取样、模型回放与跨平台实测范围见根 `revise`。
+
+## 2026-11-16 专注工作台迭代
+
+本次完成六轮本地迭代。Tech Lead 整合任务进度、设备绘图、阅读与回顾流程。界面角色负责工作台、打包及浏览器体验验证，视觉识别角色负责截图推理、手审与周期自动记录，复盘角色负责专注时段、改进实验与论文书签。各轮修改与实测结果记录于根 `revise`。
+
+## 2026-11-14 个人 Outlook 连接
+
+认证角色负责个人登录、续期、原学校缓存和认证回归；界面角色负责邮箱类型选择与浏览器验收；待办角色负责 Linux 上的独立软件与增量收件检查。Tech Lead 整合服务接口、在本机验证真实个人账号同步并记录结果。相关文件已释放，验证范围见根 `revise`。
+
+## 2026-11-14 学校 Outlook 一次登录与自动同步
+
+OUTLOOK-SYNC 由 Tech Lead 整合试读页、服务生命周期、说明和端到端检查。邮件角色负责 `outlook-delta.mjs`、`mail-source.mjs` 和增量读取测试。认证角色负责 `outlook-auth.mjs`、凭据库依赖与认证测试。待办角色负责 `outlook-worker.mjs`、增量游标、摘要和写入重试测试。复用本机模型与现有 Hub，测试使用合成数据和隔离待办。
+
+已完成整合。四组文件释放，相关验证与平台执行情况见根 `revise`。Graph 身份验证与邮箱端的正式验收依赖学校应用注册及使用者登录。
+
+## 2026-11-14 邮件 AI 可行性验证
+
+先用独立的 `experiments/mail-ai/` 验证一条链路，再讨论正式产品设置。Tech Lead 负责多模态模型实测、分析器、命令入口、整合、使用说明、`revise` 与三平台验收配置。三项独立交付各自单一写入，使用临时数据和样例。
+
+- 邮件输入：`experiments/mail-ai/mail-source.mjs`、该目录的 `package.json` / `package-lock.json`、`tests/mail-source.test.mjs`。解析 EML、读取 Outlook 收件箱正文及受限图片输入。
+- 待办导入：`experiments/mail-ai/task-import.mjs`、`tests/task-import.test.mjs`。复用真实 Hub 的任务接口，处理精确日期、重复邮件、用户编辑、数据冲突和容量。
+- Canvas 可行性：`experiments/mail-ai/canvas.mjs`、`tests/canvas.test.mjs`。读取指定课程作业，复用同一作业链接身份；账号和真实课程的验收单独记录。
+- 三平台检查由 Canvas 工作完成后的同一角色接手 `.github/workflows/mail-ai.yml`，在可用的本机环境执行隔离测试。Tech Lead 负责记录实际运行平台。
+- 本机试读页：收件适配完成后，邮件角色接手 `experiments/mail-ai/{trial.mjs,trial.html,tests/trial.test.mjs}` 和 `mail-source.mjs` 的内存读取入口。使用真实邮件解析器、本机模型、同一套待办核对规则及已有 Hub，提供样例、EML 上传与可选加入待办。
+
+本轮 EMAIL-AI-1 已完成整合，各文件释放。Tech Lead 在根 README 增加试读入口，并归档原句核对、跨平台验证与真实模型逐例结果。macOS/Linux 各 26 项软件测试通过，Chrome 完成 10 项合成邮件交互检查，Windows 矩阵待实际运行。现有 Hub API 与固件协议继续适用。Outlook、Canvas 使用只读适配器，已完成模拟接口验证，真实账户登录及后台同步留待后续集成。
+
+## MAC-DEV-SIM 本机开发与模拟屏（2026-11-13）
+
+用户选择本轮先完成 Mac 本机开发与模拟屏，不制作原生 Mac 安装应用。复用真实 Hub、现有显示快照协议和设备字形；不改固件、任务业务、真实数据或进行设备操作。
+
+- Tech Lead：根 package.json、README、AGENTS.md、docs/MAC_DEVELOPMENT.md、docs/HANDOFF.md、本登记、scripts/dev.mjs、tests/development/**、backend/src/service.ts 及相关 HTTP 路由测试；负责开发启动、页面整合、浏览器验收和最终验证。
+- Mac Runtime：backend/src/data-lock.ts、backend/tests/desktop-lock.test.mjs、backend/tests/desktop-server.test.mjs；实现 macOS 单实例数据锁，保留 Windows/Linux 行为，验证进程退出及崩溃恢复。desktop-server 的规范化路径断言经 Tech Lead 移交。
+- Simulator UI：frontend/src/DeviceSimulator.tsx、frontend/src/simulator/**、frontend/src/device-simulator.css、对应前端测试，以及 frontend/src/main.tsx、frontend/src/App.tsx、frontend/vite.config.ts；使用真实 /api/v1/display-snapshot 和共享位图渲染，提供快速检查及设备节奏模式、断线保留、读取/显示状态区分。
+- Firmware Parity：scripts/test-display-host.mjs、tests/firmware/mac-host/**、docs/firmware/HOST_SIMULATION.md 与本地忽略缓存；准备可在 Mac 重跑的原生固件解析/渲染及像素一致性检查，不修改固件或替代真实硬件验收。
+
+以上文件单一写入，跨范围先协调；测试使用隔离合成数据。当前状态：已完成整合，全部文件释放。契约/后端173项、前端115项、HTTP集成7项、开发生命周期5项共300项测试通过，生产构建通过；原生固件主机1149项检查与21场景逐像素对照通过。浏览器完成12项交互/像素检查，并验证生产页面在真实Hub停止后保留画面、重启后继续同步。未执行ESP32目标编译、烧录或真机验收。
+
 ## README-SIMPLIFY 首页精简（2026-11-13）
 
 用户要求简化GitHub首页。Tech Lead接手根README与本登记，将安装体验放在前面，保留源码启动命令和开发入口，链接到现有详细说明。完成本地链接、命令与差异核对后同步GitHub，文档文件释放。

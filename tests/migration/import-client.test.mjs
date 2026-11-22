@@ -132,6 +132,12 @@ test('preview and confirmed IPC import preserve work state, signal history and A
   assert.doesNotMatch(JSON.stringify(h.events), /Complete the review|Review requested|Read the draft|先完成提纲/);
 });
 
+test('previews a Chinese task source without discarding its optional device title', async t => {
+  const source = { ...SOURCE, tasks: [{ ...SOURCE.tasks[0], title: '看论文', device_title: 'Read paper' }] };
+  const request = await confirm(await fixture(t, { source }));
+  assert.deepEqual(request.source.tasks, source.tasks);
+});
+
 test('accepts exactly 4096 bytes without treating trailing JSON whitespace as extra capacity', async t => {
   const body = Buffer.from(JSON.stringify({ ...SOURCE, focus: null }));
   const bytes = Buffer.concat([body, Buffer.alloc(4096 - body.length, 32)]);
@@ -147,7 +153,7 @@ const invalidCases = [
   ['missing fields', { source: { tasks: [] } }, 'IMPORT_INVALID_SOURCE'],
   ['unknown root fields', { source: { ...SOURCE, privateExtra: 'PRIVATE_FIELD' } }, 'IMPORT_INVALID_SOURCE'],
   ['invalid task', { source: { ...SOURCE, tasks: [{ id: 't', title: 'Task', status: 'todo' }] } }, 'IMPORT_INVALID_SOURCE'],
-  ['unsupported Chinese text', { source: { ...SOURCE, tasks: [{ ...SOURCE.tasks[0], title: '中文任务' }] } }, 'IMPORT_UNSUPPORTED_DEVICE_TEXT'],
+  ['invalid device title', { source: { ...SOURCE, tasks: [{ ...SOURCE.tasks[0], device_title: '中文任务' }] } }, 'IMPORT_INVALID_SOURCE'],
   ['unsupported timezone', { source: { ...SOURCE, timezone: 'Europe/London' } }, 'IMPORT_UNSUPPORTED_DEVICE_TIMEZONE'],
   ['too many tasks', { source: { ...SOURCE, tasks: Array.from({ length: MAX_TASKS + 1 }, (_, i) => ({ ...SOURCE.tasks[0], id: `t-${i}` })) } }, 'IMPORT_INVALID_SOURCE'],
   ['invalid AI suggestion', { source: { ...SOURCE, ai_suggestion: 'x'.repeat(121) } }, 'IMPORT_INVALID_SOURCE'],

@@ -7,6 +7,7 @@ import { parseFocusUpdateRequest, type FocusUpdateRequest } from '../../contract
 import { parseWorkStateUpdateRequest, type WorkStateUpdateRequest } from '../../contracts/work-state.ts';
 import { parseAISuggestionUpdateRequest, type AISuggestionUpdateRequest } from '../../contracts/ai-suggestion.ts';
 import { ImportSourceError, readDesktopFile, validateDesktopSource, type DesktopSource } from './desktop-data.ts';
+import { createTaskCalendar } from './task-calendar.ts';
 
 export class SourceError extends Error {
   code: string;
@@ -38,6 +39,7 @@ interface PersistenceOperations {
 
 /** Read on every request; cache only metadata for unchanged valid content. */
 export function createOverviewLoader(dataPath: string, persistence: PersistenceOperations = {}) {
+  const calendar = createTaskCalendar(dataPath, persistence.now ?? Date.now);
   let previous: DailyOverview | undefined;
   let queue: Promise<void> = Promise.resolve();
   let closing = false;
@@ -94,9 +96,6 @@ export function createOverviewLoader(dataPath: string, persistence: PersistenceO
     }
     if (!['Asia/Shanghai', 'UTC'].includes(validated.timezone)) {
       throw new SourceError('UNSUPPORTED_DEVICE_TIMEZONE', 'This device demo supports only Asia/Shanghai or UTC.');
-    }
-    if (validated.tasks.some(task => !/^[\x20-\x7e]{1,40}$/.test(task.title))) {
-      throw new SourceError('UNSUPPORTED_DEVICE_TEXT', 'This device demo requires printable ASCII task titles (1-40 characters).');
     }
     const now = (persistence.now ?? Date.now)();
     const focus = validated.focus && Date.parse(validated.focus.started_at) <= now && now < Date.parse(validated.focus.ends_at) ? validated.focus : null;
@@ -171,29 +170,53 @@ export function createOverviewLoader(dataPath: string, persistence: PersistenceO
     }
   }
 
+  async function calendarContext() {
+    const current = await read();
+    function sourceFor(tasks: Task[], date: string): DesktopSource {
+      return { date, timezone: current.timezone, tasks, ...(current.focus ? { focus: current.focus } : {}), ...optionalFields(current) };
+    }
+    return calendar.reconcile(current, (tasks, date) => {
+      try { parseDailyOverview({ ...current, tasks, date }); }
+      catch { return false; }
+      return Buffer.byteLength(JSON.stringify(sourceFor(tasks, date), null, 2) + '\n') <= MAX_OVERVIEW_BYTES;
+    }, (tasks, date) => persist(current, tasks, current.focus ?? null, { source: sourceFor(tasks, date) }));
+  }
+  async function readCurrent() { return (await calendarContext()).current; }
+
   return {
     /** Stop accepting new work; resolve only after accepted writes settle. */
     close(): Promise<void> { closing = true; return queue; },
     drain(): Promise<void> { return queue; },
     load(): Promise<DailyOverview> {
-      return enqueue(read);
+      return enqueue(readCurrent);
+    },
+    readCalendar() { return enqueue(async () => calendar.snapshot(await calendarContext())); },
+    updateCalendar(method: 'PUT' | 'DELETE', body: Record<string, unknown>) {
+      const input = structuredClone(body);
+      return enqueue(async () => {
+        await calendar.mutate(await calendarContext(), method, input);
+        return calendar.snapshot(await calendarContext());
+      });
     },
     update(input: TaskUpdateRequest): Promise<DailyOverview> {
       // Copy and validate before enqueueing so callers cannot mutate a draft
       // while another read/write is ahead of it in this process's queue.
       const update = parseTaskUpdateRequest(input);
       return enqueue(async () => {
-        const current = await read();
+        const ctx = await calendarContext();
+        const current = ctx.current;
         if (update.revision !== current.revision) throw new RevisionConflictError();
+        await calendar.prepareTasks(ctx, update.tasks, update.restoreTaskId);
         if (JSON.stringify(update.tasks) === JSON.stringify(current.tasks)) return current;
         const focus = current.focus && update.tasks.some(task => task.id === current.focus!.task_id && task.status === 'todo') ? current.focus : null;
-        return persist(current, update.tasks, focus);
+        const result = await persist(current, update.tasks, focus);
+        return ctx.state.rows.length ? readCurrent() : result;
       });
     },
     updateFocus(input: FocusUpdateRequest): Promise<DailyOverview> {
       const update = parseFocusUpdateRequest(input);
       return enqueue(async () => {
-        const current = await read();
+        const current = await readCurrent();
         if (update.revision !== current.revision) throw new RevisionConflictError();
         if (update.action === 'stop') return current.focus ? persist(current, current.tasks, null) : current;
         if (current.focus) throw new FocusActiveError();
@@ -208,7 +231,7 @@ export function createOverviewLoader(dataPath: string, persistence: PersistenceO
     updateWorkState(input: WorkStateUpdateRequest): Promise<DailyOverview> {
       const update = parseWorkStateUpdateRequest(input);
       return enqueue(async () => {
-        const current = await read();
+        const current = await readCurrent();
         if (update.revision !== current.revision) throw new RevisionConflictError();
         if (JSON.stringify(update.work_state) === JSON.stringify(current.work_state) &&
             JSON.stringify(update.signals) === JSON.stringify(current.signals)) return current;
@@ -224,7 +247,7 @@ export function createOverviewLoader(dataPath: string, persistence: PersistenceO
     updateAISuggestion(input: AISuggestionUpdateRequest): Promise<DailyOverview> {
       const update = parseAISuggestionUpdateRequest(input);
       return enqueue(async () => {
-        const current = await read();
+        const current = await readCurrent();
         if (update.revision !== current.revision) throw new RevisionConflictError();
         if (update.ai_suggestion === (current.ai_suggestion ?? '')) return current;
         const source: DesktopSource = {
@@ -240,9 +263,12 @@ export function createOverviewLoader(dataPath: string, persistence: PersistenceO
       if (options.confirmed !== true) return Promise.reject(new ImportSourceError('IMPORT_CONFIRMATION_REQUIRED', 'Confirm the preview before importing tasks.'));
       if (typeof options.backupsPath !== 'string' || !options.backupsPath.trim()) return Promise.reject(new ImportSourceError('IMPORT_BACKUP_UNAVAILABLE', 'A backup directory is required.'));
       return enqueue(async () => {
-        const current = await read();
+        const ctx = await calendarContext();
+        const current = ctx.current;
         if (options.revision !== current.revision) throw new RevisionConflictError();
-        return persist(current, candidate.tasks, candidate.focus ?? null, { source: candidate, backupsPath: path.resolve(options.backupsPath) });
+        await calendar.prepareTasks(ctx, candidate.tasks);
+        const result = await persist(current, candidate.tasks, candidate.focus ?? null, { source: candidate, backupsPath: path.resolve(options.backupsPath) });
+        return ctx.state.rows.length ? readCurrent() : result;
       });
     },
   };

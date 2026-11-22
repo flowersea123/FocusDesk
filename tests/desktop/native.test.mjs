@@ -3,14 +3,16 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
-import { mkdtemp, mkdir, cp, copyFile, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, copyFile, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { collectPayloadSources } from '../../scripts/build-installer.mjs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const RUNTIME = path.join(ROOT, '.cache/m1-toolchain/node-v24.16.0-win-x64/node.exe');
 const NATIVE = path.join(ROOT, '.cache/m1-native/launcher/FocusDesk.exe');
+const nativeOnly = { skip: process.platform !== 'win32' && 'Requires the native Windows tray launcher and Job Objects' };
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function waitFor(check, timeout = 20000) {
   const end = Date.now() + timeout;
@@ -30,10 +32,7 @@ async function setup(t) {
     assert.equal(path.dirname(path.resolve(base)), path.resolve(tmpdir())); assert.ok(path.basename(base).startsWith('FocusDesk native 测试 '));
     await rm(base, { recursive: true, force: true });
   });
-  for (const directory of ['backend/src', 'backend/public', 'frontend/dist']) await cp(path.join(ROOT, directory), path.join(app, directory), { recursive: true });
-  for (const file of ['backend/server.ts', 'package.json', 'contracts/daily-overview.ts', 'contracts/task-update.ts', 'contracts/focus-update.ts',
-    'contracts/work-state.ts', 'contracts/ai-suggestion.ts', 'contracts/display-snapshot.ts', 'contracts/display-fonts.ts', 'contracts/DISPLAY_FONT_LICENSE.txt',
-    'scripts/desktop-host.mjs', 'scripts/desktop-logs.mjs', 'scripts/desktop-paths.mjs', 'scripts/import-client.mjs']) {
+  for (const file of ['package.json', ...await collectPayloadSources(ROOT)]) {
     await mkdir(path.dirname(path.join(app, file)), { recursive: true }); await copyFile(path.join(ROOT, file), path.join(app, file));
   }
   await mkdir(path.join(app, 'runtime'), { recursive: true }); await copyFile(RUNTIME, path.join(app, 'runtime/node.exe'));
@@ -49,7 +48,7 @@ async function setup(t) {
   return { app, user, port, launch, command, state };
 }
 
-test('native tray actions, duplicate launch and graceful exit work without a system Node PATH', async t => {
+test('native tray actions, duplicate launch and graceful exit work without a system Node PATH', nativeOnly, async t => {
   const { user, port, launch, command, state } = await setup(t); const first = launch();
   const initial = await waitFor(async () => { const value = await state(); return value.phase === 'ready' && value; });
   assert.equal(initial.pid, first.pid); assert.equal(initial.port, port);
@@ -65,7 +64,7 @@ test('native tray actions, duplicate launch and graceful exit work without a sys
   assert.equal(await command('--shutdown'), 0, 'shutdown when not running is idempotent');
 });
 
-test('native Job Object recovers backend and data lock when launcher is forcibly terminated', async t => {
+test('native Job Object recovers backend and data lock when launcher is forcibly terminated', nativeOnly, async t => {
   const { port, launch, state, command } = await setup(t); const first = launch();
   await waitFor(async () => (await state()).phase === 'ready');
   const exit = once(first, 'exit'); first.kill(); await exit;

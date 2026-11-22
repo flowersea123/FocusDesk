@@ -16,6 +16,7 @@ import nextDay from '../../../contracts/fixtures/next-day.json';
 export type DemoScenario = 'today' | 'empty' | 'completed' | 'next-day' | 'failure';
 export interface OverviewSource {
   kind: 'mock' | 'http';
+  localWorkspace?: boolean;
   read(scenario: DemoScenario, signal: AbortSignal): Promise<DailyOverview>;
   updateTasks?(input: TaskUpdateRequest, signal: AbortSignal): Promise<DailyOverview>;
   updateFocus?(input: FocusUpdateRequest, signal: AbortSignal): Promise<DailyOverview>;
@@ -136,7 +137,8 @@ export function createHttpSource({ baseUrl, timeoutMs = 5_000, fetcher = fetch,
   }
   return {
     kind: 'http',
-    read(_scenario, signal) { return request(endpoint, signal); },
+    localWorkspace: canWrite && new URL(endpoint, pageOrigin).pathname === '/api/v1/daily-overview',
+    read(_scenario, signal) { return request(canWrite || !pageOrigin ? endpoint : endpoint + '?view=workspace', signal); },
     ...(canWrite ? {
       updateTasks(input: TaskUpdateRequest, signal: AbortSignal) {
         return request(`${endpoint}/tasks`, signal, JSON.stringify(parseTaskUpdateRequest(input)));

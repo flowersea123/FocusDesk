@@ -1,5 +1,21 @@
 # 统一 API 与数据模型草案
 
+## 前台页面记录（2026-11-16）
+
+今日任务页一键开始会自动识别当前任务。手动核对某项任务时，`POST /api/v1/recorder` 可以携带 `{"action":"start","taskId":"…"}`。已在录制时用 `{"action":"target","taskId":"…"}` 指定后续采样要核对的任务，传 null 恢复自动匹配。`targetTaskId` 为用户在本次会话指定的核对对象。自动识别结果放在 `observedTaskId` 和 `observedAt`，未匹配时前者为 null，尚未分析画面时两者均为 null。采集时保存任务上下文，切换目标后拍到的画面才采用新目标。
+
+检查点的可选 `readingPosition:{page,total}` 与 `readingDocument` 配套保存。两数为实际页面计数器中的正整数，page 不超过 total，total 最多 100000。项目状态单独返回阅读位置、章节书签与完成项。阅读位置的百分比表示所在页在文档中的位置。
+
+自动检查点可保存 `paper:{id,view,title?,position?}`。其中 id 为 arXiv 编号，view 为 abstract 或 pdf，position 取自该 PDF 的页面计数器。项目状态的可选 `latestPaper:{id,title,at,position?}` 按任务和论文编号汇总最近一次观察。只有编号时可用编号识别文档，后续同篇观察可补足题名和页码。记录跨天保留，阅读位置不会自动勾选任务步骤。
+
+`GET /api/v1/recorder` 只查询能力和状态，不打开屏幕录制权限。对同一路径发送同源 JSON `{"action":"start"}` 或 `{"action":"stop"}` 启停本次本地会话。启动与停止均可重复请求，页面关闭或刷新不改变会话；Hub 退出或系统录制控制停止时结束。Hub 重启回到待机。状态字段为 `state`（idle、starting、recording、stopping、error、unavailable）、`supported`、`message`、`platform`、`sessionStartedAt`、`savedCount` 和 `lastSavedAt`。时间为 UTC ISO 字符串，尚无相应事件时为 null。本机回环与同源写入限制同下。
+
+前台记录沿用检查点和每日回顾。记录源为 automatic，含前台应用的 `appName` 和可选 `pageTitle`。画面可唯一对应任务时填写 `taskId`。未匹配时为 null，不写任务进度或完成项。模型不可用时，`detailSource:"window-title"` 表示内容仅来自系统提供的应用/页面标题。截图只在内存中处理。
+
+## 本机屏幕检查点（2026-11-16）
+
+`POST /api/v1/screen-observation` 接收用户选择的截图与可选任务 ID，返回 AI 摘要、下一步、明确进度的原句和完成项候选。推理在本机运行。图片按请求处理，保存操作仅提交文本。`GET /api/v1/checkpoints` 按采集时间倒序返回最近 12 条已保存的文字记录，可通过 `?limit=N` 请求 1 至 1000 条。有更早记录时响应携带 `hasMore:true`。每条含手动或自动来源，旧记录默认为手动。`POST` 以客户端 UUID 幂等保存，`DELETE` 以 ID 删除。记录与任务数据文件配套存储，容量为 1000 条。接口限定本机，写入要求同源 JSON。
+
 ## 网页 AI 建议编辑（2026-11-12）
 
 DailyOverview 1.0 和任务源可选包含 `ai_suggestion` 字符串，支持中文、英文和换行，最多120个UTF-16代码单元，与网页textarea的maxlength一致。空字符串表示清空建议。旧文件缺少此字段时继续有效，旧内容版本哈希兼容。
@@ -46,7 +62,7 @@ LAN-1 只新增服务连接信息，不变更任务/专注 DTO 和本机写权�
 - `GET/HEAD /connect`：独立连接说明页，不修改现有 Dashboard，显示电脑操作入口和可复制的 ESP32 API 地址；刷新即可识别 IP 变化。连接信息读取无设备回执，不声称候选 IP 能穿过防火墙或 AP 隔离。
 - 默认 Windows 启动监听 `0.0.0.0:8787`，本机 Dashboard 用 `http://127.0.0.1:8787/`；LAN 设备可读 Dashboard 和原任务 API，PUT 仍严格要求本机同源。端口从可编辑的根 `focusdesk.config.json` 或现有 CLI 参数读取，CLI 优先；IP 不写死在 Dashboard 构建中。
 
-最新扩展：用户已同意网页任务编辑和固定 25 分钟 Focus Mode，增加对应写入接口及可选 focus 字段，读取模型保持兼容 1.0。任务编辑兼容旧设备，专注页需新版固件。当前继续英文任务，不实现中文版本。
+最新扩展：用户已同意网页任务编辑和固定 25 分钟 Focus Mode，增加对应写入接口及可选 focus 字段，读取模型保持兼容 1.0。任务编辑兼容旧设备，专注页需新版固件。工作台可添加中文任务。
 
 ## 网页任务保存接口
 
@@ -61,7 +77,7 @@ LAN-1 只新增服务连接信息，不变更任务/专注 DTO 和本机写权�
 }
 ```
 
-- 请求只接受 `revision` 与 `tasks`；沿用 Task 字段/ID/状态/必填 due_at，支持 0–10 条任务，标题为 1–40 个可打印 ASCII 字符且非全空白。新任务由网页生成稳定 ID，编辑或完成保留原 ID 与其他字段；移除是明确的用户编辑操作，不自动删已完成任务。
+- 请求只接受 `revision` 与 `tasks`；沿用 Task 字段/ID/状态/必填 due_at，支持 0–10 条任务，任务名支持 1–40 个 Unicode 码点，设备别名 device_title 可选，限 1–40 个可打印 ASCII 字符。新任务由网页生成稳定 ID，编辑或完成保留原 ID 与其他字段；移除是明确的用户编辑操作，不自动删已完成任务。
 - `revision` 必须等于服务当前有效快照。成功返回 `200` 和新的完整 DailyOverview；保存等价任务不重写文件，不推进版本。date/timezone 保留服务文件的当前值，网页不写这些字段。
 - 请求来源仅本机 loopback；浏览器 `Origin` 必须与请求的 `http://Host` 同源，不提供跨域写入。用户在 `http://127.0.0.1:8787/` 编辑；其他局域网客户端/ESP32 保持读取能力，不增加设备写入。GET/HEAD 原有行为保持。
 - 缺失/不匹配 Origin、非本机请求或非 loopback/localhost Host `403`；非 JSON `415`；超限 body `413`；非法数据 `400`；版本不符 `409 / REVISION_CONFLICT`；上传超过 5 秒 `408`，读取源或保存失败 `503`。错误结构沿用 `{error:{code,message}}`。接口拒绝请求时不改文件。
@@ -72,7 +88,7 @@ LAN-1 只新增服务连接信息，不变更任务/专注 DTO 和本机写权�
 - 单一可编辑任务源是 `backend/data/tasks.json`，包含 `date`、`timezone`、`tasks` 和可选 `focus`；网页通过保存 API 原子更新此文件，也可手动编辑；服务每次读取验证后发布。没有数据库或另一套 Hub。
 - 服务为任务源的规范化内容生成稳定内容哈希 `revision`，读请求不推进版本；任务/顺序/日期/时区变化才更新版本。`updated_at` 以任务文件修改时间为依据；同进程内只改空白不改变既有有效快照。日期是文件中显式的演示日期，不声称按实时日期自动筛选。
 - 服务直接提供 `frontend/dist` 的 Dashboard 和资源，两者同源。Vite 开发模式可保持本地 Mock；独立构建的 Dashboard 默认读取同源 API，仍可用明确环境变量覆盖。
-- 本轮联网设备只使用其内置字库支持的可打印 ASCII 标题（1–40 字符，含普通空格）。任务源不支持的标题返回 `503` / `UNSUPPORTED_DEVICE_TEXT`，避免网页已更新但设备静默丢字；这是一条当前演示的显示能力限制，不改变通用 DTO 的 UTF-8 模型。共享 `device-demo.json` 提供对应英文合成样例，原中文 fixtures 保留供浏览器测试。
+- 本机任务信息使用原名。旧设备在局域网读取 daily-overview 时获得可显示的短名；网页可显式请求 ?view=workspace，?view=device 可在本机核对旧设备收到的内容。常用汉字默认转成无声调拼音，用户可自定义设备短名。
 - 当前演示 profile 的时区只接受 `Asia/Shanghai` 或 `UTC`；其他值返回 `503` / `UNSUPPORTED_DEVICE_TIMEZONE`，便于设备严格校验而不额外引入时区数据库。通用 DTO 的 IANA 模型保持不变。
 - 非法/超限/不可读文件返回 `503`、结构化错误；成功 API 设置 `Cache-Control: no-store`、`Content-Length`、UTF-8 JSON，不使用压缩或分块响应。当前 ESP32 传输实现可依赖这个明确的 Content-Length。
 - 网页使用 HTTP 轮询显示同一快照；设备成功显示后才推进已显示 revision，网络/解析失败不发起刷新。建议轮询 30 秒，电子纸刷新尝试之间至少 60 秒（保守演示值，不声称是厂商最小间隔），失败退避最高 5 分钟；显示失败后状态未知，恢复不能仅因 revision 与历史成功版本相同而跳过。
@@ -218,3 +234,47 @@ The active device layout uses FOCUSDESK/date, Tasks/completion count, up to five
 
 Display schema display-1, layout goal-1, 4096-byte transport, 64 commands and drawing kinds0–2 continue. Fonts10–17 are NunitoRegular10px, NunitoBold10px, NunitoRegular11px, NunitoBold11px, NunitoRegular13px, NunitoRegular16px, NunitoBold16px, NunitoBold17px. Glyph indexes0–9 retain their existing faces. The opaque revision prefix is goal-1:nun1: plus the source revision. The matching firmware provides the new faces. Rounded checkboxes and the recommendation background are composed from rectangle commands.
 
+
+### 大任务进度与设备画面
+
+本机 GET /api/v1/project-progress 返回逐个任务的百分比、已完成部分和步骤清单。PUT 使用 revision、taskId 和 plan/pin/unpin 更新清单或选择设备内容。set-step 接收清单中原样的 section 和布尔值 done；人工设定覆盖该步的观察结论，恢复到观察结论时清除覆盖。配置的可选 stepEdits 随未改名的步骤保留。有清单时根据已记录的步骤计数，无清单时仅采用可核对的比例。GET /api/v1/display-snapshot 继续提供标准 400×300 display-1 绘制指令。固定后设备按序展示具体成果和可见的阅读位置，取消固定后恢复今日总览。当前设备字库支持 ASCII，可为自定义步骤提供英文短名。
+
+### 每日回顾与专注时段
+
+本机 GET /api/v1/focus-review?date=YYYY-MM-DD 提供对应日的计时时段、总秒数、观察文字及改进实验。PUT /api/v1/focus-review/experiment 以日期和 revision 保存计划、复查结果。POST /api/v1/focus-review/synthesis 接收日期，返回当日小结、参与汇总的记录数及引用依据。有具体作答或完成项时，返回 `method: "recorded"`，根据全天记录分别列出每份材料的题号和状态，并从同一活动中选取按时间排列的阅读和对话摘录。其他日期由本机模型总结屏幕观察、具名活动和实际对话摘录，超过 12 条时沿时间轴取样。原始图像不写入日记，计时仅依据 Hub 记录的专注会话。
+
+每日回顾可返回 `appSessions: [{ appName, from, to, seconds }]`。录制期间，对相邻两次有效采样中同一前台应用累计间隔，以 ISO 时间返回指定日期内的起止时间，秒数保留毫秒精度。切换应用、空帧、停止或重启录制，以及超过 12 秒的采样间隔打断连续性。该数组与 `sessions` 的专注计时独立。旧数据仍可读取，旧截图显示为时间点。返回的观察可包含 `appName` 和 `taskId`，沿用当时的任务关联。私有回顾端点沿用本机访问限制。
+
+自动检查点可带可选的 `activityEvidence`，其中 `kind` 为 `work` 或 `reading`，`title` 为材料名，`subject`、`section` 为画面可辨的学科或章节。工作材料可保留带完成标记的 `completedItems` 或可见本人作答的 `answeredItems`。这些字段独立于待办绑定，未预设任务时允许 `taskId: null`。
+
+每日回顾的 `workActivities` 依材料或可核对的学科汇总。每组返回标题、按材料和题号去重的完成项、可选的已作答项，以及带时间、来源和原文依据的事件。已出现完成标记的同一题归入完成项。观察时间表示看到该状态的时刻。对话仅在材料名、学科或章节能对应时与材料合并，否则单列。旧记录沿用已有阅读位置或手动观察。用户创建的待办、完成勾选和电子纸进度仍通过原有接口维护。
+
+工作台与每日回顾在有当日屏幕或对话依据时自动请求小结。成功响应中的 `observationRevision` 标识生成时的屏幕与对话依据集合，以 SHA-256 校验，避免把旧小结显示为新证据的结论。
+
+### 论文阅读书签
+
+屏幕观察和检查点可携带 readingSection 和 readingDocument，分别表示正文位置与画面中识别出的文档标题。只有章节位置时保留阅读进度候选。GET /api/v1/project-progress 的 statuses[].readingBookmark 提供当前书签以及可确认的上一个章节。PATCH /api/v1/checkpoints 以 id 和 readingSection 幂等确认对应记录，保留最初的手动或自动来源并记录 readingConfirmed。已确认的章节作为当前大任务的完成依据。自动采样核对画面标题、同任务手动审阅过的文档以及画面内容与待办的关系。自动归属只会对有画面依据的任务生效。多个任务都符合时，可结合用户指定的对象或专注任务消除歧义。删除最后一条对应的手动记录后，该文档关联失效。
+
+### 邮件计划日与设备待办
+
+本机 `GET /api/v1/calendar` 返回 `revision`、`today`、`timezone`、`entries`。每项包含稳定 `id`、网页标题 `title`、1–40 个可打印 ASCII 字符的 `deviceTitle`、`plannedDate`、原定的 `dueDate` 与 `dueAt`、`source`、可选的 `sourceTitle` 和 `status`。两个日期字段采用 YYYY-MM-DD。原文只有日期时 `dueAt` 为空，精确时间使用 UTC 字符串。邮件正文和网页标题不进入电子纸绘制指令。
+
+本机 `PUT /api/v1/calendar` 接收 `{ revision, entry }`，entry 不含 status。改期沿用原 `id`。本机 `DELETE /api/v1/calendar` 接收 `{ revision, id }` 并保留移除记录。显式恢复使用 PUT 的顶层 `restore: true`。更新成功返回完整日历；冲突返回 HTTP 409。来源复用邮件导入的稳定标识，重复同步沿用用户选好的日期。日历存储在任务文件旁的 `.calendar.json` 中。
+
+设备仍读取 `/api/v1/display-snapshot`。Hub 根据任务时区和实际时钟，将计划日已到的事项加入未完成清单；状态从 scheduled 变为 published。达到现有任务条数或大小上限时状态为 waiting。今日任务中的勾选和删除也会反映为 done 或 removed。运行中的专注优先展示，固定项目保留原进度，并在底栏显示其他已发布且尚未完成的第一项日历任务和其余数量。网页预览和设备共用同一布局。
+
+今日清单执行「撤销删除」时，任务更新请求可携带可选的 `restoreTaskId`，标明用户明确要放回原清单的事项。普通后台重试沿用原请求。
+
+### 并行 AI 活动与对话
+
+本机每日回顾可含 `aiSessions`。每段保留 `runId,appName,title,from,to,state`。可选字段 `conversationId,conversationTurnId,conversationTitle,userExcerpt,assistantExcerpt` 来自可核对的聊天身份、用户提问与公开答复；两条摘录各不超过 320 个 UTF-16 代码单元。ID 为匿名标识，未辨认来源时允许缺省。时间跨日裁剪、重启断开，状态为 running、finished、interrupted。AI 日志单独限 90 日、4,096 段、16 MiB。不可读时返回 `aiUnavailable:true`，其余回顾仍可访问。
+
+`aiConversationSummaries` 以应用与对话身份构成的分组键返回已生成且与当次消息摘录匹配的摘要。当天多轮在同一行，父轮与后台协作以可核实的根轮次去重。活动时长为各段并集，专注计时独立。旧来源无法关联时按应用展示为未关联的活动集合。
+
+`POST /api/v1/recorder` 支持 `start-ai` 开始仅 AI 模式、`start` 开始常规模式、`stop` 停止。`/api/v1/ai-browser` 仅接受本机扩展来源，并核对当前状态会话。旧扩展的三字段事件仍可用；新版可提交哈希对话与轮次标识、标题和简短消息摘录。设备及局域网接口不提供这些内容。
+
+开始仅 AI 模式的请求体为 `{"action":"start-ai"}`，状态中的 `mode` 为 `ai`；常规录制为 `screen`。扩展源码在 `extensions/chatgpt-activity`，运行 `python3 extensions/package-chatgpt.py` 更新工作台的离线下载包。
+
+本机每日回顾的 observation 可含前台窗口原文 pageTitle。任务进度返回的每个 status 可含 paperVisits，按工作台时区的当天提供日期 date、采样次数 count、不同论文标题数 documents、有采样的分钟索引 minutes（0–1439）和最近五个不同标题及最后观察时间 recent。阅读观察和记录的完成度分别计算。
+
+本机任务状态的 accomplishments 按序返回 text、source、removable。手工登记使用 add-accomplishment 或 remove-accomplishment，附当前 revision、taskId 和 text。每条上限 160 个字符，每项任务最多 64 条自由登记。旧配置无需迁移。读取时合并可核对的完成步骤、已确认读完的章节和手工登记；标题访问只用于活动详情。
